@@ -15,13 +15,21 @@ from app.models.orders import (
 from app.models.payments import (
     DeviceNonce,
     ForwarderDevice,
+    ForwarderPairing,
     Payment,
     Refund,
     ReviewItem,
     SmsMessage,
 )
 from app.models.system import AuditLog, JobRun, Notification, Setting
-from app.models.users import PushSubscription, RefreshToken, RiderProfile, RiderStrike, User
+from app.models.users import (
+    PushSubscription,
+    RefreshToken,
+    RiderPing,
+    RiderProfile,
+    RiderStrike,
+    User,
+)
 
 __all__ = [
     "ENTRY_TYPES",
@@ -32,6 +40,7 @@ __all__ = [
     "DeviceNonce",
     "Discount",
     "ForwarderDevice",
+    "ForwarderPairing",
     "Hotel",
     "HotelHours",
     "IdempotencyKey",
@@ -51,6 +60,7 @@ __all__ = [
     "RefreshToken",
     "ReviewItem",
     "RiderPayout",
+    "RiderPing",
     "RiderProfile",
     "RiderStrike",
     "Setting",

@@ -7,6 +7,7 @@ Real sample format (names/numbers anonymised in the samples file):
 
 Rules:
 - Spaces between parts are optional (phone apps hide some), letter case is ignored.
+- Amounts may have thousands commas or not ("KSH1,420.00" and "KSH1420.00").
 - The amount must be a positive whole shilling; any cents mean "flag for review".
 - Date is day/month/year in Kenyan time (EAT, UTC+3), converted to UTC.
 - Anything that does not match cleanly is FAILED and goes to a human. We never guess.
@@ -25,7 +26,7 @@ _PAYMENT = re.compile(
     (?P<code>[A-Z0-9]{10})\s*Confirmed\.?\s*
     on\s*(?P<date>\d{1,2}/\d{1,2}/\d{2,4})\s*
     at\s*(?P<time>\d{1,2}:\d{2})\s*(?P<ampm>[AP]M)\s*
-    Ksh\s*(?P<amount>\d{1,3}(?:,\d{3})*(?:\.\d{1,2})?)\s*
+    Ksh\s*(?P<amount>(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d{1,2})?)\s*
     received\s*from\s*
     (?P<phone>\+?[\d*]{9,13})\s*
     (?P<name>[^.]+?)\.\s*

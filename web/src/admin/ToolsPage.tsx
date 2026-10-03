@@ -1,11 +1,12 @@
-/** Super admin tools: a payment simulator that stands in for the SMS forwarder app (M8) until
- * it exists. Paste a real Till SMS and it runs through the same parser and matching. */
+/** Super admin tools: every hotel's Till phone (SMS forwarder app, M8), and a payment simulator
+ * for testing: paste a real Till SMS and it runs through the same parser and matching. */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import clsx from "clsx";
-import { FlaskConical } from "lucide-react";
+import { FlaskConical, Smartphone } from "lucide-react";
 import { useState } from "react";
 
-import { ErrorNote } from "../components/ui";
+import { PairingBox, PhoneCard, type TillPhone, useUnpair } from "../components/TillPhones";
+import { ErrorNote, Skeleton } from "../components/ui";
 import { api } from "../lib/api";
 
 type Hotel = { id: string; name: string; till_number: string };
@@ -81,14 +82,55 @@ function Simulator() {
   );
 }
 
+const PHONES = ["admin", "forwarder"];
+
+function TillPhones() {
+  const q = useQuery({ queryKey: PHONES, queryFn: () => api.get<{ devices: TillPhone[]; unpaired_hotels: { id: string; name: string }[] }>("/admin/forwarder"), refetchInterval: 30_000 });
+  const unpair = useUnpair((id) => `/admin/forwarder/${id}`, PHONES);
+  const [pairFor, setPairFor] = useState("");
+  const devices = q.data?.devices ?? [];
+  const bad = devices.filter((d) => d.problems.length).length;
+  return (
+    <section className="rounded-3xl border border-line bg-surface p-5">
+      <h2 className="flex items-center gap-2 text-[1rem] font-bold">
+        <Smartphone className="size-5 text-brand" /> Till phones
+        <span className={clsx("rounded-full px-2.5 py-0.5 text-xs font-semibold", bad ? "bg-bad-soft text-bad" : "bg-ok-soft text-ok")}>
+          {devices.length - bad} of {devices.length} working
+        </span>
+      </h2>
+      <p className="mb-4 text-sm text-muted">Each hotel's Till phone sends its M-Pesa messages, so payments confirm by themselves.</p>
+      {q.isLoading ? <Skeleton className="h-24" /> : null}
+      <div className="flex flex-col gap-3">
+        {devices.map((d) => (
+          <PhoneCard key={d.id} d={d} unpairing={unpair.isPending} onUnpair={() => window.confirm(`Disconnect ${d.hotel_name}'s phone?`) && unpair.mutate(d.id)} />
+        ))}
+      </div>
+      {q.data?.unpaired_hotels.length ? (
+        <div className="mt-4">
+          <p className="mb-2 text-sm font-semibold text-warn">No phone yet: {q.data.unpaired_hotels.map((h) => h.name).join(", ")}</p>
+          <select aria-label="Pair a phone for" value={pairFor} onChange={(e) => setPairFor(e.target.value)} className="mb-3 h-11 w-full rounded-xl border border-line bg-surface px-3 text-sm sm:w-80">
+            <option value="">Pair a phone for…</option>
+            {q.data.unpaired_hotels.map((h) => <option key={h.id} value={h.id}>{h.name}</option>)}
+          </select>
+          {pairFor ? <PairingBox key={pairFor} create={() => api.post("/admin/forwarder/pairing", { hotel_id: pairFor })} invalidate={PHONES} /> : null}
+        </div>
+      ) : null}
+      <ErrorNote error={unpair.error} />
+    </section>
+  );
+}
+
 export function ToolsPage() {
   return (
     <div className="flex flex-col gap-5 p-4 sm:p-6">
       <div>
         <h1 className="text-2xl font-bold">Tools</h1>
-        <p className="text-sm text-muted">For testing until the SMS forwarder app (M8) is installed on each Till phone.</p>
+        <p className="text-sm text-muted">Till phones, and a payment simulator for testing.</p>
       </div>
-      <div className="max-w-xl"><Simulator /></div>
+      <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
+        <TillPhones />
+        <Simulator />
+      </div>
     </div>
   );
 }

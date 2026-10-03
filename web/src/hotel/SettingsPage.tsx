@@ -3,8 +3,10 @@
 import { ErrorBoundary, MapFailed } from "../components/ErrorBoundary";
 import clsx from "clsx";
 import { Banknote, Camera, Check, Clock, Copy, MapPin, Palette, Pencil, Phone, Smartphone, Store } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 import { type FormEvent, type ReactNode, Suspense, lazy, useEffect, useRef, useState } from "react";
 
+import { PairingBox, PhoneCard, type TillPhone, useUnpair } from "../components/TillPhones";
 import { Button, ErrorNote, Input, Sheet, Skeleton, Switch } from "../components/ui";
 import { HotelCover } from "../customer/bits";
 import { api } from "../lib/api";
@@ -228,6 +230,38 @@ function LocationPanel({ lat, lng, canEdit }: { lat: number | null; lng: number 
 
 // --- Page --------------------------------------------------------------------------------------
 
+const PHONES = ["hotel", "forwarder"];
+
+/** The Till phone app (M8): connect a phone, and see that it's working. */
+function TillPhonePanel() {
+  const q = useQuery({ queryKey: PHONES, queryFn: () => api.get<{ devices: TillPhone[] }>("/hotel/forwarder"), refetchInterval: 30_000 });
+  const unpair = useUnpair((id) => `/hotel/forwarder/${id}`, PHONES);
+  const [adding, setAdding] = useState(false);
+  const devices = q.data?.devices ?? [];
+  return (
+    <Panel
+      icon={<Smartphone className="size-5" />}
+      title="Till phone"
+      sub="The phone that receives this Till's M-Pesa messages sends them to Chakula, so orders confirm by themselves."
+    >
+      {q.isLoading ? <Skeleton className="h-24" /> : null}
+      <div className="flex flex-col gap-3">
+        {devices.map((d) => (
+          <PhoneCard key={d.id} d={d} unpairing={unpair.isPending} onUnpair={() => window.confirm("Disconnect this phone? Payments will need confirming by hand until a phone is connected again.") && unpair.mutate(d.id)} />
+        ))}
+        {devices.length === 0 || adding ? (
+          <PairingBox create={() => api.post<{ code: string; expires_at: string }>("/hotel/forwarder/pairing")} invalidate={PHONES} />
+        ) : (
+          <button onClick={() => setAdding(true)} className="self-start text-sm font-semibold text-brand underline">
+            Replace with another phone
+          </button>
+        )}
+      </div>
+      <ErrorNote error={unpair.error} />
+    </Panel>
+  );
+}
+
 export function SettingsPage() {
   const isAdmin = useIsAdmin();
   const { data, isLoading, error } = useHotelSettings();
@@ -296,6 +330,8 @@ export function SettingsPage() {
           </div>
           <ErrorNote error={upload.error} />
         </section>
+
+        {isAdmin ? <TillPhonePanel /> : null}
 
         {/* Options */}
         <Panel icon={<Banknote className="size-5" />} title="Ordering options">

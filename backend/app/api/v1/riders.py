@@ -1,7 +1,7 @@
 """Riders (DECISIONS D21): sign-up and KYC review, delivery jobs, the admin dispatch board."""
 
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, File, Form, UploadFile
@@ -21,7 +21,7 @@ from app.schemas.auth import TokenOut
 from app.schemas.catalogue import Input
 from app.schemas.common import Schema
 from app.schemas.riders import ReviewIn, RiderDetailsIn, RiderOut, RiderRegisterIn, SubmitIn
-from app.services import auth, delivery, events, media, riders
+from app.services import auth, delivery, events, media, riders, tracking
 from app.services.media import Storage
 
 public = APIRouter(tags=["riders"])
@@ -211,6 +211,12 @@ class OnlineIn(Input):
     online: bool
 
 
+class LocationIn(Input):
+    lat: float = Field(ge=-90, le=90)
+    lng: float = Field(ge=-180, le=180)
+    accuracy_m: int | None = Field(None, ge=0, le=100_000)
+
+
 class PickupIn(Input):
     fee_received: bool | None = None  # option A instant: did the fee come with the food?
 
@@ -331,6 +337,15 @@ async def _jobs_out(session, orders: list[Order], rider_id: uuid.UUID) -> list[J
 async def _job(session, order: Order, user_id) -> JobOut:
     await session.commit()
     return (await _jobs_out(session, [order], user_id))[0]
+
+
+@rider.post("/location", status_code=204)
+async def location(body: LocationIn, user: Rider, session: Session):
+    """The rider's phone, every ~30 s while online (D27)."""
+    await tracking.record(
+        session, user.id, lat=body.lat, lng=body.lng, accuracy_m=body.accuracy_m, now=utcnow()
+    )
+    await session.commit()
 
 
 @rider.post("/online", response_model=RiderOut)
@@ -467,6 +482,11 @@ class DispatchOut(Schema):
     assigned_at: datetime | None
     rider_seen: bool = False
     picked_up_at: datetime | None
+    # For the Dispatch map (D27): where the food is and where it's going.
+    hotel_lat: float | None = None
+    hotel_lng: float | None = None
+    lat: float | None = None
+    lng: float | None = None
 
 
 class RiderBrief(Schema):
@@ -476,13 +496,39 @@ class RiderBrief(Schema):
     photo_url: str | None
     is_online: bool
     active_jobs: int
+    # The rider's last finished delivery today: tells dispatch they're free again (owner, D25).
+    last_code: str | None = None
+    last_status: str | None = None
+    last_at: datetime | None = None
+    # Live location (D27); `live` is false when the last fix is over 5 minutes old.
+    lat: float | None = None
+    lng: float | None = None
+    accuracy_m: int | None = None
+    location_at: datetime | None = None
+    live: bool = False
+
+
+class FinishedOut(Schema):
+    id: uuid.UUID
+    code: str
+    status: str  # delivered | failed_delivery
+    hotel_name: str
+    customer_name: str
+    rider_id: uuid.UUID | None
+    rider_name: str | None
+    picked_up_at: datetime | None
+    closed_at: datetime
+
+
+FINISHED = ("delivered", "failed_delivery")
 
 
 @dispatch.get("")
 async def dispatch_board(_: SuperAdmin, session: Session, storage: StorageDep):
+    now = utcnow()
     orders = (
         await session.execute(
-            select(Order, Hotel.name)
+            select(Order, Hotel)
             .join(Hotel, Hotel.id == Order.hotel_id)
             .where(Order.type == "delivery", Order.status.in_(delivery.ON_JOB))
             .order_by(Order.accepted_at)
@@ -497,6 +543,23 @@ async def dispatch_board(_: SuperAdmin, session: Session, storage: StorageDep):
         )
     ).all()
     names = {u.id: u.name for u, _ in rider_rows}
+    finished = (
+        await session.execute(
+            select(Order, Hotel.name)
+            .join(Hotel, Hotel.id == Order.hotel_id)
+            .where(
+                Order.type == "delivery",
+                Order.status.in_(FINISHED),
+                Order.closed_at >= utcnow() - timedelta(hours=12),
+            )
+            .order_by(Order.closed_at.desc())
+            .limit(30)
+        )
+    ).all()
+    last: dict = {}
+    for o, _ in finished:  # newest first: keep the first per rider
+        if o.rider_id and o.rider_id not in last:
+            last[o.rider_id] = o
     active: dict = {}
     for o, _ in orders:
         if o.rider_id:
@@ -507,7 +570,11 @@ async def dispatch_board(_: SuperAdmin, session: Session, storage: StorageDep):
                 id=o.id,
                 code=o.code,
                 status=o.status,
-                hotel_name=hotel,
+                hotel_name=hotel.name,
+                hotel_lat=hotel.lat,
+                hotel_lng=hotel.lng,
+                lat=o.lat,
+                lng=o.lng,
                 customer_name=o.customer_name,
                 landmark=o.landmark,
                 distance_km=o.distance_km,
@@ -531,10 +598,38 @@ async def dispatch_board(_: SuperAdmin, session: Session, storage: StorageDep):
                 photo_url=storage.url(p.photo_key) if p.photo_key else None,
                 is_online=p.is_online,
                 active_jobs=active.get(u.id, 0),
+                last_code=last[u.id].code if u.id in last else None,
+                last_status=last[u.id].status if u.id in last else None,
+                last_at=last[u.id].closed_at if u.id in last else None,
+                lat=p.last_lat,
+                lng=p.last_lng,
+                accuracy_m=p.last_accuracy_m,
+                location_at=p.last_location_at,
+                live=tracking.is_live(p, now),
             )
             for u, p in rider_rows
         ],
+        "finished": [
+            FinishedOut(
+                id=o.id,
+                code=o.code,
+                status=o.status,
+                hotel_name=hotel,
+                customer_name=o.customer_name,
+                rider_id=o.rider_id,
+                rider_name=names.get(o.rider_id),
+                picked_up_at=o.picked_up_at,
+                closed_at=o.closed_at,
+            )
+            for o, hotel in finished
+        ],
     }
+
+
+@dispatch.get("/{order_id}/trail")
+async def order_trail(order_id: uuid.UUID, _: SuperAdmin, session: Session):
+    """Where the rider was during this job (D27)."""
+    return await tracking.trail(session, order_id)
 
 
 @dispatch.post("/{order_id}/assign")

@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Chakula Till</string>
+    <string name="subtitle">Sends this Till\'s M-Pesa payment messages to Chakula, so orders confirm by themselves. Other messages are never read or sent.</string>
+
+    <string name="pair_title">Connect this phone</string>
+    <string name="pair_help">On a computer, open Chakula → Settings → Till phone → Pair a phone. Type the 8-letter code here.</string>
+    <string name="server_label">Server address</string>
+    <string name="code_label">Pairing code</string>
+    <string name="label_label">Name for this phone</string>
+    <string name="pair">Connect</string>
+    <string name="err_server">Enter the server address, starting with https://</string>
+    <string name="err_code">The code has 8 letters, like ACDE-F347</string>
+    <string name="err_clock">This phone\'s clock is wrong. Turn on automatic date and time.</string>
+    <string name="err_network">Couldn\'t reach the server: %1$s</string>
+
+    <string name="status_ok">Working: payments are sent automatically</string>
+    <string name="status_waiting">Waiting to reach the server…</string>
+    <plurals name="status_queued">
+        <item quantity="one">Waiting for internet: 1 payment message will send when connected</item>
+        <item quantity="other">Waiting for internet: %d payment messages will send when connected</item>
+    </plurals>
+    <string name="status_no_sms">Not working: allow SMS below</string>
+    <string name="status_unpaired">Disconnected: this phone was unpaired</string>
+    <string name="status_clock">Not working: set the phone\'s clock to automatic</string>
+    <string name="hotel_line">%1$s · Till %2$s</string>
+    <string name="last_contact">Last contact with Chakula: %1$s</string>
+    <string name="last_sent">Last payment message sent: %1$s</string>
+    <string name="pending">Messages waiting to send: %1$d</string>
+    <string name="last_error">Last problem: %1$s</string>
+    <string name="never">never</string>
+
+    <string name="setup_title">Setup checklist</string>
+    <string name="sms_step">1. Allow SMS</string>
+    <string name="sms_step_help">Lets the app see M-Pesa messages as they arrive.</string>
+    <string name="sms_button">Allow SMS</string>
+    <string name="restricted_help">If Android says \"Restricted setting\": tap Open app settings, then the ⋮ menu at the top right, tap \"Allow restricted settings\", confirm, come back here and tap Allow SMS again.</string>
+    <string name="app_settings">Open app settings</string>
+    <string name="battery_step">2. Keep running in the background</string>
+    <string name="battery_step_help">Stops Android from pausing the app to save battery.</string>
+    <string name="battery_button">Allow background running</string>
+    <string name="tips">3. Keep this phone charged, with mobile data or Wi-Fi on.</string>
+    <string name="done">✓ Done</string>
+    <string name="todo">To do</string>
+
+    <string name="check_now">Send now</string>
+    <string name="checking">Checking for new payment messages…</string>
+    <string name="unpair">Disconnect this phone</string>
+</resources>

@@ -160,6 +160,34 @@ At 100 orders/day, manual payment confirmation means about 20 code entries per c
 - Hotel locations can be set by the super admin (*Delivery & fees → Hotel locations*) or by the hotel admin (*Settings → Hotel location*).
 - This replaces the flat `rider_fee` setting (migration 0002 converts it).
 
+## D27. Rider live location (owner, 2026-10-03)
+
+- While a rider is **online**, the rider screen sends the phone's GPS position every 30 s, or sooner after moving 100 m. Going offline stops it. Riders see "Sharing your location with dispatch". Only approved, online riders can send a position.
+- **Dispatch map** (super admin) shows riders (green = free, orange = on a job, grey = not seen for 5+ minutes), hotels (🏪) and customer drop-off pins. A dashed line runs from each rider to where they're heading next, with the distance.
+- During a job each fix is also kept (at most one per 20 s) as the job's **trail**, `GET /admin/dispatch/{order}/trail`, for disputes. Trails are deleted after 30 days.
+- Limitation: a web page can only share location while it's open. Riders must keep the Chakula screen open while on a job; a closed browser stops updates. The Flutter rider app ("Later") would lift this.
+
+## D26. SMS forwarder: the Till phone app (M8, 2026-10-03)
+
+- **App:** `forwarder/`, "Chakula Till", Kotlin, Android 8+. Tested on Android 16. Built with `./gradlew assembleDebug`; hotels download it from `/downloads/chakula-till.apk` (copied from the build, not committed).
+- **Pairing:** the hotel admin (Settings → Till phone) or super admin (Tools → Till phones) shows a one-time 8-letter code, valid 15 minutes. The app sends it with the server address and receives its device ID and signing secret. The secret is stored encrypted by the phone's Android Keystore. Server side it is never stored: it is HMAC(`FORWARDER_KEY`, a per-phone salt). **One phone per Till**: pairing a new phone unpairs the old one.
+- **Every request is signed** (HMAC-SHA256 over timestamp, nonce and body hash). Requests more than 5 minutes off, a reused nonce, a changed body or an unpaired phone are refused.
+- **Only messages from MPESA** are read and sent. The app filters on the phone, and the server drops anything else unread.
+- **Delivery without a permanent notification:**
+  - An SMS broadcast queues the message and uploads it as soon as there is internet.
+  - A 15-minute WorkManager check-in rescans the inbox for the last 3 days, uploads anything not yet acknowledged, and reports health (battery, queue size, SMS permission).
+  - The server stores each raw message once and ignores repeats, so resending is always safe. One message that fails to process goes to review and never blocks the rest.
+- **Health:** a phone not heard from in 40 minutes, with SMS permission off, or with messages stuck is shown as a problem on the hotel's Settings and Payments pages and on the admin's Tools page.
+- **Android 13+:** an app installed from a file must be allowed "restricted settings" before it can get SMS permission. The app shows the steps (App info → ⋮ → Allow restricted settings) and asks to be excluded from battery optimisation.
+- **Tested end to end in the Android emulator:** pairing; an SMS without a code confirming the right order by itself; the phone offline (message queued, sent when back online); a wrong payer name going to review; an app update keeping its pairing.
+
+## D25. Rider free again; payer name check (owner, 2026-10-03)
+
+- **Dispatch shows when a rider is free.** Each rider shows *Free · ready for a job*, *On N jobs* or *Offline*, plus their last delivery ("Delivered #XWUMVX 3 min ago"). A *Just finished* list covers the last 12 hours, and when a delivery completes while Dispatch is open a green notice says the rider is free for the next job.
+- **Payer name vs checkout name.** The Till SMS name is compared word by word, in any order, with the name typed at checkout. It tolerates one-letter slips (Mohamed/Mohammed) and short forms (Kam/Kamau). Words of 1–2 letters never count. Score: 2 names, 1 name, or none.
+  - **With the customer's code**, the code decides: the order is paid whatever the name (people pay for each other). The hotel's order card shows "Paid by …" with the match.
+  - **Without a code**, an order is chosen automatically only if exactly one waiting order fits the amount, the phone digits and **at least one name**; two names beat one. If the amount fits but no name matches, nothing is confirmed and the hotel gets a review item naming the likely order, to check and use *Match to order*.
+
 ## D24. Cancel after accepting; weekly billing to the platform (M7, owner 2026-10-03)
 
 **Cancel & refund after accepting.** The hotel admin (own hotel) or the super admin can cancel an order the hotel accepted but can't finish (e.g. ran out mid-cook), with a reason. Everything received is refunded through the normal refund flow, commission and service fee are reversed, and a rider who took the job loses it. Once the food is with a rider, it's a failed delivery instead.
@@ -205,11 +233,11 @@ Measured in Chrome:
 
 **Still open (not built yet):**
 - ~~Weekly statements and rider payouts (M7).~~ Done, see D24.
-- The SMS forwarder app (M8); payments currently arrive through the admin's paste-SMS tool or cashier confirmation.
+- ~~The SMS forwarder app (M8).~~ Done, see D26.
 - Web Push for closed browsers, and deployment (M9).
 - ~~No way to cancel an order after the hotel has accepted it.~~ Done, see D24.
 - Customers get no SMS updates (only the open tracking page).
-- No rider live location.
+- ~~No rider live location.~~ Done, see D27.
 - Phone numbers aren't verified (D9).
 
 ## D22. Alarms ring until the action is done (owner, 2026-10-02)

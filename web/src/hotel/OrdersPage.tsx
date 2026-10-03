@@ -13,6 +13,19 @@ import { money } from "../lib/format";
 import { useAlarmUnlocked } from "../lib/alarm";
 import { useHotelSettings, useIsAdmin } from "./hooks";
 
+/** Who paid, from the Till SMS, and whether it's the name given at checkout (D25). Someone
+ * else paying is normal (a friend, a parent), so this informs; it never blocks. */
+function PayerName({ name, match }: { name: string; match: number | null }) {
+  const tone = match === 2 ? "text-ok" : match === 1 ? "text-muted" : match === 0 ? "text-warn" : "text-muted";
+  const label = match === 2 ? "name matches" : match === 1 ? "one name matches" : match === 0 ? "different name from checkout" : "";
+  return (
+    <p className={`mt-1 text-xs ${tone}`}>
+      💳 Paid by <span className="font-semibold">{name}</span>
+      {label ? ` · ${label}` : ""}
+    </p>
+  );
+}
+
 type BoardOrder = {
   id: string;
   code: string;
@@ -34,6 +47,8 @@ type BoardOrder = {
   landmark: string | null;
   reason: string | null;
   platform_bonus: number;
+  payer_name: string | null;
+  name_match: number | null;
   rider_name: string | null;
   rider_phone: string | null;
   rider_photo_url: string | null;
@@ -110,6 +125,7 @@ function OrderCard({ o, onAction, canCancel }: { o: BoardOrder; onAction: (o: Bo
         </a>
       </div>
       {o.landmark ? <p className="mt-1 text-xs text-muted">📍 {o.landmark}</p> : null}
+      {o.payer_name ? <PayerName name={o.payer_name} match={o.name_match} /> : null}
 
       {isNew ? (
         <>

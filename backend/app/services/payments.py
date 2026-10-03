@@ -25,7 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.errors import AppError
 from app.models import Hotel, Order, OrderEvent, Payment, Product, ReviewItem
 from app.models.orders import OrderItem
-from app.services import events, ledger, settings
+from app.services import events, ledger, names, settings
 
 CODE_RE = re.compile(r"^[A-Z0-9]{10}$")
 PAID_AT_TOLERANCE = timedelta(minutes=2)
@@ -343,6 +343,7 @@ async def submit_customer_code(
     if used is not None:  # the SMS arrived first: match now
         used.order_id = order.id
         await session.flush()
+        await _close_unmatched(session, used, f"customer_code:{order.code}", now)
         return await apply_payment(
             session, order, used, actor_type="system", actor_id=None, now=now
         )
@@ -370,11 +371,17 @@ async def record_incoming(
     paid_at: datetime,
     source: str,
     phone_digits: str | None = None,
+    payer_name: str | None = None,
     sms_message_id: uuid.UUID | None = None,
     now: datetime,
 ) -> tuple[Payment, Outcome | None]:
-    """A payment seen on a Till (forwarder SMS in M8; the admin simulator until then).
-    Stored first, then matched; repeats are no-ops (unique code)."""
+    """A payment seen on a Till (the forwarder app, M8; or the admin's paste-SMS tool).
+    Stored first, then matched; repeats are no-ops (unique code).
+
+    With the customer's code: that order, whatever the payer's name (people pay for each
+    other). Without a code, an order is chosen only when exactly one waiting order fits the
+    amount, the visible phone digits and, when the SMS has a name, at least one checkout name
+    (D25); two names beat one. Anything else goes to the hotel's review queue."""
     code = normalize_code(code)
     payment = await _insert_payment(
         session,
@@ -385,6 +392,7 @@ async def record_incoming(
         source=source,
         sms_message_id=sms_message_id,
         status="review",
+        payer_name=(" ".join(payer_name.split())[:120] or None) if payer_name else None,
     )
     if payment is None:
         existing = (
@@ -435,8 +443,44 @@ async def record_incoming(
         if phone_digits:
             tail = re.sub(r"\D", "", phone_digits)[-3:]
             candidates = [o for o in candidates if o.customer_phone.endswith(tail)]
+        if payment.payer_name and candidates:
+            scored = [
+                (names.match(o.customer_name, payment.payer_name) or 0, o) for o in candidates
+            ]
+            best = max(s for s, _ in scored)
+            candidates = [o for s, o in scored if s == best] if best > 0 else []
+            if not candidates:
+                near = ", ".join(f"#{o.code} ({o.customer_name})" for _, o in scored[:3])
+                await open_review(
+                    session,
+                    type="unmatched_sms",
+                    hotel_id=hotel.id,
+                    payment_id=payment.id,
+                    sms_message_id=sms_message_id,
+                    reason=(
+                        f"KES {amount:,} from {payment.payer_name} ({code}): the amount fits "
+                        f"{near} but the name doesn't. Check, then use Match to order."
+                    ),
+                )
+                return payment, None
         if len(candidates) == 1:
             order = await _lock_order(session, candidates[0].id)
+        elif len(candidates) > 1:
+            several = ", ".join(f"#{o.code} ({o.customer_name})" for o in candidates[:4])
+            await open_review(
+                session,
+                type="unmatched_sms",
+                hotel_id=hotel.id,
+                payment_id=payment.id,
+                sms_message_id=sms_message_id,
+                reason=(
+                    f"KES {amount:,} received ({code}"
+                    f"{f', from {payment.payer_name}' if payment.payer_name else ''}) fits "
+                    f"{len(candidates)} orders equally: {several}. Ask the customer, then use "
+                    "Match to order."
+                ),
+            )
+            return payment, None
 
     if order is None:
         await open_review(
@@ -445,11 +489,16 @@ async def record_incoming(
             hotel_id=hotel.id,
             payment_id=payment.id,
             sms_message_id=sms_message_id,
-            reason=f"KES {amount:,} received ({code}) but no order could be matched",
+            reason=(
+                f"KES {amount:,} received ({code}"
+                f"{f', from {payment.payer_name}' if payment.payer_name else ''}) "
+                "but no order could be matched"
+            ),
         )
         return payment, None
 
     payment.order_id = order.id
+    payment.name_match = names.match(order.customer_name, payment.payer_name)
     await session.flush()
     outcome = await apply_payment(
         session,
@@ -662,6 +711,31 @@ async def resolve(
     await session.flush()
     _resolved_event(session, item)
     return item
+
+
+async def _close_unmatched(
+    session: AsyncSession, payment: Payment, resolution: str, now: datetime
+) -> None:
+    """The payment now belongs to an order, so its "which order was this for?" item is
+    answered. Left open, it would offer a Match that can only fail."""
+    items = (
+        (
+            await session.execute(
+                select(ReviewItem).where(
+                    ReviewItem.payment_id == payment.id,
+                    ReviewItem.type == "unmatched_sms",
+                    ReviewItem.status == "open",
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    for item in items:
+        item.status, item.resolution, item.resolved_at = "resolved", resolution, now
+        _resolved_event(session, item)
+    if items:
+        await session.flush()
 
 
 def _resolved_event(session: AsyncSession, item: ReviewItem) -> None:

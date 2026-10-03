@@ -76,6 +76,12 @@ async def _orders_out(session, orders: list[Order]) -> list[HotelOrderOut]:
             await session.execute(select(OrderItem).where(OrderItem.order_id.in_(ids)))
         ).scalars():
             items[oi.order_id].append(f"{oi.quantity}× {oi.name_snapshot}")
+    payers: dict[uuid.UUID, Payment] = {}
+    if ids:
+        for pay in (
+            await session.execute(select(Payment).where(Payment.order_id.in_(ids)))
+        ).scalars():
+            payers[pay.order_id] = pay
     return [
         HotelOrderOut(
             id=o.id,
@@ -100,6 +106,8 @@ async def _orders_out(session, orders: list[Order]) -> list[HotelOrderOut]:
             prep_minutes=o.prep_minutes,
             landmark=o.landmark,
             reason=o.reason,
+            payer_name=payers[o.id].payer_name if o.id in payers else None,
+            name_match=payers[o.id].name_match if o.id in payers else None,
             **_rider_fields(o, riders_by_id.get(o.rider_id), storage),
         )
         for o in orders
@@ -390,6 +398,7 @@ async def test_sms(body: TestSmsIn, _: SuperAdmin, session: Session):
             paid_at=parsed.paid_at,
             source="manual",
             phone_digits=parsed.phone_digits,
+            payer_name=parsed.sender_name,
             now=now,
         )
         out["result"] = outcome.result if outcome else "unmatched"

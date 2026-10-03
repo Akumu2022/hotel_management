@@ -13,6 +13,7 @@ from sqlalchemy import (
     UniqueConstraint,
     text,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, created_at, non_negative, one_of, uuid_pk
@@ -45,6 +46,25 @@ class ForwarderDevice(Base):
     secret_encrypted: Mapped[str] = mapped_column(String(300))
     last_heartbeat_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = created_at()
+    # M8 (D26): what the phone last reported, for the "Till phone" status screens.
+    app_version: Mapped[str | None] = mapped_column(String(20))
+    last_sms_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_report: Mapped[dict] = mapped_column(JSONB, default=dict, server_default="{}")
+
+
+class ForwarderPairing(Base):
+    """A one-time code shown on screen to pair a Till phone (M8, D26). Only its hash is kept."""
+
+    __tablename__ = "forwarder_pairings"
+
+    id: Mapped[uuid.UUID] = uuid_pk()
+    hotel_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("hotels.id"), index=True)
+    code_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    device_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("forwarder_devices.id"))
+    created_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"))
     created_at: Mapped[datetime] = created_at()
 
 
@@ -84,6 +104,9 @@ class Payment(Base):
         one_of("source", PAYMENT_SOURCES),
         one_of("status", PAYMENT_STATUSES),
         CheckConstraint("amount > 0", name="amount_positive"),
+        CheckConstraint(
+            "name_match IS NULL OR name_match BETWEEN 0 AND 2", name="name_match_range"
+        ),
         Index(
             "uq_payments_order_id",
             "order_id",
@@ -102,6 +125,10 @@ class Payment(Base):
     order_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("orders.id"))
     settlement_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("settlements.id"))
     status: Mapped[str] = mapped_column(String(10))
+    # D25: the payer's name from the Till SMS and how well it matches the checkout name
+    # (2 = two names, 1 = one name, 0 = none, null = unknown, e.g. typed by the cashier).
+    payer_name: Mapped[str | None] = mapped_column(String(120))
+    name_match: Mapped[int | None] = mapped_column(SmallInteger)
     confirmed_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"))
     created_at: Mapped[datetime] = created_at()
 

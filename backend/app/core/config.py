@@ -16,6 +16,9 @@ class Config(BaseSettings):
     media_url: str = "/media"
     # Rider ID photos and selfies (D21): never served by the static file server.
     private_media_dir: str = "private_media"
+    # M8 (D26): each Till phone's signing secret is HMAC(forwarder_key, its random salt), so the
+    # database alone can't be used to forge payment messages. Set a long random value in prod.
+    forwarder_key: str = "dev-forwarder-key-change-me-dev-forwarder-key"
 
     @property
     def cors_origin_list(self) -> list[str]:

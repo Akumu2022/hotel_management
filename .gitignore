@@ -10,3 +10,4 @@ dist/
 media/
 private_media/
 .pgdata/
+web/public/downloads/*.apk

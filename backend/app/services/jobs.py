@@ -14,7 +14,18 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core.time import utcnow
 from app.models import Hotel, Order, OrderEvent, Payment, ReviewItem
-from app.services import billing, catalogue, delivery, events, hours, order_flow, payments, settings
+from app.services import (
+    billing,
+    catalogue,
+    delivery,
+    events,
+    forwarder,
+    hours,
+    order_flow,
+    payments,
+    settings,
+    tracking,
+)
 
 log = logging.getLogger("app.jobs")
 
@@ -128,6 +139,8 @@ async def run_all(sessionmaker: async_sessionmaker, now: datetime | None = None)
         ("auto_rejected", order_flow.auto_reject_late),
         ("fee_answers_timed_out", delivery.answer_timeouts),
         ("billing", billing.weekly_job),
+        ("nonces_pruned", forwarder.prune_nonces),
+        ("pings_pruned", tracking.prune),
     ):
         async with sessionmaker() as session:
             try:

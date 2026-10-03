@@ -8,6 +8,7 @@ import clsx from "clsx";
 import { AlertTriangle, Banknote, CheckCircle2, Clock, RotateCcw, ShieldCheck, Smartphone } from "lucide-react";
 import { useEffect, useState } from "react";
 
+import { type TillPhone, phoneHealth } from "../components/TillPhones";
 import { Badge, EmptyState, ErrorNote, Skeleton } from "../components/ui";
 import { api } from "../lib/api";
 import { money } from "../lib/format";
@@ -271,10 +272,22 @@ export function PaymentsPage() {
   const review = useQuery({ queryKey: ["hotel", "payments", "review"], queryFn: () => api.get<Review[]>("/hotel/review-items"), refetchInterval: 15_000 });
   const refunds = useQuery({ queryKey: ["hotel", "payments", "refunds"], queryFn: () => api.get<RefundRow[]>("/hotel/refunds"), refetchInterval: 30_000 });
 
+  const phones = useQuery({ queryKey: ["hotel", "forwarder"], queryFn: () => api.get<{ devices: TillPhone[] }>("/hotel/forwarder"), refetchInterval: 60_000 });
+  const health = phones.data ? phoneHealth(phones.data.devices[0]) : null;
+
   if (pending.isLoading) return <Skeleton className="h-64 rounded-[1.5rem]" />;
 
   return (
     <div className="flex flex-col gap-5">
+      {health ? (
+        <p className={clsx("flex items-start gap-2 rounded-2xl px-4 py-3 text-sm font-semibold", health.ok ? "bg-ok-soft text-ok" : "bg-bad-soft text-bad")}>
+          <Smartphone className="mt-0.5 size-4 shrink-0" />
+          <span>
+            Till phone: {health.text}
+            {!health.ok && isAdmin ? " Settings → Till phone." : ""}
+          </span>
+        </p>
+      ) : null}
       <p className="flex items-start gap-2 rounded-2xl bg-warn-soft px-4 py-3 text-sm text-warn">
         <AlertTriangle className="mt-0.5 size-4 shrink-0" />
         Only confirm from the Till phone's own M-Pesa message. Never accept screenshots or forwarded messages.

@@ -38,6 +38,7 @@ function AdminAlarms() {
     void qc.invalidateQueries({ queryKey: ["admin", "reviews"] });
     void qc.invalidateQueries({ queryKey: ["admin", "dispatch"] });
     if (["settlement", "statement", "payout", "hotel", "reconnected"].includes(e.type)) void qc.invalidateQueries({ queryKey: ["admin", "billing"] });
+    if (e.type === "forwarder") void qc.invalidateQueries({ queryKey: ["admin", "forwarder"] });
   }, { staff: true });
   const alerts = useQuery({ queryKey: ["admin", "alerts"], queryFn: () => api.get<{ unaccepted: unknown[] }>("/admin/alerts"), refetchInterval: 15_000 });
   const reviews = useQuery({ queryKey: ["admin", "reviews"], queryFn: () => api.get<{ hotel_name: string | null; type: string }[]>("/admin/review-items"), refetchInterval: 15_000 });

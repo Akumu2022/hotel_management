@@ -1,7 +1,16 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, String
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    DateTime,
+    Float,
+    ForeignKey,
+    Index,
+    SmallInteger,
+    String,
+)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -82,6 +91,27 @@ class RiderProfile(Base):
     payout_mode: Mapped[str] = mapped_column(String(8), default="instant", server_default="instant")
     is_online: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Live location (D27): the latest GPS fix from the rider's phone, sent only while online.
+    last_lat: Mapped[float | None] = mapped_column(Float)
+    last_lng: Mapped[float | None] = mapped_column(Float)
+    last_accuracy_m: Mapped[int | None] = mapped_column(SmallInteger)
+    last_location_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class RiderPing(Base):
+    """Where a rider was during a job, every ~30 s (D27): for disputes ("I was at the gate").
+    Kept 30 days."""
+
+    __tablename__ = "rider_pings"
+    __table_args__ = (Index("ix_rider_pings_rider_at", "rider_id", "at"),)
+
+    id: Mapped[uuid.UUID] = uuid_pk()
+    rider_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"))
+    order_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("orders.id"), index=True)
+    lat: Mapped[float] = mapped_column(Float)
+    lng: Mapped[float] = mapped_column(Float)
+    accuracy_m: Mapped[int | None] = mapped_column(SmallInteger)
+    at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 
 class RiderStrike(Base):

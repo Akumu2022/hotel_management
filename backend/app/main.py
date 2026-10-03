@@ -16,6 +16,7 @@ from app.api.v1 import (
     admin,
     auth,
     billing,
+    forwarder,
     hotel,
     ordering,
     orders_board,
@@ -116,6 +117,9 @@ def create_app() -> FastAPI:
     v1.include_router(billing.hotel)
     v1.include_router(billing.admin)
     v1.include_router(billing.rider)
+    v1.include_router(forwarder.device)
+    v1.include_router(forwarder.hotel)
+    v1.include_router(forwarder.admin)
     app.include_router(v1)
 
     # Development: serve uploaded photos from the local media folder (R2 in production).

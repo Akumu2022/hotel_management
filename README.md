@@ -4,8 +4,10 @@ Spec: *Hotel Food Ordering App — Developer Specification* (Oct 1, 2026), with 
 [docs/DECISIONS.md](docs/DECISIONS.md). UI direction: [docs/UI.md](docs/UI.md).
 
 ```
-backend/   FastAPI app, Alembic migrations, tests
-docs/      spec addendum, UI direction
+backend/     FastAPI app, Alembic migrations, tests
+web/         React + Vite app (customer, hotel, rider, admin)
+forwarder/   "Chakula Till" Android app for each hotel's Till phone (M8)
+docs/        spec addendum, UI direction
 ```
 
 ## Local development (Windows, no Docker)
@@ -36,6 +38,24 @@ npm run build      # type-check + production build
 ```
 
 Areas: `/` customer, `/hotel` (orders, payments, menu, deals, Chakula bill, settings), `/rider`, `/admin`.
+
+## Till phone app (forwarder/)
+
+Sends each hotel's M-Pesa Till messages to the server so payments confirm by themselves
+(DECISIONS D26). Needs Android Studio's SDK and bundled Java:
+
+```powershell
+cd forwarder
+$env:JAVA_HOME = "C:\Program Files\Android\Android Studio1\jbr"   # your Android Studio's jbr
+.\gradlew assembleDebug
+copy app\build\outputs\apk\debug\app-debug.apk ..\web\public\downloads\chakula-till.apk
+```
+
+Hotels download it from `/downloads/chakula-till.apk`, then pair it under Settings → Till phone.
+For a phone on the same Wi-Fi as a development laptop, run the API with `--host 0.0.0.0` and
+`npm run dev -- --host`, and enter `http://<laptop Wi-Fi IP>:5173` as the server address
+(the emulator uses `http://10.0.2.2:8000`). Debug builds allow plain http; release builds need https.
+Set `FORWARDER_KEY` (see `.env.example`) to a long random value in production.
 
 ## Tests and lint
 

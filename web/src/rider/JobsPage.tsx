@@ -3,7 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import clsx from "clsx";
 import { AlertTriangle, Banknote, Bike, CheckCircle2, MapPin, Navigation, Phone, Power, Store } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { useAlarm } from "../lib/alarm";
 
@@ -256,6 +256,37 @@ function MyJob({ j, act }: { j: Job; act: (path: string, body?: unknown) => Prom
   );
 }
 
+/** While online, share the phone's location with dispatch (D27): every 30 s, or sooner after
+ * moving 100 m. Stops the moment the rider goes offline. Works while this screen is open. */
+function useShareLocation(online: boolean) {
+  const [state, setState] = useState<"off" | "on" | "denied" | "unavailable">("off");
+  useEffect(() => {
+    if (!online) {
+      setState("off");
+      return;
+    }
+    if (!("geolocation" in navigator)) {
+      setState("unavailable");
+      return;
+    }
+    let last: { lat: number; lng: number; at: number } | null = null;
+    const id = navigator.geolocation.watchPosition(
+      (pos) => {
+        setState("on");
+        const p = { lat: pos.coords.latitude, lng: pos.coords.longitude, at: Date.now() };
+        const moved = last ? Math.hypot((p.lat - last.lat) * 111_000, (p.lng - last.lng) * 111_000) : Infinity;
+        if (last && p.at - last.at < 30_000 && moved < 100) return;
+        last = p;
+        void api.post("/rider/location", { lat: p.lat, lng: p.lng, accuracy_m: Math.round(pos.coords.accuracy) }).catch(() => undefined);
+      },
+      (err) => setState(err.code === err.PERMISSION_DENIED ? "denied" : "unavailable"),
+      { enableHighAccuracy: true, maximumAge: 10_000, timeout: 30_000 },
+    );
+    return () => navigator.geolocation.clearWatch(id);
+  }, [online]);
+  return state;
+}
+
 type Earnings = { owed: number; payouts: { id: string; amount: number; mpesa_code: string; paid_at: string }[] };
 
 const paidOn = new Intl.DateTimeFormat("en-KE", { weekday: "short", day: "numeric", month: "short", timeZone: "Africa/Nairobi" });
@@ -291,6 +322,7 @@ export function JobsPage({ me }: { me: RiderMe }) {
   const qc = useQueryClient();
   const jobs = useQuery({ queryKey: ["rider", "jobs"], queryFn: () => api.get<Job[]>("/rider/jobs"), refetchInterval: 20_000 });
   const history = useQuery({ queryKey: ["rider", "history"], queryFn: () => api.get<Job[]>("/rider/jobs/history") });
+  const location = useShareLocation(me.is_online);
   const earnings = useQuery({ queryKey: ["rider", "earnings"], queryFn: () => api.get<Earnings>("/rider/earnings") });
   const refresh = () => {
     void qc.invalidateQueries({ queryKey: ["rider"] });
@@ -340,6 +372,13 @@ export function JobsPage({ me }: { me: RiderMe }) {
         </span>
       </button>
       <ErrorNote error={online.error} />
+      {me.is_online ? (
+        location === "on" ? (
+          <p className="flex items-center gap-2 px-1 text-xs text-muted"><MapPin className="size-3.5 text-ok" /> Sharing your location with dispatch while you're online.</p>
+        ) : location === "denied" ? (
+          <p className="rounded-2xl bg-warn-soft px-4 py-3 text-sm font-semibold text-warn">Turn on location for this site so dispatch can see where you are and send you the nearest jobs.</p>
+        ) : null
+      ) : null}
 
       <div className="grid grid-cols-2 gap-3">
         <div className="rounded-2xl bg-surface p-4 text-center shadow-sm">

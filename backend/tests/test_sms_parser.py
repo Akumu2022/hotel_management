@@ -59,6 +59,26 @@ def test_thousands_and_masked_phone_and_morning_time():
 
 
 @pytest.mark.parametrize(
+    ("amount", "expected"),
+    [("1420.00", 1420), ("1,420.00", 1420), ("12500", 12500), ("12,500.00", 12500), ("720", 720)],
+)
+def test_amount_with_or_without_thousands_comma(amount, expected):
+    p = parse(
+        f"UJ3TEST001 Confirmed.on 3/10/26 at 10:51 AMKSH{amount} received from 2547******999 "
+        "KAMAU DANIEL JAMES. New Account balance is KSH5,420.00. Transaction cost, KSH0.00."
+    )
+    assert (p.status, p.amount, p.sender_name) == ("parsed", expected, "KAMAU DANIEL JAMES")
+
+
+def test_misplaced_comma_is_not_guessed():
+    p = parse(
+        "UJ3TEST001 Confirmed.on 3/10/26 at 10:51 AMKSH14,20.00 received from 2547******999 "
+        "KAMAU DANIEL JAMES. New Account balance is KSH5,420.00."
+    )
+    assert p.status == "failed"
+
+
+@pytest.mark.parametrize(
     "raw",
     [
         "UJ2H08M4M3 Confirmed.on 2/10/26 at 7:37 PMKSH40.50 received from 254700000001 Jane Doe. New Account balance is KSH1,090.05.",  # cents

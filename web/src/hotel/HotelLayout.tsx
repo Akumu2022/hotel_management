@@ -73,6 +73,7 @@ function HotelAlarms() {
     }
     if (e.type === "hotel") void qc.invalidateQueries({ queryKey: ["hotel", "settings"] });
     if (e.type === "hotel" || e.type === "statement" || e.type === "settlement") void qc.invalidateQueries({ queryKey: ["hotel", "billing"] });
+    if (e.type === "forwarder") void qc.invalidateQueries({ queryKey: ["hotel", "forwarder"] });
   }, { staff: true });
   useAlarm("hotel-orders", useNewOrdersCount(), "order", "New order: accept or reject");
   useAlarm("hotel-payments", usePaymentsToAct(), "payment", "Payment to confirm or refund to send");
