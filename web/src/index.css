@@ -1,0 +1,103 @@
+@import "tailwindcss";
+
+/* Design tokens, following the owner's reference designs (Bonfol / D.CC), docs/UI.md. */
+@theme {
+  --color-brand: #dc4b12; /* reference orange, darkened just enough for white labels */
+  --color-brand-hover: #c2410c;
+  --color-brand-accent: #f05a22;
+  --color-brand-soft: #fff1ea;
+  --color-brand-tint: #ffe4d6;
+  --color-page: #ececec;
+  --color-surface: #ffffff;
+  --color-subtle: #f6f6f6;
+  --color-ink: #18181b;
+  --color-muted: #71717a;
+  --color-line: #e9e9eb;
+  --color-ok: #16a34a;
+  --color-ok-soft: #ecfdf3;
+  --color-warn: #c2410c;
+  --color-warn-soft: #fff7ed;
+  --color-bad: #dc2626;
+  --color-bad-soft: #fef2f2;
+  --radius-card: 1rem;
+  --font-sans: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+/* Dark theme: same tokens, darker values. Brand orange stays the same. */
+.dark {
+  color-scheme: dark;
+  --color-page: #09090b;
+  --color-surface: #17171a;
+  --color-subtle: #222226;
+  --color-ink: #f4f4f5;
+  --color-muted: #a1a1aa;
+  --color-line: #2c2c31;
+  --color-brand-soft: #34190f;
+  --color-brand-tint: #4a2414;
+  --color-ok-soft: #0e2618;
+  --color-warn-soft: #2b1a0b;
+  --color-bad-soft: #2d1212;
+}
+.dark .leaflet-container {
+  filter: brightness(0.85) contrast(1.05);
+}
+
+/* Density (owner, 2026-10-03): on laptops and desktops the app should look the way it did at
+   70% browser zoom. Every size is in rem, so scaling the root font scales the whole UI.
+   Phones keep 100%; breakpoints (media queries) stay in real screen pixels. */
+@media (min-width: 768px) {
+  html {
+    font-size: 85%;
+  }
+}
+@media (min-width: 1024px) {
+  html {
+    font-size: 70%;
+  }
+}
+
+html,
+body {
+  background: var(--color-page);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.money {
+  font-variant-numeric: tabular-nums;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  scrollbar-width: none;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-brand);
+  outline-offset: 2px;
+}
+
+/* Motion: short and subtle; respects reduced-motion. */
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(-12px) scale(0.96); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes pop-in {
+  from { opacity: 0; transform: scale(0.94); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes slide-up {
+  from { opacity: 0; transform: translateY(24px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes bump {
+  0%, 100% { transform: scale(1); }
+  40% { transform: scale(1.06); }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}

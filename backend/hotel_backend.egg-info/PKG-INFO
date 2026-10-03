@@ -1,0 +1,21 @@
+Metadata-Version: 2.4
+Name: hotel-backend
+Version: 0.1.0
+Requires-Python: <3.14,>=3.13
+Requires-Dist: fastapi==0.115.*
+Requires-Dist: uvicorn[standard]==0.32.*
+Requires-Dist: pydantic==2.*
+Requires-Dist: pydantic-settings==2.*
+Requires-Dist: sqlalchemy[asyncio]==2.0.*
+Requires-Dist: asyncpg==0.30.*
+Requires-Dist: alembic==1.14.*
+Requires-Dist: argon2-cffi==23.*
+Requires-Dist: pyjwt==2.*
+Requires-Dist: pillow==11.*
+Requires-Dist: python-multipart==0.0.*
+Requires-Dist: tzdata
+Provides-Extra: dev
+Requires-Dist: pytest==8.*; extra == "dev"
+Requires-Dist: pytest-asyncio==1.*; extra == "dev"
+Requires-Dist: httpx==0.28.*; extra == "dev"
+Requires-Dist: ruff==0.8.*; extra == "dev"

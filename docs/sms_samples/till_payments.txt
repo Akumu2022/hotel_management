@@ -1,0 +1,8 @@
+# Real M-Pesa Lipa na M-Pesa (Till) payment SMS, received 2 Oct 2026.
+# Customer names and phone numbers are anonymised; everything else is exactly as received
+# (as shown by the phone's SMS app, which hides some spaces). One message per block.
+# Every block here is an automated parser test (backend/tests/test_sms_parser.py).
+
+UJ2H08M4M3 Confirmed.on 2/10/26 at 7:37 PMKSH40.00 received from 254700000001 Jane Doe. New Account balance is KSH1,090.05. Transaction cost, KSH0.00.  Receiving payments of Ksh 500 & below in your Lipa na M-PESA till is now FREE!
+
+UJ2EP8HDF4 Confirmed.on 2/10/26 at 7:39 PMKSH60.00 received from 254700000002 JOHN TEST KAMAU. New Account balance is KSH1,150.05. Transaction cost, KSH0.00.  Receiving payments of Ksh 500 & below in your Lipa na M-PESA till is now FREE!
