@@ -24,7 +24,7 @@ async def _login(client, user, password):
 async def test_admin_reset_then_forced_change(client, db):
     admin = await make_user(db, "super_admin")
     rider = await make_user(db, "rider")
-    old = (await _login(client, rider, PASSWORD)).json()
+    old_refresh = (await _login(client, rider, PASSWORD)).cookies["chakula_refresh"]
 
     r = await client.post(
         f"{API}/admin/users/{rider.id}/reset-password", headers=auth_header(admin)
@@ -33,9 +33,7 @@ async def test_admin_reset_then_forced_change(client, db):
     temp = r.json()["temp_password"]
     assert (await _login(client, rider, PASSWORD)).status_code == 401
     # Every open session was logged out.
-    refreshed = await client.post(
-        f"{API}/auth/refresh", json={"refresh_token": old["refresh_token"]}
-    )
+    refreshed = await client.post(f"{API}/auth/refresh", json={"refresh_token": old_refresh})
     assert refreshed.status_code == 401
 
     login = (await _login(client, rider, temp)).json()

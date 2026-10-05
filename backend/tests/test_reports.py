@@ -97,10 +97,10 @@ async def test_payment_review_belongs_to_the_hotel(client, db):
     order = await make_order(db, hotel)
     fresh = ReviewItem(type="underpaid", hotel_id=hotel.id, order_id=order.id, reason="Short")
     stale = ReviewItem(
-        type="underpaid",
+        type="no_sms",
         hotel_id=hotel.id,
         order_id=order.id,
-        reason="Short",
+        reason="Customer entered a code but no SMS arrived",
         created_at=utcnow() - timedelta(minutes=20),
     )
     orphan = ReviewItem(type="parse_failed", reason="Could not read SMS")
@@ -114,15 +114,26 @@ async def test_payment_review_belongs_to_the_hotel(client, db):
         "open": 2
     }
 
+    staff = auth_header(await make_user(db, "cashier", hotel))
+    mine = {i["id"] for i in (await client.get("/api/v1/hotel/review-items", headers=staff)).json()}
+    assert mine == {str(fresh.id), str(stale.id)}
+
+    # Within 15 minutes a hotel item is the hotel's alone...
+    r = await client.post(
+        f"/api/v1/admin/review-items/{fresh.id}/resolve", headers=admin, json={"action": "refund"}
+    )
+    assert r.status_code == 403 and r.json()["error"]["code"] == "hotel_item"
+    # ...once escalated, the owner can settle it too, so the queue can always be emptied.
     r = await client.post(
         f"/api/v1/admin/review-items/{stale.id}/resolve", headers=admin, json={"action": "dismiss"}
     )
-    assert r.status_code == 403 and r.json()["error"]["code"] == "hotel_item"
+    assert r.status_code == 200 and r.json()["status"] == "resolved"
+    await db.refresh(stale)
+    assert stale.resolved_by is not None
     r = await client.post(
         f"/api/v1/admin/review-items/{orphan.id}/resolve", headers=admin, json={"action": "dismiss"}
     )
     assert r.status_code == 200
-
-    staff = auth_header(await make_user(db, "cashier", hotel))
-    mine = {i["id"] for i in (await client.get("/api/v1/hotel/review-items", headers=staff)).json()}
-    assert mine == {str(fresh.id), str(stale.id)}
+    assert (await client.get("/api/v1/admin/review-items/count", headers=admin)).json() == {
+        "open": 0
+    }

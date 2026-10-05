@@ -1,6 +1,7 @@
 /**
  * API client. Errors come back as {"error": {"code", "message", fields?}} (backend core/errors).
- * Access tokens last 15 minutes; on a 401 we rotate the refresh token once and retry.
+ * Access tokens last 15 minutes; on a 401 we rotate the refresh token (an httpOnly cookie) once
+ * and retry.
  */
 
 export class ApiError extends Error {
@@ -16,7 +17,10 @@ export class ApiError extends Error {
 }
 
 const BASE = "/api/v1";
-const STORE = "hotel-auth";
+// D29: only the (non-secret) profile is kept in the browser, to draw the screens. The refresh
+// token is an httpOnly cookie the page can't read; the 15-minute access token lives in memory.
+const USER_STORE = "chakula-user";
+const OLD_STORE = "hotel-auth"; // before D29: whole session incl. refresh token. Migrated once.
 
 export type Me = {
   id: string;
@@ -27,35 +31,63 @@ export type Me = {
   must_change_password?: boolean; // after an admin reset (D28)
 };
 
-export type Session = { access_token: string; refresh_token: string; user: Me };
+/** What login, refresh and sign-up return. The refresh token comes as a cookie, not here. */
+export type Session = { access_token: string; user: Me };
 
-function load(): Session | null {
+function read<T>(key: string): T | null {
   try {
-    const raw = localStorage.getItem(STORE);
-    return raw ? (JSON.parse(raw) as Session) : null;
+    const raw = localStorage.getItem(key);
+    return raw ? (JSON.parse(raw) as T) : null;
   } catch {
     return null;
   }
 }
 
-let session: Session | null = load();
+let user: Me | null = read<Me>(USER_STORE);
+let accessToken: string | null = null; // memory only
 const listeners = new Set<() => void>();
 
 function save(next: Session | null) {
-  session = next;
+  user = next?.user ?? null;
+  accessToken = next?.access_token ?? null;
   try {
-    if (next) localStorage.setItem(STORE, JSON.stringify(next));
-    else localStorage.removeItem(STORE);
+    if (user) localStorage.setItem(USER_STORE, JSON.stringify(user));
+    else localStorage.removeItem(USER_STORE);
   } catch {
-    /* private mode: session lives in memory only */
+    /* private mode: the profile lives in memory only */
   }
   listeners.forEach((fn) => fn());
 }
 
+// One-time move of an old stored session to the cookie: refresh with it, then forget it.
+let migrating: Promise<unknown> | null = null;
+{
+  const old = read<{ refresh_token?: string; user?: Me }>(OLD_STORE);
+  if (old) {
+    try {
+      localStorage.removeItem(OLD_STORE);
+    } catch {
+      /* ignore */
+    }
+    if (old.refresh_token && old.user) {
+      user = old.user;
+      migrating = fetch(BASE + "/auth/refresh", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ refresh_token: old.refresh_token }),
+      })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((next: Session | null) => save(next))
+        .catch(() => save(null))
+        .finally(() => (migrating = null));
+    }
+  }
+}
+
 export const auth = {
-  user: () => session?.user ?? null,
-  /** For EventSource (no headers): passed as ?access_token=. */
-  token: () => session?.access_token ?? null,
+  user: () => user,
+  /** For EventSource (no headers): passed as ?access_token=. May be null right after a reload. */
+  token: () => accessToken,
   subscribe(fn: () => void) {
     listeners.add(fn);
     return () => listeners.delete(fn);
@@ -70,31 +102,35 @@ export const auth = {
   adopt(next: Session) {
     save(next);
   },
+  /** Make sure there is a fresh access token (after a reload it exists only as the cookie). */
+  async ready(): Promise<boolean> {
+    if (migrating) await migrating;
+    return accessToken ? true : refresh();
+  },
   async logout() {
-    const token = session?.refresh_token;
     save(null);
-    if (token) await request("POST", "/auth/logout", { refresh_token: token }, { auth: false }).catch(() => {});
+    await request("POST", "/auth/logout", undefined, { auth: false }).catch(() => {});
   },
 };
 
 let refreshing: Promise<boolean> | null = null;
 
 async function refresh(): Promise<boolean> {
-  if (!session) return false;
-  // One refresh at a time: parallel 401s share it (a reused refresh token logs everyone out).
+  if (!user) return false;
+  // One refresh at a time, in this tab and across tabs: refresh tokens rotate, and presenting an
+  // already-used one logs every session out (token theft protection).
   refreshing ??= (async () => {
+    const run = async () => {
+      try {
+        save(await request<Session>("POST", "/auth/refresh", undefined, { auth: false }));
+        return true;
+      } catch {
+        save(null);
+        return false;
+      }
+    };
     try {
-      const next = await request<Session>(
-        "POST",
-        "/auth/refresh",
-        { refresh_token: session!.refresh_token },
-        { auth: false },
-      );
-      save(next);
-      return true;
-    } catch {
-      save(null);
-      return false;
+      return navigator.locks ? await navigator.locks.request("chakula-refresh", run) : await run();
     } finally {
       refreshing = null;
     }
@@ -111,7 +147,9 @@ export async function request<T = unknown>(
   opts: Options = {},
 ): Promise<T> {
   const headers: Record<string, string> = { ...opts.headers };
-  if (opts.auth !== false && session) headers.Authorization = `Bearer ${session.access_token}`;
+  // Logged in but no token yet (fresh page load): get one first instead of a wasted 401.
+  if (opts.auth !== false && user && !accessToken) await auth.ready();
+  if (opts.auth !== false && accessToken) headers.Authorization = `Bearer ${accessToken}`;
   let payload: BodyInit | undefined;
   if (opts.form) payload = opts.form;
   else if (body !== undefined) {

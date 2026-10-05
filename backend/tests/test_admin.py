@@ -113,7 +113,7 @@ async def test_deactivating_user_revokes_sessions(client, db, headers):
     login = await client.post(
         "/api/v1/auth/login", json={"phone": rider.phone, "password": PASSWORD}
     )
-    refresh = login.json()["refresh_token"]
+    refresh = login.cookies["chakula_refresh"]
     r = await client.patch(
         f"/api/v1/admin/users/{rider.id}", headers=headers, json={"is_active": False}
     )

@@ -160,6 +160,17 @@ At 100 orders/day, manual payment confirmation means about 20 code entries per c
 - Hotel locations can be set by the super admin (*Delivery & fees → Hotel locations*) or by the hotel admin (*Settings → Hotel location*).
 - This replaces the flat `rider_fee` setting (migration 0002 converts it).
 
+## D29. Secrets stay on the server; owner can clear "Needs attention" (owner, 2026-10-06)
+
+- **Login sessions:** the refresh token is an httpOnly, SameSite=Strict cookie limited to `/api/v1/auth`; it is never in a response body or in browser storage, so page scripts and DevTools' storage panel can't read it. The 15-minute access token is kept in memory only. The browser keeps just the non-secret profile (name, role) to draw screens. Old stored sessions are moved to the cookie automatically on the next visit. Refreshes are serialised across tabs (Web Locks) so two tabs can't trip the token-reuse protection.
+- **Login is rate limited** (10 attempts per minute per IP; password changes too).
+- **Production refuses weak secrets:** with `APP_ENV=production` the API won't start unless `JWT_SECRET` and `FORWARDER_KEY` are 32+ random characters and `COOKIE_SECURE=true`. Secrets live only in the server's environment, never in the web app.
+- **Needs attention:** a hotel's payment item is the hotel's alone for its first 15 minutes; once escalated to the owner's queue, the owner can settle it with the same actions (recorded as resolved by the owner), so the queue can always be emptied.
+- **Notification bell** (owner, hotel and rider top bars): lists exactly what is ringing (the same list that plays the sound) with a Go link to where it's fixed, plus items that wait without sound (owner: hotel payment items to settle, rider applications). It never silences an alarm.
+- **Dismissing "no SMS" closes the order** as expired, "Payment not received". Before, the order stayed in checking-payment and the every-minute job reopened the item, so it could never be cleared. Money arriving later is a late payment (D5).
+- **Dispatch: Cancel & refund** a delivery that has no rider (same rules as Find order), so the "Delivery has no rider" alarm can always be ended.
+- **Production web image** (`web/Dockerfile.prod` + `web/nginx.conf`): static build served by nginx (~8 MB memory vs ~180 MB for the dev server), long caching for hashed files, no caching for the service worker.
+
 ## D28. Eat-in orders, ratings, password reset, owner creates hotels (owner, 2026-10-05)
 
 - **SMS matching uses the full number.** Real Till SMS show the payer's full number (`254792468015`). When it is full and equals exactly one waiting order's checkout number with the same amount, that order is paid whatever the name. Masked numbers keep the D25 rules (last 3 digits + name). While the Till phone is online, the hotel's waiting card says the payment confirms automatically; manual entry is a fallback behind a link.

@@ -7,6 +7,7 @@ import { Link, Navigate } from "react-router-dom";
 
 import { Button, ErrorNote, Skeleton } from "../components/ui";
 import { AlarmBanner } from "../components/AlarmBanner";
+import { NotificationBell } from "../components/NotificationBell";
 import { ThemeToggle } from "../customer/CustomerLayout";
 import { api, auth } from "../lib/api";
 import { compressImage } from "../lib/format";
@@ -53,6 +54,7 @@ function Shell({ me, children }: { me?: RiderMe; children: ReactNode }) {
             </span>
           </span>
           <div className="flex items-center gap-2">
+            <NotificationBell links={{ "rider-assigned": "/rider", "rider-open": "/rider" }} />
             <ThemeToggle />
             <Link to="/password" aria-label="Change password" className="flex size-10 items-center justify-center rounded-xl border border-line text-muted hover:bg-subtle">
               <KeyRound className="size-4" />

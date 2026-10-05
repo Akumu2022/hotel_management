@@ -20,6 +20,13 @@ export function useLive(path: string | null, onEvent: (e: LiveEvent) => void, op
 
     const connect = () => {
       if (stopped) return;
+      if (opts.staff && !auth.token()) {
+        // After a reload the login is only a cookie: fetch an access token, then connect.
+        void auth.ready().then((ok) => {
+          if (ok && !stopped) connect();
+        });
+        return;
+      }
       const token = opts.staff ? auth.token() : null;
       const url = `/api/v1${path}${token ? `${path.includes("?") ? "&" : "?"}access_token=${encodeURIComponent(token)}` : ""}`;
       es = new EventSource(url);

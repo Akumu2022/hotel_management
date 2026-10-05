@@ -20,7 +20,12 @@ async def test_login_with_local_phone_format(client, db):
     assert r.status_code == 200, r.text
     body = r.json()
     assert body["user"]["role"] == "super_admin"
-    assert body["access_token"] and body["refresh_token"]
+    assert body["access_token"]
+    # D29: the refresh token is only an httpOnly cookie, never readable by page scripts.
+    assert "refresh_token" not in body
+    cookie = r.headers["set-cookie"].lower()
+    assert "chakula_refresh=" in cookie and "httponly" in cookie and "samesite=strict" in cookie
+    assert "path=/api/v1/auth" in cookie
 
 
 async def test_wrong_password_and_unknown_user_look_the_same(client, db):
@@ -41,12 +46,12 @@ async def test_inactive_user_cannot_log_in(client, db):
 
 async def test_refresh_rotates_and_reuse_revokes_everything(client, db):
     user = await make_user(db, "rider")
-    first = (await login(client, user)).json()["refresh_token"]
-    other_session = (await login(client, user)).json()["refresh_token"]
+    first = (await login(client, user)).cookies["chakula_refresh"]
+    other_session = (await login(client, user)).cookies["chakula_refresh"]
 
     r = await client.post("/api/v1/auth/refresh", json={"refresh_token": first})
     assert r.status_code == 200
-    second = r.json()["refresh_token"]
+    second = r.cookies["chakula_refresh"]
     assert second != first
 
     # Replaying the rotated token is treated as theft: every session is revoked.
@@ -59,7 +64,7 @@ async def test_refresh_rotates_and_reuse_revokes_everything(client, db):
 
 async def test_logout_revokes_refresh_token(client, db):
     user = await make_user(db, "rider")
-    token = (await login(client, user)).json()["refresh_token"]
+    token = (await login(client, user)).cookies["chakula_refresh"]
     assert (
         await client.post("/api/v1/auth/logout", json={"refresh_token": token})
     ).status_code == 204
@@ -105,3 +110,36 @@ async def test_deactivated_user_token_stops_working(client, db):
     user.is_active = False
     await db.flush()
     assert (await client.get("/api/v1/hotel/categories", headers=headers)).status_code == 401
+
+
+async def test_browser_session_uses_the_cookie_only(client, db):
+    """D29: a browser never handles the refresh token; the cookie does refresh and logout."""
+    user = await make_user(db, "super_admin")
+    await login(client, user)  # the test client keeps the cookie like a browser
+    r = await client.post("/api/v1/auth/refresh")
+    assert r.status_code == 200 and "refresh_token" not in r.json()
+    assert (await client.post("/api/v1/auth/logout")).status_code == 204
+    client.cookies.clear()
+    assert (await client.post("/api/v1/auth/refresh")).status_code == 401
+
+
+async def test_login_attempts_are_limited(client, db):
+    user = await make_user(db, "super_admin")
+    codes = [(await login(client, user, "wrong-password")).status_code for _ in range(11)]
+    assert codes[:10] == [401] * 10 and codes[10] == 429
+
+
+def test_production_refuses_development_secrets():
+    import pytest
+
+    from app.core.config import Config
+
+    Config(app_env="development").check_secrets()  # dev defaults are fine locally
+    with pytest.raises(RuntimeError, match="JWT_SECRET"):
+        Config(app_env="production", cookie_secure=True).check_secrets()
+    strong = "x" * 40
+    with pytest.raises(RuntimeError, match="COOKIE_SECURE"):
+        Config(app_env="production", jwt_secret=strong, forwarder_key=strong).check_secrets()
+    Config(
+        app_env="production", jwt_secret=strong, forwarder_key=strong, cookie_secure=True
+    ).check_secrets()

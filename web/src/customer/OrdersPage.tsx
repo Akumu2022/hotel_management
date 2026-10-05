@@ -179,7 +179,7 @@ export function OrdersPage() {
                   return (
                     <li key={r.token} className="rounded-2xl border border-line bg-surface p-2 transition-shadow hover:shadow-md">
                       <Link to={`/o/${r.token}`} className="flex min-w-0 items-start gap-3.5 rounded-xl p-2">
-                        <span className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-brand-soft text-2xl">{r.type === "pickup" ? "🏪" : "🛵"}</span>
+                        <span className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-brand-soft text-2xl">{r.type === "pickup" ? "🏪" : r.type === "eat_in" ? "🍽️" : "🛵"}</span>
                         <span className="min-w-0 flex-1">
                           <span className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
                             <span className="font-bold">{r.hotel_name}</span>

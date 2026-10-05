@@ -327,8 +327,13 @@ async def admin_resolve(item_id: uuid.UUID, body: ResolveIn, user: SuperAdmin, s
     item = await session.get(ReviewItem, item_id)
     if item is None:
         raise not_found("Review item not found")
-    if item.hotel_id is not None and item.type not in payments.ADMIN_TYPES:
-        raise AppError(403, "hotel_item", "The hotel resolves its own payments. Call them.")
+    # The hotel resolves its own payment items first. Once one has waited ESCALATE_AFTER it is in
+    # the owner's queue, and the owner may settle it too, so the queue can always be emptied.
+    escalated = item.created_at < utcnow() - ESCALATE_AFTER
+    if item.hotel_id is not None and item.type not in payments.ADMIN_TYPES and not escalated:
+        raise AppError(
+            403, "hotel_item", "The hotel has 15 minutes to resolve its own payments. Call them."
+        )
     item = await payments.resolve(
         session, item, body.action, user.id, utcnow(), order_code=body.order_code
     )

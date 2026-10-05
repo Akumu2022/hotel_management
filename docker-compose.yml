@@ -18,12 +18,17 @@ services:
 
   api:
     build: ./backend
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload --no-access-log
+    # Bring the database up to date first, so new code never meets an old schema.
+    command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload --no-access-log"
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-hotel}:${POSTGRES_PASSWORD:-hotel}@db:5432/${POSTGRES_DB:-hotel}
       TEST_DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-hotel}:${POSTGRES_PASSWORD:-hotel}@db:5432/hotel_test
       JWT_SECRET: ${JWT_SECRET:-dev-secret-change-me-dev-secret-change-me}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173}
+      # D29: secrets stay on the server. Defaults are the development values; set real ones in .env.
+      FORWARDER_KEY: ${FORWARDER_KEY:-dev-forwarder-key-change-me-dev-forwarder-key}
+      APP_ENV: ${APP_ENV:-development}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
     ports:
       - "8000:8000"
     volumes:
@@ -35,6 +40,8 @@ services:
   web:
     build: ./web
     command: npm run dev -- --host 0.0.0.0
+    environment:
+      VITE_POLL: "1" # see web/vite.config.ts: pick up edits made on the host
     ports:
       - "5173:5173"
     volumes:

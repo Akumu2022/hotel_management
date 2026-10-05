@@ -720,6 +720,18 @@ async def resolve(
             order.closed_at = now
             order.reason = "Payment reversed by M-Pesa"
             await _event(session, order, previous, "staff", user_id, "payment reversed")
+    elif action == "dismiss" and item.type == "no_sms":
+        # "We checked: the money never came." Close the order, or the every-minute check finds
+        # it still waiting and opens the same item again. Money arriving later is a late
+        # payment (D5), handled as usual.
+        if order and order.status == "checking_payment":
+            order.status = "expired"
+            order.closed_at = now
+            order.reason = "Payment not received"
+            await _event(
+                session, order, "checking_payment", "staff", user_id, "payment not received"
+            )
+            events.order_changed(session, order)
     item.status = "resolved"
     item.resolution = action
     item.resolved_by = user_id

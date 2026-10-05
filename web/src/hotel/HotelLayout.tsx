@@ -5,6 +5,7 @@ import { AlertTriangle, BadgePercent, ClipboardList, KeyRound, LayoutDashboard, 
 import { Link, NavLink, Navigate, Outlet, useLocation } from "react-router-dom";
 
 import { Button, Switch } from "../components/ui";
+import { NotificationBell } from "../components/NotificationBell";
 import { ThemeToggle } from "../customer/CustomerLayout";
 import { AlarmBanner } from "../components/AlarmBanner";
 import { useAlarm } from "../lib/alarm";
@@ -201,6 +202,7 @@ export function HotelLayout() {
               <p className="truncate text-sm text-muted">{section === "dashboard" ? `Welcome back, ${me.name.split(" ")[0]}` : settings?.name}</p>
             </div>
             <div className="flex items-center gap-2">
+              <NotificationBell links={{ "hotel-orders": "/hotel/orders", "hotel-payments": "/hotel/payments" }} />
               <ThemeToggle />
               <AcceptingToggle />
             </div>

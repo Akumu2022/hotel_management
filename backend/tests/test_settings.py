@@ -97,7 +97,9 @@ async def test_hotel_override_falls_back_to_global(db):
     tiers = settings.effective_for_hotel(values, plain)  # global default: flat tiers (D19)
     assert (tiers.commission_bp, tiers.service_fee, tiers.commission_for(650)) == (0, 20, 30)
     # A per-hotel percent deal overrides the tiers.
-    assert settings.effective_for_hotel(values, custom) == settings.HotelRates(800, 15, 100, eat_in_fee=30)
+    assert settings.effective_for_hotel(values, custom) == settings.HotelRates(
+        800, 15, 100, eat_in_fee=30
+    )
 
 
 def test_percent_to_bp():

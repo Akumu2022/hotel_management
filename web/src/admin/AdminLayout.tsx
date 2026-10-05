@@ -4,6 +4,7 @@ import { Bike, Building2, FlaskConical, KeyRound, LayoutDashboard, LogOut, MapPi
 import { useSyncExternalStore } from "react";
 import { Link, NavLink, Navigate, Outlet } from "react-router-dom";
 
+import { NotificationBell } from "../components/NotificationBell";
 import { ThemeToggle } from "../customer/CustomerLayout";
 import { AlarmBanner } from "../components/AlarmBanner";
 import { useAlarm } from "../lib/alarm";
@@ -65,6 +66,30 @@ function usePendingSettlements() {
 function usePendingRiders() {
   const q = useQuery({ queryKey: ["admin", "riders"], queryFn: () => api.get<{ kyc_status: string }[]>("/admin/riders?status=all"), refetchInterval: 60_000 });
   return (q.data ?? []).filter((r) => r.kyc_status === "pending").length;
+}
+
+const BELL_LINKS = {
+  "admin-unaccepted": "/admin/review",
+  "admin-no-rider": "/admin/dispatch",
+  "admin-long-delivery": "/admin/dispatch",
+  "admin-review": "/admin/review",
+  "admin-settlements": "/admin/billing",
+};
+
+/** Things that wait without sound: escalated hotel payment items, rider applications. Same
+ * queries the page already runs (shared cache), so the bell adds no requests. */
+function AdminBell({ pendingRiders }: { pendingRiders: number }) {
+  const reviews = useQuery({ queryKey: ["admin", "reviews"], queryFn: () => api.get<{ hotel_name: string | null; type: string }[]>("/admin/review-items"), refetchInterval: 15_000 });
+  const hotelItems = (reviews.data ?? []).filter((r) => r.hotel_name && !["failed_delivery", "fee_dispute"].includes(r.type)).length;
+  return (
+    <NotificationBell
+      links={BELL_LINKS}
+      quiet={[
+        { id: "hotel-items", label: "Hotel payment problems you can settle", count: hotelItems, to: "/admin/review" },
+        { id: "riders", label: "Rider applications to review", count: pendingRiders, to: "/admin/riders" },
+      ]}
+    />
+  );
 }
 
 function CountBadge({ n }: { n: number }) {
@@ -136,6 +161,7 @@ export function AdminLayout() {
             </nav>
             <span className="hidden text-sm font-medium text-muted md:block">Signed in as {me.name}</span>
             <div className="flex items-center gap-2">
+              <AdminBell pendingRiders={pendingRiders} />
               <ThemeToggle />
               <button onClick={() => auth.logout()} aria-label="Log out" className="flex size-10 items-center justify-center rounded-xl border border-line text-muted hover:bg-subtle md:hidden">
                 <LogOut className="size-4" />

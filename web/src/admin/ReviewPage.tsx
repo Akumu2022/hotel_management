@@ -152,7 +152,7 @@ export function ReviewPage() {
     <div className="flex flex-col gap-5 p-4 sm:p-6">
       <div>
         <h1 className="text-2xl font-bold">Needs attention</h1>
-        <p className="text-sm text-muted">Each hotel resolves its own payment problems. You see what's late: chase the hotel by phone. Messages that belong to no hotel are yours.</p>
+        <p className="text-sm text-muted">Each hotel resolves its own payment problems first. After 15 minutes they show here: call the hotel, or settle it yourself. Messages that belong to no hotel are yours.</p>
       </div>
       <FindOrder />
       <DutyAlerts />
@@ -165,6 +165,7 @@ export function ReviewPage() {
               {items.data.map((r) => {
                 const old = minutesAgo(r.created_at) >= 15;
                 const ours = !r.hotel_name || ADMIN_TYPES.includes(r.type);
+                const canAct = ours || old; // after 15 min the owner may settle a hotel's item too
                 return (
                   <li key={r.id} className={clsx("rounded-2xl border p-4", old ? "border-bad/40 bg-bad-soft/40" : "border-line")}>
                     <div className="flex flex-wrap items-center justify-between gap-2">
@@ -188,7 +189,7 @@ export function ReviewPage() {
                           <Phone className="size-4" /> Call {r.hotel_name}
                         </a>
                       ) : null}
-                      {ours && r.actions.map((a) => (
+                      {canAct && r.actions.map((a) => (
                         <button key={a} onClick={() => resolve.mutate({ id: r.id, action: a })} disabled={resolve.isPending} className={clsx("h-10 rounded-xl px-4 text-sm font-semibold", a === "dismiss" ? "border border-line" : "bg-ink text-surface")}>
                           {LABEL[a] ?? a}
                         </button>

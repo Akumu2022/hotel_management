@@ -67,6 +67,7 @@ async def _out(session, p: RiderProfile, storage: Storage) -> RiderOut:
 )
 async def apply(
     session: Session,
+    response: Response,
     storage: StorageDep,
     private: PrivateDep,
     name: Annotated[str, Form()],
@@ -106,7 +107,7 @@ async def apply(
     )
     pair = await auth.login(session, body.phone, body.password)
     await session.commit()
-    return token_out(pair)
+    return token_out(pair, response)
 
 
 # --- Rider: own application -------------------------------------------------------------------

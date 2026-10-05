@@ -26,7 +26,22 @@ let vibrateTimer: ReturnType<typeof setInterval> | null = null;
 let notification: Notification | null = null;
 let baseTitle = typeof document !== "undefined" ? document.title : "";
 
-const notify = () => listeners.forEach((fn) => fn());
+/** What is waiting right now, for the notification bell. Same list the sound uses. */
+export type ActiveAlarm = { id: string; tone: Tone; count: number; title: string };
+let active: ActiveAlarm[] = [];
+let activeKey = "";
+
+const notify = () => {
+  const next = [...reasons]
+    .filter(([, r]) => r.count > 0)
+    .map(([id, r]) => ({ id, ...r }));
+  const key = JSON.stringify(next);
+  if (key !== activeKey) {
+    activeKey = key; // new array only when something changed, so React re-renders only then
+    active = next;
+  }
+  listeners.forEach((fn) => fn());
+};
 
 /** A 2.4 s pattern for each tone, looped. Square waves cut through kitchen noise. */
 function buffer(c: AudioContext, tone: Tone): AudioBuffer {
@@ -157,6 +172,13 @@ export function useAlarmUnlocked(): boolean {
   return useSyncExternalStore(
     (fn) => (listeners.add(fn), () => listeners.delete(fn)),
     () => unlocked,
+  );
+}
+
+export function useActiveAlarms(): ActiveAlarm[] {
+  return useSyncExternalStore(
+    (fn) => (listeners.add(fn), () => listeners.delete(fn)),
+    () => active,
   );
 }
 

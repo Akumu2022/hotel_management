@@ -101,6 +101,13 @@ export function DispatchPage() {
     mutationFn: ({ order, rider }: { order: string; rider: string }) => api.post(`/admin/dispatch/${order}/assign`, { rider_id: rider }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "dispatch"] }),
   });
+  // A delivery no rider can take (none online, or none at all) stops the alarm by being
+  // cancelled & refunded here, with the same rules as Needs attention -> Find order (D24).
+  const cancel = useMutation({
+    mutationFn: ({ order, reason }: { order: string; reason: string }) =>
+      api.post(`/admin/orders/${order}/cancel`, { reason, note: reason === "other" ? "No rider available" : null }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "dispatch"] }),
+  });
   const orders = board.data?.orders ?? [];
   const riders = board.data?.riders ?? [];
   const unassigned = orders.filter((o) => !o.rider_id);
@@ -122,7 +129,7 @@ export function DispatchPage() {
           <button onClick={() => dismiss(f.id)} aria-label="Dismiss" className="rounded-lg p-1 hover:bg-white/20"><X className="size-4" /></button>
         </div>
       ))}
-      <ErrorNote error={assign.error} />
+      <ErrorNote error={assign.error ?? cancel.error} />
       {board.data ? (
         <ErrorBoundary fallback={(retry) => <MapFailed retry={retry} />}>
           <Suspense fallback={<Skeleton className="h-[26rem] rounded-3xl" />}>
@@ -179,6 +186,23 @@ export function DispatchPage() {
                               {r.name} · {r.active_jobs ? `${r.active_jobs} job${r.active_jobs === 1 ? "" : "s"}` : r.is_online ? "free" : "offline"}
                             </option>
                           ))}
+                        </select>
+                      ) : null}
+                      {canAssign && !o.rider_id ? (
+                        <select
+                          aria-label={`Cancel and refund #${o.code}`}
+                          value=""
+                          disabled={cancel.isPending}
+                          onChange={(e) => {
+                            const reason = e.target.value;
+                            if (reason && window.confirm(`Cancel #${o.code} and refund ${o.customer_name}? The hotel sends the refund.`)) cancel.mutate({ order: o.id, reason });
+                          }}
+                          className="h-10 rounded-xl border border-bad/40 bg-surface px-3 text-sm font-semibold text-bad"
+                        >
+                          <option value="">Cancel & refund…</option>
+                          <option value="other">No rider available</option>
+                          <option value="customer_asked">Customer asked</option>
+                          <option value="kitchen_problem">Hotel problem</option>
                         </select>
                       ) : null}
                     </div>

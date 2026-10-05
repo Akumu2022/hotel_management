@@ -19,6 +19,30 @@ class Config(BaseSettings):
     # M8 (D26): each Till phone's signing secret is HMAC(forwarder_key, its random salt), so the
     # database alone can't be used to forge payment messages. Set a long random value in prod.
     forwarder_key: str = "dev-forwarder-key-change-me-dev-forwarder-key"
+    # "production" refuses to start with the development secrets above (see check_secrets).
+    app_env: str = "development"
+    # The login cookie is sent only over HTTPS when true. Must be true in production; false in
+    # development so http://localhost and phones on the Wi-Fi can log in.
+    cookie_secure: bool = False
+
+    def check_secrets(self) -> None:
+        """Stop a production server that would sign logins or Till messages with a known key."""
+        if self.app_env != "production":
+            return
+        weak = [
+            name
+            for name, value in (
+                ("JWT_SECRET", self.jwt_secret),
+                ("FORWARDER_KEY", self.forwarder_key),
+            )
+            if "change-me" in value or len(value) < 32
+        ]
+        if weak:
+            raise RuntimeError(
+                f"Set strong secrets before running in production: {', '.join(weak)}"
+            )
+        if not self.cookie_secure:
+            raise RuntimeError("Set COOKIE_SECURE=true in production (HTTPS only login cookie)")
 
     @property
     def cors_origin_list(self) -> list[str]:

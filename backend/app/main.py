@@ -50,6 +50,7 @@ def _configure_logging() -> None:
 
 def create_app() -> FastAPI:
     _configure_logging()
+    get_config().check_secrets()
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI):

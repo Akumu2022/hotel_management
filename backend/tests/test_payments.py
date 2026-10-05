@@ -317,6 +317,24 @@ async def test_no_sms_alert_after_five_minutes(db, setup):
     assert len(await reviews(db, order.id, "no_sms")) == 1  # one alert, not one per minute
 
 
+async def test_dismissed_no_sms_closes_the_order_and_stays_closed(db, setup):
+    """Dismiss = "the money never came": the order expires, so the minute job can't reopen it."""
+    _, order, cashier = setup
+    await payments.submit_customer_code(db, order.id, CODE, utcnow())
+    later = utcnow() + timedelta(minutes=6)
+    await jobs.flag_missing_payments(db, later)
+    [item] = await reviews(db, order.id, "no_sms")
+    await payments.resolve(db, item, "dismiss", cashier.id, later)
+    await db.refresh(order)
+    assert (order.status, order.reason) == ("expired", "Payment not received")
+    for minutes in (7, 30, 120):  # the background job keeps running
+        await jobs.flag_missing_payments(db, utcnow() + timedelta(minutes=minutes))
+    assert [i.status for i in await reviews(db, order.id, "no_sms")] == ["resolved"]
+    # If the money does arrive later, it is a late payment as usual (D5).
+    await confirm(db, order, cashier)
+    assert [i.type for i in await reviews(db, order.id) if i.status == "open"] == ["late_payment"]
+
+
 # --- Reversal, cash ----------------------------------------------------------------------------
 
 
