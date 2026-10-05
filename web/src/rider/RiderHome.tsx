@@ -1,9 +1,9 @@
 /** Rider app shell (DECISIONS D21): KYC steps until the Chakula team approves, then jobs. */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import clsx from "clsx";
-import { Bike, Camera, CheckCircle2, Clock, IdCard, LogOut, ShieldAlert, ShieldCheck, UserRound } from "lucide-react";
+import { Bike, Camera, CheckCircle2, Clock, IdCard, KeyRound, LogOut, ShieldAlert, ShieldCheck, UserRound } from "lucide-react";
 import { type ReactNode, useRef, useState, useSyncExternalStore } from "react";
-import { Navigate } from "react-router-dom";
+import { Link, Navigate } from "react-router-dom";
 
 import { Button, ErrorNote, Skeleton } from "../components/ui";
 import { AlarmBanner } from "../components/AlarmBanner";
@@ -54,6 +54,9 @@ function Shell({ me, children }: { me?: RiderMe; children: ReactNode }) {
           </span>
           <div className="flex items-center gap-2">
             <ThemeToggle />
+            <Link to="/password" aria-label="Change password" className="flex size-10 items-center justify-center rounded-xl border border-line text-muted hover:bg-subtle">
+              <KeyRound className="size-4" />
+            </Link>
             <button onClick={() => auth.logout()} aria-label="Log out" className="flex size-10 items-center justify-center rounded-xl border border-line text-muted hover:bg-subtle">
               <LogOut className="size-4" />
             </button>
@@ -178,6 +181,7 @@ export function RiderHome() {
   const me = useQuery({ queryKey: ["rider", "me"], queryFn: () => api.get<RiderMe>("/rider/me"), enabled: user?.role === "rider", refetchInterval: (q) => (q.state.data?.kyc_status === "pending" ? 30_000 : false) });
   if (!user) return <Navigate to="/rider/join" replace />;
   if (user.role !== "rider") return <Navigate to={user.role === "super_admin" ? "/admin" : "/hotel"} replace />;
+  if (user.must_change_password) return <Navigate to="/password" replace />;
   if (!me.data) return <Shell><Skeleton className="h-64 rounded-3xl" /></Shell>;
 
   const d = me.data;

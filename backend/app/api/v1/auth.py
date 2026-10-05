@@ -3,8 +3,8 @@ from fastapi import APIRouter
 from app.api.deps import CurrentUserDep, Session
 from app.core.errors import AppError
 from app.models import User
-from app.schemas.auth import LoginIn, MeOut, RefreshIn, TokenOut
-from app.services import auth
+from app.schemas.auth import ChangePasswordIn, LoginIn, MeOut, RefreshIn, TokenOut
+from app.services import audit, auth
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -45,3 +45,19 @@ async def logout(body: RefreshIn, session: Session):
 async def me(user: CurrentUserDep, session: Session):
     """Who is logged in. Also used by live screens to refresh an expired access token."""
     return MeOut.model_validate(await session.get(User, user.id))
+
+
+@router.post("/change-password", response_model=TokenOut)
+async def change_password(body: ChangePasswordIn, user: CurrentUserDep, session: Session):
+    """Everyone can change their own password; required after an admin reset (D28)."""
+    row = await session.get(User, user.id, with_for_update=True)
+    pair = await auth.change_password(session, row, body.current_password, body.new_password)
+    await audit.log(
+        session,
+        actor_id=row.id,
+        action="user.password_change",
+        target_type="user",
+        target_id=row.id,
+    )
+    await session.commit()
+    return _out(pair)

@@ -37,6 +37,10 @@ class User(Base):
     phone: Mapped[str] = mapped_column(String(12), unique=True)
     password_hash: Mapped[str] = mapped_column(String(200))
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
+    # Set by an admin's password reset (D28): the temporary password must be changed at login.
+    must_change_password: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default="false"
+    )
     created_at: Mapped[datetime] = created_at()
 
 

@@ -1,6 +1,6 @@
 /* Small shadcn-style primitives styled with the tokens in index.css (docs/UI.md section 1). */
 import clsx from "clsx";
-import { X } from "lucide-react";
+import { Eye, EyeOff, X } from "lucide-react";
 import {
   type ButtonHTMLAttributes,
   type InputHTMLAttributes,
@@ -10,6 +10,7 @@ import {
   forwardRef,
   useEffect,
   useId,
+  useState,
 } from "react";
 
 type Variant = "primary" | "secondary" | "ghost" | "danger";
@@ -86,6 +87,27 @@ const inputClass =
 export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement>>(
   function Input({ className, ...rest }, ref) {
     return <input ref={ref} {...rest} className={clsx(inputClass, className)} />;
+  },
+);
+
+/** Password box with a show/hide eye (D28). */
+export const PasswordInput = forwardRef<HTMLInputElement, Omit<InputHTMLAttributes<HTMLInputElement>, "type">>(
+  function PasswordInput({ className, ...rest }, ref) {
+    const [shown, setShown] = useState(false);
+    return (
+      <div className="relative">
+        <input ref={ref} {...rest} type={shown ? "text" : "password"} className={clsx(inputClass, "pr-11", className)} />
+        <button
+          type="button"
+          onClick={() => setShown((v) => !v)}
+          aria-label={shown ? "Hide password" : "Show password"}
+          aria-pressed={shown}
+          className="absolute inset-y-0 right-0 flex w-11 items-center justify-center text-muted hover:text-ink"
+        >
+          {shown ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+        </button>
+      </div>
+    );
   },
 );
 

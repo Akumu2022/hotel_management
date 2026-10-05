@@ -14,6 +14,8 @@ export type PublicHotel = {
   lat: number | null;
   lng: number | null;
   prep_minutes: number;
+  rating: number | null; // average stars (D28)
+  rating_count: number;
 };
 
 export type MenuOption = { id: string; group_name: string; name: string; price_delta: number };
@@ -51,7 +53,7 @@ export type PublicOffer = {
   ends_at: string | null;
 };
 
-export type OrderType = "delivery" | "pickup";
+export type OrderType = "delivery" | "pickup" | "eat_in";
 export type RiderFeeMode = "included" | "cash" | "none";
 
 export type Quote = {
@@ -68,7 +70,8 @@ export type Quote = {
   items_total: number;
   order_discount: number;
   food_net: number;
-  service_fee: number;
+  service_fee: number; // includes eat_in_fee
+  eat_in_fee: number;
   rider_fee: number;
   rider_fee_in_till: number;
   rider_fee_cash: number;
@@ -123,7 +126,9 @@ export type Track = {
   items_total: number;
   order_discount: number;
   food_net: number;
-  service_fee: number;
+  service_fee: number; // includes eat_in_fee
+  eat_in_fee: number;
+  arrive_at: string | null;
   rider_fee: number;
   till_amount: number;
   rider_fee_cash: number;
@@ -143,6 +148,8 @@ export type Track = {
   rider_phone: string | null;
   rider_photo_url: string | null;
   fee_question: boolean;
+  can_rate: boolean;
+  rated: boolean;
 };
 
 export type PublicConfig = {

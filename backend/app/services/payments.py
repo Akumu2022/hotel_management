@@ -23,6 +23,7 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import AppError
+from app.core.phone import normalize_phone
 from app.models import Hotel, Order, OrderEvent, Payment, Product, ReviewItem
 from app.models.orders import OrderItem
 from app.services import events, ledger, names, settings
@@ -38,6 +39,16 @@ def normalize_code(raw: str) -> str:
     if not CODE_RE.match(code):
         raise AppError(422, "bad_code", "M-Pesa codes are 10 letters and numbers, e.g. SJK3ABC12D")
     return code
+
+
+def _full_phone(digits: str | None) -> str | None:
+    """The payer's number when the SMS shows all of it (no stars), else None."""
+    if not digits or "*" in digits:
+        return None
+    try:
+        return normalize_phone(digits)
+    except ValueError:
+        return None
 
 
 @dataclass(frozen=True)
@@ -381,7 +392,8 @@ async def record_incoming(
     With the customer's code: that order, whatever the payer's name (people pay for each
     other). Without a code, an order is chosen only when exactly one waiting order fits the
     amount, the visible phone digits and, when the SMS has a name, at least one checkout name
-    (D25); two names beat one. Anything else goes to the hotel's review queue."""
+    (D25); two names beat one. A full (unmasked) number equal to the checkout number is enough
+    on its own (D28). Anything else goes to the hotel's review queue."""
     code = normalize_code(code)
     payment = await _insert_payment(
         session,
@@ -440,10 +452,14 @@ async def record_incoming(
             .scalars()
             .all()
         )
-        if phone_digits:
+        full = _full_phone(phone_digits)
+        if full:
+            # D28: the SMS shows the whole number, so it identifies the customer by itself.
+            candidates = [o for o in candidates if o.customer_phone == full]
+        elif phone_digits:
             tail = re.sub(r"\D", "", phone_digits)[-3:]
             candidates = [o for o in candidates if o.customer_phone.endswith(tail)]
-        if payment.payer_name and candidates:
+        if payment.payer_name and len(candidates) > (1 if full else 0):
             scored = [
                 (names.match(o.customer_name, payment.payer_name) or 0, o) for o in candidates
             ]

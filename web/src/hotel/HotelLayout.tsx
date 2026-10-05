@@ -1,7 +1,7 @@
 /** Hotel staff shell in the D.CC reference style: store card, sidebar nav, user card. */
 import clsx from "clsx";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, BadgePercent, ClipboardList, LayoutDashboard, LogOut, Megaphone, Receipt, Settings, UtensilsCrossed, Wallet } from "lucide-react";
+import { AlertTriangle, BadgePercent, ClipboardList, KeyRound, LayoutDashboard, LogOut, Megaphone, Receipt, Settings, UtensilsCrossed, Wallet } from "lucide-react";
 import { Link, NavLink, Navigate, Outlet, useLocation } from "react-router-dom";
 
 import { Button, Switch } from "../components/ui";
@@ -135,6 +135,7 @@ export function HotelLayout() {
   const tabs = [...MAIN, ...other];
 
   if (!me) return <Navigate to="/login" replace />;
+  if (me.must_change_password) return <Navigate to="/password" replace />;
   if (me.role === "super_admin") return <Navigate to="/admin" replace />;
   if (me.role !== "hotel_admin" && me.role !== "cashier") {
     return (
@@ -183,6 +184,9 @@ export function HotelLayout() {
               <span className="block truncate text-sm font-semibold">{me.name}</span>
               <span className="block text-xs text-muted">{me.role === "hotel_admin" ? "Admin" : "Cashier"}</span>
             </span>
+            <Link to="/password" aria-label="Change password" title="Change password" className="flex size-9 items-center justify-center rounded-lg text-muted hover:bg-subtle hover:text-ink">
+              <KeyRound className="size-4" />
+            </Link>
             <button onClick={() => auth.logout()} aria-label="Log out" title="Log out" className="flex size-9 items-center justify-center rounded-lg text-muted hover:bg-subtle hover:text-ink">
               <LogOut className="size-4" />
             </button>

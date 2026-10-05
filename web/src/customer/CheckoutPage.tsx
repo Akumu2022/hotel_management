@@ -148,10 +148,12 @@ export function CheckoutPage() {
   // Moving the pin clears an old "outside the area" message.
   useEffect(() => setPlaceError(null), [pin]);
   useEffect(() => {
-    if (type === "delivery") setPayment("mpesa");
+    if (type !== "pickup") setPayment("mpesa"); // delivery and eat in are paid first
   }, [type]);
+  // Eat in (D28): minutes from now until the customer sits down.
+  const [arriveIn, setArriveIn] = useState<number | null>(null);
 
-  const riderFeeMode: RiderFeeMode = type === "pickup" ? "none" : feeMode;
+  const riderFeeMode: RiderFeeMode = type === "delivery" ? feeMode : "none";
   const phoneDigits = phone.replace(/\D/g, "");
   const quoteBody = useMemo(
     () => ({
@@ -216,6 +218,7 @@ export function CheckoutPage() {
           phone,
           payment_method: payment,
           landmark: type === "delivery" ? landmark : null,
+          arrive_at: type === "eat_in" && arriveIn ? new Date(Date.now() + arriveIn * 60_000).toISOString() : null,
           expected_total: expectedTotal,
         },
         { auth: false, headers: { "Idempotency-Key": idemKey } },
@@ -242,6 +245,7 @@ export function CheckoutPage() {
     if (type === "delivery" && !pin) return setPlaceError("Tap the map to show the rider where to bring your food");
     if (type === "delivery" && pinOutside) return setPlaceError("Your pin is outside our delivery area. Move it inside the dashed line, or choose pickup.");
     if (type === "delivery" && q?.too_far) return setPlaceError(`That's too far from ${c.hotel_name} for our riders. Choose pickup or a closer spot.`);
+    if (type === "eat_in" && !arriveIn) return setPlaceError("Choose when you'll arrive");
     if (q) place(q.till_amount);
   }
 
@@ -253,7 +257,7 @@ export function CheckoutPage() {
   const done = {
     how: true,
     details: name.trim().length >= 2 && phoneDigits.length >= 9,
-    where: type === "pickup" || (!!pin && !pinOutside && !q?.too_far && landmark.trim().length >= 3),
+    where: type === "pickup" || (type === "eat_in" && !!arriveIn) || (type === "delivery" && !!pin && !pinOutside && !q?.too_far && landmark.trim().length >= 3),
     pay: !cashCapExceeded,
   };
   const doneCount = Object.values(done).filter(Boolean).length;
@@ -425,6 +429,36 @@ export function CheckoutPage() {
                   </div>
                 ) : null}
               </Step>
+            ) : type === "eat_in" ? (
+              <Step n={3} title={t("When will you arrive?")} hint={t("Pay now; the hotel has your food ready when you sit down")} done={done.where}>
+                <div className="flex flex-wrap gap-2" role="radiogroup" aria-label={t("When will you arrive?")}>
+                  {[20, 30, 45, 60, 90, 120].map((m) => (
+                    <button
+                      key={m}
+                      type="button"
+                      role="radio"
+                      aria-checked={arriveIn === m}
+                      onClick={() => setArriveIn(m)}
+                      className={clsx("flex h-11 items-center rounded-xl border-2 px-4 text-sm font-semibold", arriveIn === m ? "border-brand bg-brand-soft text-brand" : "border-line bg-surface")}
+                    >
+                      {m < 60 ? t("In {m} min", { m }) : t("In {h} h", { h: m / 60 })}
+                    </button>
+                  ))}
+                </div>
+                <div className="flex items-center gap-3 rounded-2xl bg-subtle p-4">
+                  <span className="text-3xl">🍽️</span>
+                  <div>
+                    <p className="font-semibold">{c.hotel_name}</p>
+                    <p className="text-sm text-muted">
+                      {arriveIn
+                        ? t("Arriving about {time}. Show your order number when you come in.", {
+                            time: new Date(Date.now() + arriveIn * 60_000).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }),
+                          })
+                        : t("Show your order number when you come in")}
+                    </p>
+                  </div>
+                </div>
+              </Step>
             ) : (
               <Step n={3} title={t("Where to collect")} hint={t("We'll tell you when it's ready")} done={done.where}>
                 <div className="flex items-center gap-3 rounded-2xl bg-subtle p-4">
@@ -438,7 +472,9 @@ export function CheckoutPage() {
             )}
 
             <Step n={4} title={t("How will you pay?")} done={done.pay}>
-              {type === "delivery" ? (
+              {type === "eat_in" ? (
+                <PayOption active onClick={() => setPayment("mpesa")} emoji="📱" title={t("M-Pesa now")} body={t("Eat-in orders are paid first, so the food is ready when you arrive")} />
+              ) : type === "delivery" ? (
                 <>
                   <PayOption
                     active={feeMode === "included"}
@@ -559,8 +595,14 @@ export function CheckoutPage() {
                     ) : null}
                     <div className="flex justify-between">
                       <span className="text-muted">{t("Service fee")}</span>
-                      <span className="money font-medium">{money(q.service_fee)}</span>
+                      <span className="money font-medium">{money(q.service_fee - q.eat_in_fee)}</span>
                     </div>
+                    {q.eat_in_fee ? (
+                      <div className="flex justify-between">
+                        <span className="text-muted">{t("Eat-in booking")}</span>
+                        <span className="money font-medium">{money(q.eat_in_fee)}</span>
+                      </div>
+                    ) : null}
                     {q.rider_fee_in_till ? (
                       <div className="flex justify-between">
                         <span className="text-muted">{t("Delivery")}</span>

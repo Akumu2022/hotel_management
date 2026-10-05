@@ -105,6 +105,7 @@ async def _orders_out(session, orders: list[Order]) -> list[HotelOrderOut]:
             ready_at=o.ready_at,
             prep_minutes=o.prep_minutes,
             landmark=o.landmark,
+            arrive_at=o.arrive_at,
             reason=o.reason,
             payer_name=payers[o.id].payer_name if o.id in payers else None,
             name_match=payers[o.id].name_match if o.id in payers else None,

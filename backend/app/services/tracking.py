@@ -19,6 +19,7 @@ from app.services.delivery import ON_JOB
 PING_EVERY = timedelta(seconds=20)
 KEEP_PINGS = timedelta(days=30)
 STALE_AFTER = timedelta(minutes=5)  # older fixes show as "last seen", not live
+MAX_ACCURACY_M = 100
 
 
 async def record(
@@ -29,6 +30,14 @@ async def record(
         raise AppError(403, "not_approved", "Only approved riders share their location")
     if not p.is_online:
         raise AppError(409, "offline", "Location is only shared while you're online")
+    # D28: a rough fix (weak GPS, Wi-Fi guess) would make the rider jump on the map. Keep the
+    # last good one while it is fresh; with nothing better, a rough fix still beats none.
+    rough = accuracy_m is not None and accuracy_m > MAX_ACCURACY_M
+    fresh = p.last_location_at is not None and now - p.last_location_at < STALE_AFTER
+    good_before = p.last_accuracy_m is not None and p.last_accuracy_m <= MAX_ACCURACY_M
+    if rough and fresh and good_before:
+        p.last_seen_at = now
+        return p
     p.last_lat, p.last_lng = round(lat, 6), round(lng, 6)
     p.last_accuracy_m = min(accuracy_m, 30_000) if accuracy_m is not None else None
     p.last_location_at = now

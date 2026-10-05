@@ -130,9 +130,17 @@ export function ModePicker({
       body: hotelName ? t("Collect at {hotel} · no fee", { hotel: hotelName }) : t("Collect it yourself · no fee"),
       disabled: false,
     },
+    {
+      // D28: order ahead, pay first, the food is ready when you sit down.
+      value: "eat_in" as const,
+      emoji: "🍽️",
+      title: t("Eat in"),
+      body: t("Order ahead, eat there"),
+      disabled: false,
+    },
   ];
   return (
-    <div className="grid grid-cols-2 gap-2.5" role="radiogroup" aria-label={t("How do you want your food?")}>
+    <div className={clsx("grid gap-2.5", compact ? "grid-cols-3" : "grid-cols-2 sm:grid-cols-3")} role="radiogroup" aria-label={t("How do you want your food?")}>
       {options.map((o) => {
         const active = mode === o.value;
         return (
@@ -317,7 +325,7 @@ export function HelpButton({ number, message, variant = "full" }: { number?: str
 // --- Time estimate ------------------------------------------------------------------------------
 
 /** "20–35 min": prep plus town travel for delivery, prep only for pickup. */
-export function etaText(prepMinutes: number, mode: "delivery" | "pickup"): string {
+export function etaText(prepMinutes: number, mode: "delivery" | "pickup" | "eat_in"): string {
   const lo = mode === "delivery" ? prepMinutes + 5 : Math.max(5, prepMinutes - 5);
   const hi = mode === "delivery" ? prepMinutes + 20 : prepMinutes + 5;
   const round5 = (n: number) => Math.round(n / 5) * 5;

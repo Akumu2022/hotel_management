@@ -129,7 +129,7 @@ async def collected(session, order_id, *, user_id, hotel_id, now) -> Order:
     order = await _lock(session, order_id, hotel_id)
     if order.status == "collected":
         return order
-    if order.type != "pickup":
+    if order.type == "delivery":
         raise AppError(409, "not_pickup", "Delivery orders are handed to a rider, not collected")
     if order.status != "ready":
         raise _wrong_state(order, "hand over")

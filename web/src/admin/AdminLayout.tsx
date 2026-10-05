@@ -1,8 +1,8 @@
 import clsx from "clsx";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bike, FlaskConical, LayoutDashboard, LogOut, MapPinned, Percent, ShieldAlert, Users, UtensilsCrossed, Wallet } from "lucide-react";
+import { Bike, Building2, FlaskConical, KeyRound, LayoutDashboard, LogOut, MapPinned, Percent, ShieldAlert, Users, UtensilsCrossed, Wallet } from "lucide-react";
 import { useSyncExternalStore } from "react";
-import { NavLink, Navigate, Outlet } from "react-router-dom";
+import { Link, NavLink, Navigate, Outlet } from "react-router-dom";
 
 import { ThemeToggle } from "../customer/CustomerLayout";
 import { AlarmBanner } from "../components/AlarmBanner";
@@ -15,6 +15,7 @@ const NAV = [
   { to: "review", label: "Needs attention", icon: ShieldAlert },
   { to: "dispatch", label: "Dispatch", icon: Bike },
   { to: "billing", label: "Billing", icon: Wallet },
+  { to: "hotels", label: "Hotels", icon: Building2 },
   { to: "riders", label: "Riders", icon: Users },
   { to: "fees", label: "Fees & bonuses", icon: Percent },
   { to: "delivery", label: "Delivery", icon: MapPinned },
@@ -77,6 +78,7 @@ export function AdminLayout() {
   const pendingRiders = usePendingRiders();
   const pendingSettlements = usePendingSettlements();
   if (!me) return <Navigate to="/login" replace />;
+  if (me.must_change_password) return <Navigate to="/password" replace />;
   if (me.role !== "super_admin") return <Navigate to="/hotel" replace />;
 
   return (
@@ -109,7 +111,10 @@ export function AdminLayout() {
           </nav>
           <div className="mt-auto border-t border-line p-4">
             <p className="truncate text-sm font-semibold">{me.name}</p>
-            <button onClick={() => auth.logout()} className="mt-2 flex h-9 w-full items-center gap-2 rounded-lg px-2 text-sm text-muted hover:bg-subtle hover:text-ink">
+            <Link to="/password" className="mt-2 flex h-9 w-full items-center gap-2 rounded-lg px-2 text-sm text-muted hover:bg-subtle hover:text-ink">
+              <KeyRound className="size-4" /> Change password
+            </Link>
+            <button onClick={() => auth.logout()} className="flex h-9 w-full items-center gap-2 rounded-lg px-2 text-sm text-muted hover:bg-subtle hover:text-ink">
               <LogOut className="size-4" /> Log out
             </button>
           </div>

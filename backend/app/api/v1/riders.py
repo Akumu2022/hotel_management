@@ -21,7 +21,7 @@ from app.schemas.auth import TokenOut
 from app.schemas.catalogue import Input
 from app.schemas.common import Schema
 from app.schemas.riders import ReviewIn, RiderDetailsIn, RiderOut, RiderRegisterIn, SubmitIn
-from app.services import auth, delivery, events, media, riders, tracking
+from app.services import auth, delivery, events, media, ratings, riders, tracking
 from app.services.media import Storage
 
 public = APIRouter(tags=["riders"])
@@ -161,7 +161,11 @@ async def list_riders(
     if status != "all":
         stmt = stmt.where(RiderProfile.kyc_status == status)
     stmt = stmt.order_by(RiderProfile.submitted_at.desc().nulls_last(), User.created_at.desc())
-    return [await _out(session, p, storage) for p in (await session.execute(stmt)).scalars()]
+    out = [await _out(session, p, storage) for p in (await session.execute(stmt)).scalars()]
+    stars = await ratings.rider_stars(session, [r.id for r in out])
+    for r in out:
+        r.rating, r.rating_count = stars[r.id].average, stars[r.id].count
+    return out
 
 
 @admin.get("/{rider_id}", response_model=RiderOut)

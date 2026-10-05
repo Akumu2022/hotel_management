@@ -34,7 +34,7 @@ from app.schemas.orders import (
     TrackItem,
     TrackOut,
 )
-from app.services import delivery, ledger, media, orders
+from app.services import delivery, ledger, media, orders, ratings
 from app.services.media import Storage
 
 router = APIRouter(tags=["ordering"])
@@ -124,6 +124,7 @@ async def track(token: str, session: Session, storage: StorageDep):
         ).all()
     )
     on_the_way = order.status in ("picked_up", "on_the_way", "delivered")
+    rated = await ratings.is_rated(session, order.id)
     profile = await session.get(RiderProfile, order.rider_id) if rider else None
     return TrackOut(
         code=order.code,
@@ -151,6 +152,8 @@ async def track(token: str, session: Session, storage: StorageDep):
         order_discount=order.order_discount,
         food_net=order.food_net,
         service_fee=order.service_fee,
+        eat_in_fee=order.eat_in_fee,
+        arrive_at=order.arrive_at,
         rider_fee=order.rider_fee,
         till_amount=order.till_amount,
         rider_fee_cash=order.rider_fee - order.rider_fee_in_till,
@@ -162,6 +165,8 @@ async def track(token: str, session: Session, storage: StorageDep):
         prep_minutes=order.prep_minutes,
         reason=order.reason,
         can_cancel=order.status in orders.CANCELLABLE,
+        rated=rated,
+        can_rate=order.status in ratings.FINISHED and not rated,
         created_at=order.created_at,
         events=[
             TrackEvent(status=e.to_status, at=e.created_at)
@@ -287,3 +292,27 @@ async def rider_fee_answer(token: str, body: FeeAnswerIn, session: Session):
     order = await delivery.customer_answer(session, order, "yes" if body.paid else "no", utcnow())
     await session.commit()
     return {"answer": order.customer_fee_answer}
+
+
+class RatingIn(Schema):
+    hotel_stars: int = Field(ge=1, le=5, strict=True)
+    rider_stars: int | None = Field(None, ge=1, le=5, strict=True)
+    comment: str | None = Field(None, max_length=500)
+
+
+@router.post("/track/{token}/rating", status_code=204, dependencies=[Depends(limit("rating", 10))])
+async def rate(token: str, body: RatingIn, session: Session):
+    """D28: stars for the hotel (and the rider on deliveries), once per finished order."""
+    order = (
+        await session.execute(select(Order).where(Order.tracking_token == token))
+    ).scalar_one_or_none()
+    if order is None:
+        raise not_found("Order not found")
+    await ratings.submit(
+        session,
+        order,
+        hotel_stars=body.hotel_stars,
+        rider_stars=body.rider_stars,
+        comment=body.comment,
+    )
+    await session.commit()

@@ -10,7 +10,7 @@ PAYOUT_MODES = ("instant", "weekly")
 DISCOUNT_SCOPES = ("item", "order")
 DISCOUNT_KINDS = ("percent", "fixed")
 
-ORDER_TYPES = ("delivery", "pickup")
+ORDER_TYPES = ("delivery", "pickup", "eat_in")  # eat_in: order ahead, pay, eat there (D28)
 RIDER_FEE_MODES = ("included", "cash", "none")  # included = option A, cash = option B
 PAYMENT_METHODS = ("mpesa", "cash")
 ORDER_STATUSES = (

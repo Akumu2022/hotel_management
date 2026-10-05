@@ -86,6 +86,8 @@ class PlatformSettings(BaseModel):
     commission_step_fee: int = Field(10, ge=0, le=100_000, strict=True)
     commission_bp: int = Field(1000, ge=0, le=MAX_COMMISSION_BP)
     service_fee: int = Field(20, ge=0, le=10_000)
+    # Eat in (D28): the owner's markup on each eat-in order, platform money. 0 = none.
+    eat_in_fee: int = Field(30, ge=0, le=10_000, strict=True)
     # Rider fee (DECISIONS D14, D16): "bands" = fixed price per distance band;
     # "per_km" = base + per-km price, never below the minimum, rounded up to KES 10.
     rider_fee_mode: str = Field("per_km", pattern="^(bands|per_km)$")
@@ -226,6 +228,7 @@ class HotelRates:
     commission_bp: int
     service_fee: int
     rider_fee: int
+    eat_in_fee: int = 0
     # Flat tiers (D19); empty = percent commission_bp. A per-hotel percent deal overrides tiers.
     commission_tiers: tuple[tuple[int, int], ...] = ()
     commission_step: int = 1000
@@ -246,6 +249,7 @@ def effective_for_hotel(settings: PlatformSettings, hotel: Hotel) -> HotelRates:
             commission_bp=0,
             service_fee=service_fee,
             rider_fee=settings.base_rider_fee,
+            eat_in_fee=settings.eat_in_fee,
             commission_tiers=settings.tiers,
             commission_step=settings.commission_step,
             commission_step_fee=settings.commission_step_fee,
@@ -256,6 +260,7 @@ def effective_for_hotel(settings: PlatformSettings, hotel: Hotel) -> HotelRates:
         ),
         service_fee=service_fee,
         rider_fee=settings.base_rider_fee,
+        eat_in_fee=settings.eat_in_fee,
     )
 
 

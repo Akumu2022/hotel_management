@@ -5,7 +5,7 @@
  */
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import clsx from "clsx";
-import { AlertTriangle, Banknote, CheckCircle2, Clock, RotateCcw, ShieldCheck, Smartphone } from "lucide-react";
+import { AlertTriangle, Banknote, CheckCircle2, Clock, Loader2, RotateCcw, ShieldCheck, Smartphone } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { type TillPhone, phoneHealth } from "../components/TillPhones";
@@ -19,6 +19,7 @@ type PendingOrder = {
   code: string;
   status: string;
   type: string;
+  arrive_at?: string | null;
   payment_method: "mpesa" | "cash";
   customer_name: string;
   customer_phone: string;
@@ -77,11 +78,13 @@ function Section({ title, count, icon, children }: { title: string; count: numbe
   );
 }
 
-function ConfirmCard({ o }: { o: PendingOrder }) {
+function ConfirmCard({ o, auto }: { o: PendingOrder; auto: boolean }) {
   const qc = useQueryClient();
   const [code, setCode] = useState(o.customer_trans_code ?? "");
   const [amount, setAmount] = useState("");
   const [result, setResult] = useState<{ ok: boolean; text: string } | null>(null);
+  // D28: with a working Till phone the SMS confirms the order; typing is only the fallback.
+  const [manual, setManual] = useState(false);
   useEffect(() => setCode(o.customer_trans_code ?? ""), [o.customer_trans_code]);
   const refresh = () => qc.invalidateQueries({ queryKey: ["hotel", "payments"] });
 
@@ -103,7 +106,9 @@ function ConfirmCard({ o }: { o: PendingOrder }) {
         <div>
           <p className="font-bold">#{o.code} · {o.customer_name}</p>
           <p className="text-sm text-muted">{o.items.join(", ")}</p>
-          <p className="mt-0.5 text-xs text-muted">{ago(o.created_at)} · {o.type}</p>
+          <p className="mt-0.5 text-xs text-muted">
+            {ago(o.created_at)} · {o.type === "eat_in" ? <b className="text-warn">EAT IN{o.arrive_at ? ` · arrives ${new Intl.DateTimeFormat("en-KE", { hour: "numeric", minute: "2-digit", timeZone: "Africa/Nairobi" }).format(new Date(o.arrive_at))}` : ""}</b> : o.type}
+          </p>
         </div>
         <div className="text-right">
           <p className="money text-2xl font-extrabold">{money(o.till_amount)}</p>
@@ -125,6 +130,15 @@ function ConfirmCard({ o }: { o: PendingOrder }) {
         >
           <Banknote className="size-4" /> Cash received · {money(o.till_amount)}
         </button>
+      ) : auto && !manual ? (
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-xl bg-ok-soft px-3 py-2.5 text-sm text-ok">
+          <span className="flex items-center gap-2 font-medium">
+            <Loader2 className="size-4 animate-spin" /> Confirms by itself when the M-Pesa SMS arrives
+          </span>
+          <button onClick={() => setManual(true)} className="text-xs font-semibold text-muted underline underline-offset-2 hover:text-ink">
+            Enter code by hand
+          </button>
+        </div>
       ) : (
         <div className="mt-3 flex flex-col gap-2">
           <p className="text-xs font-medium text-muted">Copy from the Till phone's M-Pesa message:</p>
@@ -297,7 +311,7 @@ export function PaymentsPage() {
         <Section title="Waiting for payment" count={pending.data?.length ?? 0} icon={<Smartphone className="size-5" />}>
           {pending.error ? <ErrorNote error={pending.error} /> : null}
           {pending.data?.length ? (
-            <ul className="flex flex-col gap-3">{pending.data.map((o) => <ConfirmCard key={o.id} o={o} />)}</ul>
+            <ul className="flex flex-col gap-3">{pending.data.map((o) => <ConfirmCard key={o.id} o={o} auto={!!health?.ok} />)}</ul>
           ) : (
             <EmptyState title="All caught up" body="New orders waiting for payment appear here." />
           )}

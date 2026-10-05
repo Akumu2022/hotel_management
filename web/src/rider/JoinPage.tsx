@@ -7,7 +7,7 @@ import { ArrowLeft, ArrowRight, Bike, Camera, CheckCircle2, IdCard, Pencil, Shie
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
-import { Button, Field, Input } from "../components/ui";
+import { Button, Field, Input, PasswordInput } from "../components/ui";
 import { ThemeToggle } from "../customer/CustomerLayout";
 import { ApiError, type Session, auth, request } from "../lib/api";
 import { compressImage } from "../lib/format";
@@ -260,7 +260,7 @@ export function JoinPage() {
             <Field label="Their full name" error={errors.next_of_kin}>{(id) => <Input id={id} name="next_of_kin" value={f.next_of_kin} onChange={set("next_of_kin")} aria-invalid={!!errors.next_of_kin} />}</Field>
             <Field label="Their phone" error={errors.next_of_kin_phone}>{(id) => <Input id={id} name="next_of_kin_phone" type="tel" value={f.next_of_kin_phone} onChange={set("next_of_kin_phone")} inputMode="tel" placeholder="0712 345 678" aria-invalid={!!errors.next_of_kin_phone} />}</Field>
           </fieldset>
-          <Field label="Create a password" hint="At least 8 characters. You'll use it to log in." error={errors.password}>{(id) => <Input id={id} name="password" type="password" value={f.password} onChange={set("password")} autoComplete="new-password" aria-invalid={!!errors.password} />}</Field>
+          <Field label="Create a password" hint="At least 8 characters. You'll use it to log in." error={errors.password}>{(id) => <PasswordInput id={id} name="password" value={f.password} onChange={set("password")} autoComplete="new-password" aria-invalid={!!errors.password} />}</Field>
           <Button type="submit" size="lg">Next: photos <ArrowRight className="size-5" /></Button>
         </form>
       ) : step === 2 ? (

@@ -160,6 +160,16 @@ At 100 orders/day, manual payment confirmation means about 20 code entries per c
 - Hotel locations can be set by the super admin (*Delivery & fees → Hotel locations*) or by the hotel admin (*Settings → Hotel location*).
 - This replaces the flat `rider_fee` setting (migration 0002 converts it).
 
+## D28. Eat-in orders, ratings, password reset, owner creates hotels (owner, 2026-10-05)
+
+- **SMS matching uses the full number.** Real Till SMS show the payer's full number (`254792468015`). When it is full and equals exactly one waiting order's checkout number with the same amount, that order is paid whatever the name. Masked numbers keep the D25 rules (last 3 digits + name). While the Till phone is online, the hotel's waiting card says the payment confirms automatically; manual entry is a fallback behind a link.
+- **Eat in** is a third order type beside delivery and pickup: order ahead, pay first, come and eat. No map, no rider, no delivery fee. The customer picks an arrival time. The order flow is unchanged: the hotel prepares only after payment is confirmed, and cancels/refunds follow the existing rules. Every screen marks it **EAT IN** so the hotel can tell it apart.
+- **Eat-in markup** (`eat_in_fee`, KES, owner-entered under Settings, may be 0) is added to the customer's total and paid to the hotel's Till with the food. The hotel keeps none of it: it goes on the hotel's weekly statement as owed to the platform, like the service fee.
+- **Ratings:** after a completed order the customer may rate the hotel (all orders) and the rider (delivery orders), 1–5 stars with an optional comment, once per order. Averages show on the admin pages; the customer hotel list puts higher-rated hotels first (open hotels before closed ones still).
+- **Passwords:** every password box has a show/hide eye. The super admin can reset any staff or rider password, a hotel admin their own staff; the person gets a temporary password and must change it at next login. Everyone can change their own password. Self-service reset by SMS is "later".
+- **Hotels are created only by the owner** (super admin), from an admin screen that also creates the hotel admin's login. There is no hotel self-sign-up.
+- **Coordinates:** hotel locations can also be typed/pasted as `lat, lng` (e.g. from Google Maps). Rider GPS fixes worse than 100 m accuracy are not used for the live position.
+
 ## D27. Rider live location (owner, 2026-10-03)
 
 - While a rider is **online**, the rider screen sends the phone's GPS position every 30 s, or sooner after moving 100 m. Going offline stops it. Riders see "Sharing your location with dispatch". Only approved, online riders can send a position.

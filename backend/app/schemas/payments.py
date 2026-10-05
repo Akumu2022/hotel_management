@@ -51,6 +51,7 @@ class HotelOrderOut(Schema):
     ready_at: datetime | None = None
     prep_minutes: int | None = None
     landmark: str | None = None
+    arrive_at: datetime | None = None  # eat in (D28)
     reason: str | None = None
     payer_name: str | None = None  # from the Till SMS (D25)
     name_match: int | None = None  # 2 two names, 1 one name, 0 none, None unknown

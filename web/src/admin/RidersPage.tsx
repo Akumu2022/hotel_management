@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 
 import { ErrorNote, Skeleton } from "../components/ui";
 import { api, auth, request } from "../lib/api";
+import { ResetPassword, Stars } from "../components/accounts";
 
 type Rider = {
   id: string;
@@ -24,6 +25,8 @@ type Rider = {
   reviewed_at: string | null;
   reviewed_by_name: string | null;
   is_online: boolean;
+  rating: number | null;
+  rating_count: number;
   created_at: string;
 };
 
@@ -139,7 +142,14 @@ function Detail({ r }: { r: Rider }) {
             <button onClick={() => review.mutate("reject")} disabled={!note.trim() || review.isPending} className="h-11 rounded-xl border border-bad/40 px-4 text-sm font-semibold text-bad disabled:opacity-40">Send back</button>
           </div>
         </div>
-      ) : r.kyc_status === "approved" ? (
+      ) : null}
+      {r.kyc_status === "approved" || r.kyc_status === "suspended" ? (
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
+          <span className="flex items-center gap-2 text-sm">Customer rating: <Stars rating={r.rating} count={r.rating_count} />{r.rating_count >= 10 && (r.rating ?? 5) < 3.5 ? <span className="rounded-full bg-bad-soft px-2 py-0.5 text-xs font-semibold text-bad">Low rating</span> : null}</span>
+          <ResetPassword url={`/admin/users/${r.id}/reset-password`} name={r.name} />
+        </div>
+      ) : null}
+      {r.kyc_status === "pending" ? null : r.kyc_status === "approved" ? (
         <div className="mt-5 flex flex-col gap-2 border-t border-line pt-5 sm:flex-row">
           <input value={note} onChange={(e) => setNote(e.target.value)} maxLength={300} placeholder="Reason for suspending" className="h-11 min-w-0 flex-1 rounded-xl border border-line bg-surface px-3 text-sm outline-none focus:border-brand" />
           <button onClick={() => review.mutate("suspend")} disabled={!note.trim() || review.isPending} className="flex h-11 items-center justify-center gap-2 rounded-xl bg-bad px-4 text-sm font-semibold text-white disabled:opacity-40">

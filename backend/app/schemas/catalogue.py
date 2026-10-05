@@ -315,6 +315,8 @@ class PublicHotel(Schema):
     lat: float | None = None
     lng: float | None = None
     prep_minutes: int = 15  # typical (median) prep time of its dishes, for time estimates
+    rating: float | None = None  # average stars (D28); None until rated
+    rating_count: int = 0
 
 
 class MenuOption(Schema):

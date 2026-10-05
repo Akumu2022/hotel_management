@@ -140,7 +140,8 @@ export function OrderPanel({ onProceed }: { onProceed?: () => void }) {
       <div className="flex flex-col gap-2.5 px-5 py-4 text-sm">
         <div className="flex justify-between"><span className="text-muted">{t("Food")}</span><span className="money font-medium">{money(q?.items_total ?? 0)}</span></div>
         {q?.order_discount ? <div className="flex justify-between"><span className="text-muted">{t("Discount")}</span><span className="money font-medium text-ok">−{money(q.order_discount)}</span></div> : null}
-        <div className="flex justify-between"><span className="text-muted">{t("Service fee")}</span><span className="money font-medium">{money(empty ? 0 : (q?.service_fee ?? 0))}</span></div>
+        <div className="flex justify-between"><span className="text-muted">{t("Service fee")}</span><span className="money font-medium">{money(empty ? 0 : (q?.service_fee ?? 0) - (q?.eat_in_fee ?? 0))}</span></div>
+        {!empty && q?.eat_in_fee ? <div className="flex justify-between"><span className="text-muted">{t("Eat-in booking")}</span><span className="money font-medium">{money(q.eat_in_fee)}</span></div> : null}
         {mode === "delivery" ? <div className="flex justify-between"><span className="text-muted">{t("Delivery")}</span><span className="money font-medium">{money(empty ? 0 : (q?.rider_fee ?? 0))}</span></div> : null}
         {!empty ? <BonusLine q={q} /> : null}
         {!empty ? <BonusNudges q={q} delivery={mode === "delivery"} payAllByMpesa /> : null}

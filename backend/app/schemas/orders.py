@@ -19,7 +19,7 @@ class QuoteIn(Input):
 
     hotel_slug: str = Field(max_length=80)
     lines: list[CartLineIn] = Field(min_length=1, max_length=50)
-    type: Literal["delivery", "pickup"]
+    type: Literal["delivery", "pickup", "eat_in"]
     rider_fee_mode: Literal["included", "cash", "none"]
     promo_code: str | None = Field(None, max_length=20)
     phone: Phone | None = None  # lets the quote check "one promo use per phone"
@@ -28,8 +28,8 @@ class QuoteIn(Input):
 
     @model_validator(mode="after")
     def _mode(self):
-        if (self.type == "pickup") != (self.rider_fee_mode == "none"):
-            raise ValueError("Pickup has no rider fee; delivery needs option A or B")
+        if (self.type != "delivery") != (self.rider_fee_mode == "none"):
+            raise ValueError("Pickup and eat in have no rider fee; delivery needs option A or B")
         return self
 
 
@@ -40,6 +40,7 @@ class OrderIn(QuoteIn):
     lat: float | None = Field(None, ge=-90, le=90)
     lng: float | None = Field(None, ge=-180, le=180)
     landmark: str | None = Field(None, max_length=300)
+    arrive_at: datetime | None = None  # eat in (D28): when the customer will come to eat
     # The total the customer saw. If the server's total differs, placement is refused with
     # 409 price_changed and the new quote, so the customer confirms the new amount.
     expected_total: int = Field(ge=0, strict=True)
@@ -53,6 +54,11 @@ class OrderIn(QuoteIn):
                 raise ValueError("Describe the delivery spot (e.g. gate colour, building)")
             if self.payment_method != "mpesa":
                 raise ValueError("Delivery orders are paid by M-Pesa")
+        if self.type == "eat_in":
+            if self.arrive_at is None:
+                raise ValueError("Choose when you'll arrive")
+            if self.payment_method != "mpesa":
+                raise ValueError("Eat-in orders are paid first, by M-Pesa")
         return self
 
 
@@ -72,7 +78,8 @@ class QuoteOut(Schema):
     items_total: int
     order_discount: int
     food_net: int
-    service_fee: int
+    service_fee: int  # includes eat_in_fee
+    eat_in_fee: int = 0
     rider_fee: int
     rider_fee_in_till: int
     rider_fee_cash: int  # option B: paid to the rider at the door
@@ -134,7 +141,9 @@ class TrackOut(Schema):
     items_total: int
     order_discount: int
     food_net: int
-    service_fee: int
+    service_fee: int  # includes eat_in_fee
+    eat_in_fee: int = 0
+    arrive_at: datetime | None = None
     rider_fee: int
     till_amount: int
     rider_fee_cash: int
@@ -153,4 +162,6 @@ class TrackOut(Schema):
     rider_name: str | None = None
     rider_phone: str | None = None
     rider_photo_url: str | None = None
+    can_rate: bool = False  # D28: finished and not rated yet
+    rated: bool = False
     fee_question: bool = False  # D8: "Did you pay the rider KES X?" awaiting an answer

@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import clsx from "clsx";
-import { ArrowRight, Bike, Clock, Store, Timer } from "lucide-react";
+import { ArrowRight, Bike, Clock, Star, Store, Timer, UtensilsCrossed } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import { ErrorNote, Skeleton } from "../components/ui";
@@ -29,11 +29,17 @@ function HotelCard({ hotel }: { hotel: PublicHotel }) {
         <p className="mt-1.5 flex items-center gap-3 text-xs font-medium text-white/85">
           <span className="flex items-center gap-1"><Bike className="size-3.5" /> {t("Delivery")}</span>
           <span className="flex items-center gap-1"><Store className="size-3.5" /> {t("Pickup")}</span>
+          <span className="flex items-center gap-1"><UtensilsCrossed className="size-3.5" /> {t("Eat in")}</span>
         </p>
       </HotelCover>
       <div className="flex items-center justify-between gap-2 px-4 py-3">
         <span className="flex min-w-0 flex-wrap items-center gap-1.5 whitespace-nowrap">
           <StatusChip hotel={hotel} />
+          {hotel.rating_count ? (
+            <span className="flex items-center gap-1 rounded-full bg-subtle px-2.5 py-1 text-xs font-semibold text-ink" title={t("{n} ratings", { n: hotel.rating_count })}>
+              <Star className="size-3.5 fill-warn text-warn" /> {hotel.rating?.toFixed(1)}
+            </span>
+          ) : null}
           <span className="flex items-center gap-1 rounded-full bg-subtle px-2.5 py-1 text-xs font-semibold text-ink" title={mode === "delivery" ? t("Delivery") : t("Pickup")}>
             <Timer className="size-3.5" /> {t("{min} min", { min: etaText(hotel.prep_minutes, mode) })}
           </span>

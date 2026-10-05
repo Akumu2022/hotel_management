@@ -11,7 +11,7 @@ from app.core.errors import not_found
 from app.core.time import utcnow
 from app.models import Hotel, Offer
 from app.schemas.catalogue import Menu, PublicHotel, PublicOffer
-from app.services import catalogue, media, settings
+from app.services import catalogue, media, ratings, settings
 from app.services.media import Storage
 
 router = APIRouter(tags=["public"])
@@ -26,14 +26,17 @@ async def list_hotels(session: Session, storage: StorageDep):
     hours = await catalogue.hotel_hours(session, [h.id for h in hotels])
     prep = await catalogue.typical_prep(session, [h.id for h in hotels])
     now = utcnow()
-    out = [
-        catalogue.public_hotel(
+    stars = await ratings.hotel_stars(session, [h.id for h in hotels])
+    out = []
+    for h in hotels:
+        card = catalogue.public_hotel(
             h, hours[h.id], now, values.order_cutoff_minutes, storage, prep[h.id]
         )
-        for h in hotels
-    ]
-    # Open hotels first, then by name.
-    return sorted(out, key=lambda h: (not h.is_open, h.name))
+        card.rating, card.rating_count = stars[h.id].average, stars[h.id].count
+        out.append((card, stars[h.id].rank_score))
+    # Open hotels first, then the best rated (D28), then by name.
+    out.sort(key=lambda c: (not c[0].is_open, -c[1], c[0].name))
+    return [c for c, _ in out]
 
 
 @router.get("/hotels/{slug}/menu", response_model=Menu)

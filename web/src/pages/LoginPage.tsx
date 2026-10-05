@@ -1,9 +1,10 @@
 import { type FormEvent, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
-import { Button, Card, ErrorNote, Field, Input } from "../components/ui";
+import { Button, Card, ErrorNote, Field, Input, PasswordInput } from "../components/ui";
 import { ThemeToggle } from "../customer/CustomerLayout";
 import { auth } from "../lib/api";
+import { homeFor } from "./PasswordPage";
 
 export function LoginPage() {
   const navigate = useNavigate();
@@ -18,8 +19,8 @@ export function LoginPage() {
     setError(null);
     try {
       await auth.login(phone, password);
-      const role = auth.user()?.role;
-      navigate(role === "super_admin" ? "/admin" : role === "rider" ? "/rider" : "/hotel");
+      const me = auth.user();
+      navigate(me?.must_change_password ? "/password" : homeFor(me?.role));
     } catch (err) {
       setError(err);
     } finally {
@@ -52,9 +53,8 @@ export function LoginPage() {
           </Field>
           <Field label="Password">
             {(id) => (
-              <Input
+              <PasswordInput
                 id={id}
-                type="password"
                 autoComplete="current-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}

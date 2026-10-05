@@ -11,6 +11,7 @@ from app.models.orders import (
     OrderEvent,
     OrderItem,
     PromoRedemption,
+    Rating,
 )
 from app.models.payments import (
     DeviceNonce,
@@ -52,6 +53,7 @@ __all__ = [
     "OrderEvent",
     "OrderItem",
     "Payment",
+    "Rating",
     "Product",
     "ProductOption",
     "PromoRedemption",

@@ -46,6 +46,7 @@ class SettingsOut(Schema):
     commission_step_fee: int
     commission_percent: float
     service_fee: int
+    eat_in_fee: int
     rider_fee_mode: str
     rider_fee_bands: list[dict]
     rider_fee_base: int
@@ -89,6 +90,7 @@ class SettingsIn(Schema):
     commission_step_fee: int | None = Field(None, strict=True)
     commission_percent: Percent | None = None
     service_fee: int | None = Field(None, strict=True)
+    eat_in_fee: int | None = Field(None, strict=True)
     rider_fee_bands: list[RiderFeeBand] | None = Field(None, min_length=1, max_length=8)
     rider_fee_mode: Literal["bands", "per_km"] | None = None
     rider_fee_base: int | None = Field(None, strict=True)
@@ -161,6 +163,8 @@ class HotelOut(Schema):
     lat: float | None = None
     lng: float | None = None
     created_at: datetime
+    rating: float | None = None  # D28
+    rating_count: int = 0
 
     @model_validator(mode="before")
     @classmethod
@@ -178,6 +182,14 @@ _TILL = r"^\d{5,10}$"
 _COLOR = r"^#[0-9a-fA-F]{6}$"
 
 
+class HotelLoginIn(Schema):
+    """The hotel admin's login, made with the hotel (D28)."""
+
+    name: str = Field(min_length=2, max_length=120)
+    phone: Phone
+    password: str = Field(min_length=8, max_length=200)
+
+
 class HotelCreate(Schema):
     name: str = Field(min_length=2, max_length=120)
     slug: str = Field(min_length=2, max_length=80, pattern=_SLUG)
@@ -189,6 +201,7 @@ class HotelCreate(Schema):
     accent_color: str | None = Field(None, pattern=_COLOR)
     lat: float | None = Field(None, ge=-90, le=90)
     lng: float | None = Field(None, ge=-180, le=180)
+    admin: HotelLoginIn | None = None
 
     @model_validator(mode="after")
     def _location_pair(self):
@@ -230,7 +243,7 @@ _NULLABLE_HOTEL_FIELDS = {
 
 def hotel_values(body: HotelCreate | HotelPatch) -> dict:
     """Request fields -> model column values, converting % to basis points."""
-    data = body.model_dump(exclude_unset=True)
+    data = body.model_dump(exclude_unset=True, exclude={"admin"})
     for key, value in data.items():
         if value is None and key not in _NULLABLE_HOTEL_FIELDS:
             raise AppError(422, "validation_error", f"{key} cannot be empty")

@@ -4,7 +4,7 @@
  */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import clsx from "clsx";
-import { Bell, BellOff, Bike, Check, ChefHat, Clock, PackageCheck, Phone, Store, X } from "lucide-react";
+import { Bell, BellOff, Bike, Check, ChefHat, Clock, PackageCheck, Phone, Store, UtensilsCrossed, X } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
 import { Badge, ErrorNote, Skeleton } from "../components/ui";
@@ -30,7 +30,8 @@ type BoardOrder = {
   id: string;
   code: string;
   status: string;
-  type: "delivery" | "pickup";
+  type: "delivery" | "pickup" | "eat_in";
+  arrive_at?: string | null;
   payment_method: "mpesa" | "cash";
   rider_fee_mode: string;
   customer_name: string;
@@ -101,10 +102,18 @@ function OrderCard({ o, onAction, canCancel }: { o: BoardOrder; onAction: (o: Bo
           <p className="text-sm font-medium">{o.customer_name}</p>
         </div>
         <div className="flex flex-col items-end gap-1">
-          <Badge tone={o.type === "delivery" ? "brand" : "neutral"}>
-            {o.type === "delivery" ? <Bike className="mr-1 inline size-3.5" /> : <Store className="mr-1 inline size-3.5" />}
-            {o.type === "delivery" ? `Delivery${o.distance_km != null ? ` · ${o.distance_km} km` : ""}` : "Pickup"}
-          </Badge>
+          {o.type === "eat_in" ? (
+            // D28: eat in must stand out: the customer is coming to sit down at this time.
+            <Badge tone="warn">
+              <UtensilsCrossed className="mr-1 inline size-3.5" />
+              EAT IN{o.arrive_at ? ` · arrives ${new Intl.DateTimeFormat("en-KE", { hour: "numeric", minute: "2-digit", timeZone: "Africa/Nairobi" }).format(new Date(o.arrive_at))}` : ""}
+            </Badge>
+          ) : (
+            <Badge tone={o.type === "delivery" ? "brand" : "neutral"}>
+              {o.type === "delivery" ? <Bike className="mr-1 inline size-3.5" /> : <Store className="mr-1 inline size-3.5" />}
+              {o.type === "delivery" ? `Delivery${o.distance_km != null ? ` · ${o.distance_km} km` : ""}` : "Pickup"}
+            </Badge>
+          )}
           {o.payment_method === "cash" && !o.paid_at ? <Badge tone="warn">Cash at counter</Badge> : <Badge tone="ok">Paid</Badge>}
         </div>
       </div>
@@ -157,9 +166,9 @@ function OrderCard({ o, onAction, canCancel }: { o: BoardOrder; onAction: (o: Bo
             <Check className="size-4" /> Mark ready
           </button>
         </>
-      ) : o.status === "ready" && o.type === "pickup" ? (
+      ) : o.status === "ready" && o.type !== "delivery" ? (
         <button onClick={() => onAction(o, "collected")} className="mt-3 flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-ok font-semibold text-white">
-          <PackageCheck className="size-4" /> {o.payment_method === "cash" && !o.paid_at ? `Cash received & handed over` : "Handed to customer"}
+          <PackageCheck className="size-4" /> {o.payment_method === "cash" && !o.paid_at ? `Cash received & handed over` : o.type === "eat_in" ? "Served to customer" : "Handed to customer"}
         </button>
       ) : null}
       {o.type === "delivery" && ["accepted", "preparing", "ready"].includes(o.status) ? (

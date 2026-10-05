@@ -24,6 +24,7 @@ export type Me = {
   hotel_id: string | null;
   name: string;
   phone: string;
+  must_change_password?: boolean; // after an admin reset (D28)
 };
 
 export type Session = { access_token: string; refresh_token: string; user: Me };
@@ -61,6 +62,9 @@ export const auth = {
   },
   async login(phone: string, password: string) {
     save(await request<Session>("POST", "/auth/login", { phone, password }, { auth: false }));
+  },
+  async changePassword(current_password: string, new_password: string) {
+    save(await request<Session>("POST", "/auth/change-password", { current_password, new_password }));
   },
   /** Sign-up endpoints return a login directly (rider registration). */
   adopt(next: Session) {

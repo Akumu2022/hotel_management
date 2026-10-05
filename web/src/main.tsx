@@ -17,6 +17,7 @@ import { ApiError, auth } from "./lib/api";
 
 // Staff areas are split out so customers on slow networks never download them.
 const LoginPage = lazy(() => import("./pages/LoginPage").then((m) => ({ default: m.LoginPage })));
+const PasswordPage = lazy(() => import("./pages/PasswordPage").then((m) => ({ default: m.PasswordPage })));
 const HotelLayout = lazy(() => import("./hotel/HotelLayout").then((m) => ({ default: m.HotelLayout })));
 const DashboardPage = lazy(() => import("./hotel/DashboardPage").then((m) => ({ default: m.DashboardPage })));
 const HotelOrdersPage = lazy(() => import("./hotel/OrdersPage").then((m) => ({ default: m.OrdersPage })));
@@ -42,6 +43,7 @@ const AdminDashboardPage = lazy(() =>
 );
 const FeesPage = lazy(() => import("./admin/FeesPage").then((m) => ({ default: m.FeesPage })));
 const RidersPage = lazy(() => import("./admin/RidersPage").then((m) => ({ default: m.RidersPage })));
+const AdminHotelsPage = lazy(() => import("./admin/HotelsPage").then((m) => ({ default: m.HotelsPage })));
 const DispatchPage = lazy(() => import("./admin/DispatchPage").then((m) => ({ default: m.DispatchPage })));
 const ToolsPage = lazy(() => import("./admin/ToolsPage").then((m) => ({ default: m.ToolsPage })));
 const DeliveryPage = lazy(() => import("./admin/DeliveryPage").then((m) => ({ default: m.DeliveryPage })));
@@ -76,6 +78,7 @@ createRoot(document.getElementById("root")!).render(
                 <Route path="orders" element={<OrdersPage />} />
               </Route>
               <Route path="/login" element={<LoginPage />} />
+              <Route path="/password" element={<PasswordPage />} />
               <Route path="/rider" element={<RiderHome />} />
               <Route path="/rider/join" element={<JoinPage />} />
               <Route path="/hotel" element={<HotelLayout />}>
@@ -96,6 +99,7 @@ createRoot(document.getElementById("root")!).render(
                 <Route path="dispatch" element={<DispatchPage />} />
                 <Route path="billing" element={<AdminBillingPage />} />
                 <Route path="riders" element={<RidersPage />} />
+                <Route path="hotels" element={<AdminHotelsPage />} />
                 <Route path="fees" element={<FeesPage />} />
                 <Route path="delivery" element={<DeliveryPage />} />
                 <Route path="tools" element={<ToolsPage />} />

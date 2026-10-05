@@ -1,6 +1,7 @@
 """Staff and rider login: 15-minute JWT access tokens plus rotating refresh tokens stored hashed.
 Presenting an already-rotated refresh token revokes every session of that user (token theft)."""
 
+import secrets
 import uuid
 from dataclasses import dataclass
 from datetime import timedelta
@@ -14,6 +15,7 @@ from app.core.phone import normalize_phone
 from app.core.security import (
     DUMMY_HASH,
     create_access_token,
+    hash_password,
     hash_token,
     new_refresh_token,
     verify_password,
@@ -108,3 +110,28 @@ async def revoke_all(session: AsyncSession, user_id: uuid.UUID) -> None:
         .where(RefreshToken.user_id == user_id, RefreshToken.revoked_at.is_(None))
         .values(revoked_at=utcnow())
     )
+
+
+# Temporary passwords: no look-alike characters, easy to read out over the phone.
+_TEMP_ALPHABET = "abcdefghjkmnpqrstuvwxyz23456789"
+
+
+async def reset_password(session: AsyncSession, user: User) -> str:
+    """D28: an admin resets someone's password. Returns the temporary password (shown once);
+    the user must change it at next login, and every open session is logged out."""
+    temp = "".join(secrets.choice(_TEMP_ALPHABET) for _ in range(10))
+    user.password_hash = hash_password(temp)
+    user.must_change_password = True
+    await revoke_all(session, user.id)
+    return temp
+
+
+async def change_password(session: AsyncSession, user: User, current: str, new: str) -> TokenPair:
+    if not verify_password(user.password_hash, current):
+        raise AppError(400, "wrong_password", "Your current password is wrong")
+    if current == new:
+        raise AppError(400, "same_password", "Choose a new password, not the current one")
+    user.password_hash = hash_password(new)
+    user.must_change_password = False
+    await revoke_all(session, user.id)  # other phones log in again with the new password
+    return await _issue(session, user)

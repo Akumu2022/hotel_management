@@ -5,7 +5,7 @@
  */
 import { useMutation, useQuery } from "@tanstack/react-query";
 import clsx from "clsx";
-import { ArrowLeft, Check, ChefHat, Copy, Phone, ReceiptText, RotateCcw, Smartphone, Store, Timer, XCircle } from "lucide-react";
+import { ArrowLeft, Check, ChefHat, Copy, Phone, ReceiptText, RotateCcw, Smartphone, Star, Store, Timer, XCircle } from "lucide-react";
 import { type ReactNode, useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 
@@ -214,7 +214,7 @@ function Timeline({ t }: { t: Track }) {
               {done ? <Check className="size-3.5" /> : null}
             </span>
             <span className="flex flex-1 justify-between pt-0.5">
-              <span className={clsx("text-sm", current ? "font-semibold" : done ? "" : "text-muted")}>{tr(LABELS[s])}</span>
+              <span className={clsx("text-sm", current ? "font-semibold" : done ? "" : "text-muted")}>{tr(t.type === "eat_in" && s === "collected" ? "Served" : LABELS[s])}</span>
               <span className="text-xs text-muted">{time(at.get(s))}</span>
             </span>
           </li>
@@ -238,6 +238,58 @@ function FeeQuestion({ token, fee, onDone }: { token: string; fee: number; onDon
         <button onClick={() => answer.mutate(false)} disabled={answer.isPending} className="h-12 rounded-xl border-2 border-line font-semibold">{tt("No, I didn't")}</button>
       </div>
       <ErrorNote error={answer.error} />
+    </Card>
+  );
+}
+
+function StarRow({ label, value, onChange }: { label: string; value: number; onChange: (n: number) => void }) {
+  return (
+    <div>
+      <p className="mb-1 text-sm font-medium">{label}</p>
+      <div className="flex gap-1" role="radiogroup" aria-label={label}>
+        {[1, 2, 3, 4, 5].map((n) => (
+          <button key={n} type="button" role="radio" aria-checked={value === n} aria-label={`${n}`} onClick={() => onChange(n)} className="p-0.5">
+            <Star className={clsx("size-8 transition-colors", n <= value ? "fill-warn text-warn" : "text-line")} />
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** D28: once the food is in hand, rate the hotel (and the rider on deliveries). Once per order. */
+function RateCard({ t, token, onDone }: { t: Track; token: string; onDone: () => void }) {
+  const tt = useT();
+  const [hotel, setHotel] = useState(0);
+  const [rider, setRider] = useState(0);
+  const [comment, setComment] = useState("");
+  const needsRider = t.type === "delivery";
+  const send = useMutation({
+    mutationFn: () => api.post(`/track/${token}/rating`, { hotel_stars: hotel, rider_stars: needsRider ? rider : null, comment: comment.trim() || null }),
+    onSuccess: onDone,
+  });
+  return (
+    <Card className="flex flex-col gap-4 p-5">
+      <p className="text-lg font-bold">{tt("How was it?")}</p>
+      <StarRow label={t.hotel_name} value={hotel} onChange={setHotel} />
+      {needsRider ? <StarRow label={tt("Your rider {name}", { name: t.rider_name ?? "" })} value={rider} onChange={setRider} /> : null}
+      <textarea
+        aria-label={tt("Anything to add? (optional)")}
+        placeholder={tt("Anything to add? (optional)")}
+        value={comment}
+        onChange={(e) => setComment(e.target.value)}
+        maxLength={500}
+        rows={2}
+        className="rounded-xl border border-line bg-surface p-3 text-sm outline-none focus:border-brand"
+      />
+      <button
+        onClick={() => send.mutate()}
+        disabled={!hotel || (needsRider && !rider) || send.isPending}
+        className="h-12 rounded-xl bg-brand font-semibold text-white disabled:bg-line disabled:text-muted"
+      >
+        {tt("Send rating")}
+      </button>
+      <ErrorNote error={send.error} />
     </Card>
   );
 }
@@ -284,8 +336,13 @@ export function TrackPage() {
           {/* Status header */}
           <section className={clsx("relative overflow-hidden rounded-2xl px-6 py-6 text-white", ended ? "bg-ink" : done ? "bg-ok" : "bg-brand")}>
             <p className="text-sm font-medium text-white/80">{tt("Order #{code}", { code: t.code })} · {t.hotel_name}</p>
-            <h1 className="mt-1 text-2xl font-bold">{tt(LABELS[t.status] ?? t.status)}</h1>
+            <h1 className="mt-1 text-2xl font-bold">{tt(t.type === "eat_in" && t.status === "collected" ? "Served" : (LABELS[t.status] ?? t.status))}</h1>
             {t.reason && ended ? <p className="mt-1 text-sm text-white/80">{t.reason}</p> : null}
+            {t.type === "eat_in" && t.arrive_at && !ended && !done ? (
+              <p className="mt-1 text-sm font-semibold text-white/90">
+                🍽️ {tt("Eat in · arriving about {time}", { time: new Intl.DateTimeFormat("en-KE", { hour: "numeric", minute: "2-digit", timeZone: "Africa/Nairobi" }).format(new Date(t.arrive_at)) })}
+              </p>
+            ) : null}
             {t.prep_minutes && ["accepted", "preparing"].includes(t.status) ? <p className="mt-1 text-sm text-white/85">{tt("Ready in about {min} min", { min: t.prep_minutes })}</p> : null}
             <span className="pointer-events-none absolute -right-2 -bottom-4 hidden opacity-25 sm:block">
               {ended ? <XCircle className="size-28" /> : <ChefHat className="size-28" />}
@@ -355,6 +412,8 @@ export function TrackPage() {
           ) : null}
 
           {t.fee_question ? <FeeQuestion token={token!} fee={t.rider_fee} onDone={() => void track.refetch()} /> : null}
+          {t.can_rate ? <RateCard t={t} token={token!} onDone={() => void track.refetch()} /> : null}
+          {t.rated ? <p className="text-center text-sm text-muted">{tt("Thanks for rating this order!")}</p> : null}
         </div>
 
         {/* Order summary */}
@@ -378,7 +437,8 @@ export function TrackPage() {
             </ol>
             <div className="flex flex-col gap-2 border-t border-line px-5 py-4 text-sm">
               {t.order_discount ? <div className="flex justify-between"><span className="text-muted">{tt("Discount")}</span><span className="money text-ok">−{money(t.order_discount)}</span></div> : null}
-              <div className="flex justify-between"><span className="text-muted">{tt("Service fee")}</span><span className="money">{money(t.service_fee)}</span></div>
+              <div className="flex justify-between"><span className="text-muted">{tt("Service fee")}</span><span className="money">{money(t.service_fee - t.eat_in_fee)}</span></div>
+              {t.eat_in_fee ? <div className="flex justify-between"><span className="text-muted">{tt("Eat-in booking")}</span><span className="money">{money(t.eat_in_fee)}</span></div> : null}
               {t.rider_fee && !t.rider_fee_cash ? (
                 <div className="flex justify-between">
                   <span className="text-muted">

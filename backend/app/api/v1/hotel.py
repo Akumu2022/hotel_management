@@ -19,6 +19,7 @@ from app.api.deps import (
     scoped_select,
 )
 from app.core.errors import AppError, not_found
+from app.core.security import hash_password
 from app.models import (
     Category,
     Discount,
@@ -29,7 +30,10 @@ from app.models import (
     Product,
     ProductOption,
     PromoRedemption,
+    User,
 )
+from app.schemas.admin import UserOut
+from app.schemas.auth import CashierIn, StaffActiveIn, TempPasswordOut
 from app.schemas.catalogue import (
     CategoryIn,
     CategoryOut,
@@ -52,6 +56,7 @@ from app.schemas.catalogue import (
     UploadOut,
 )
 from app.services import audit, catalogue, media
+from app.services.auth import reset_password, revoke_all
 from app.services.media import Storage
 from app.services.settings import percent_to_bp
 
@@ -500,3 +505,79 @@ async def put_settings(
         session.add_all(HotelHours(hotel_id=hotel.id, **h) for h in hours)
     await session.commit()
     return await _settings_out(session, hotel, storage)
+
+
+# --- Staff (D28) -------------------------------------------------------------------------------
+
+
+@router.get("/staff", response_model=list[UserOut])
+async def list_staff(user: HotelAdmin, session: Session):
+    rows = await session.scalars(
+        select(User).where(User.hotel_id == user.hotel_id).order_by(User.role, User.name)
+    )
+    return [UserOut.model_validate(r) for r in rows]
+
+
+@router.post("/staff", response_model=UserOut, status_code=201)
+async def add_cashier(body: CashierIn, user: HotelAdmin, session: Session):
+    cashier = User(
+        role="cashier",
+        hotel_id=user.hotel_id,
+        name=body.name,
+        phone=body.phone,
+        password_hash=hash_password(body.password),
+        must_change_password=True,  # the admin chose it; the cashier picks their own
+    )
+    session.add(cashier)
+    try:
+        await session.flush()
+    except IntegrityError:
+        raise AppError(409, "phone_taken", "That phone number already has a login") from None
+    await audit.log(
+        session, actor_id=user.id, action="user.create", target_type="user", target_id=cashier.id
+    )
+    await session.commit()
+    await session.refresh(cashier)
+    return UserOut.model_validate(cashier)
+
+
+async def _own_cashier(session, user, staff_id: uuid.UUID) -> User:
+    row = await session.get(User, staff_id, with_for_update=True)
+    if row is None or row.hotel_id != user.hotel_id or row.role != "cashier":
+        raise not_found("Staff member not found")
+    return row
+
+
+@router.patch("/staff/{staff_id}", response_model=UserOut)
+async def set_cashier_active(
+    staff_id: uuid.UUID, body: StaffActiveIn, user: HotelAdmin, session: Session
+):
+    row = await _own_cashier(session, user, staff_id)
+    row.is_active = body.is_active
+    if not body.is_active:
+        await revoke_all(session, row.id)
+    await audit.log(
+        session,
+        actor_id=user.id,
+        action="user.update",
+        target_type="user",
+        target_id=row.id,
+        details={"is_active": body.is_active},
+    )
+    await session.commit()
+    return UserOut.model_validate(row)
+
+
+@router.post("/staff/{staff_id}/reset-password", response_model=TempPasswordOut)
+async def reset_cashier_password(staff_id: uuid.UUID, user: HotelAdmin, session: Session):
+    row = await _own_cashier(session, user, staff_id)
+    temp = await reset_password(session, row)
+    await audit.log(
+        session,
+        actor_id=user.id,
+        action="user.password_reset",
+        target_type="user",
+        target_id=row.id,
+    )
+    await session.commit()
+    return TempPasswordOut(temp_password=temp)

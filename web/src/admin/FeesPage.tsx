@@ -16,6 +16,7 @@ type FeeSettings = {
   commission_step_fee: number;
   commission_percent: number;
   service_fee: number;
+  eat_in_fee: number;
   stamp_every: number;
   stamp_reward: number;
   free_delivery_min_food: number;
@@ -89,6 +90,7 @@ export function FeesPage() {
         commission_step_fee: v.commission_step_fee,
         commission_percent: v.commission_percent,
         service_fee: v.service_fee,
+        eat_in_fee: v.eat_in_fee,
         stamp_every: v.stamp_every,
         stamp_reward: v.stamp_reward,
         free_delivery_min_food: v.free_delivery_min_food,
@@ -178,6 +180,10 @@ export function FeesPage() {
           <p className="mt-4 flex flex-wrap items-center gap-2 text-sm">
             Service fee paid by the customer:
             <Num label="Service fee" value={s.service_fee} onChange={(n) => set({ service_fee: n })} width="w-24" />
+          </p>
+          <p className="mt-3 flex flex-wrap items-center gap-2 text-sm">
+            Eat-in markup, added to every eat-in order (yours, 0 = none):
+            <Num label="Eat-in markup" value={s.eat_in_fee} onChange={(n) => set({ eat_in_fee: n })} width="w-24" />
           </p>
         </Card>
 

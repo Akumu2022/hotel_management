@@ -2,12 +2,13 @@
  * location and opening hours. The Till number is the most important fact here, so it's big. */
 import { ErrorBoundary, MapFailed } from "../components/ErrorBoundary";
 import clsx from "clsx";
-import { Banknote, Camera, Check, Clock, Copy, MapPin, Palette, Pencil, Phone, Smartphone, Store } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
+import { Banknote, Camera, Check, Clock, Copy, MapPin, Palette, Pencil, Phone, Smartphone, Store, Users } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { type FormEvent, type ReactNode, Suspense, lazy, useEffect, useRef, useState } from "react";
 
 import { PairingBox, PhoneCard, type TillPhone, useUnpair } from "../components/TillPhones";
-import { Button, ErrorNote, Input, Sheet, Skeleton, Switch } from "../components/ui";
+import { Button, ErrorNote, Input, PasswordInput, Sheet, Skeleton, Switch } from "../components/ui";
+import { ResetPassword } from "../components/accounts";
 import { HotelCover } from "../customer/bits";
 import { api } from "../lib/api";
 import { WEEKDAYS, compressImage, hhmm } from "../lib/format";
@@ -262,6 +263,60 @@ function TillPhonePanel() {
   );
 }
 
+type Staff = { id: string; role: string; name: string; phone: string; is_active: boolean };
+const STAFF = ["hotel", "staff"];
+
+/** D28: the hotel admin adds cashiers, turns them off, and resets their passwords. */
+function StaffPanel() {
+  const qc = useQueryClient();
+  const q = useQuery({ queryKey: STAFF, queryFn: () => api.get<Staff[]>("/hotel/staff") });
+  const [f, setF] = useState({ name: "", phone: "", password: "" });
+  const [adding, setAdding] = useState(false);
+  const add = useMutation({
+    mutationFn: () => api.post("/hotel/staff", f),
+    onSuccess: () => {
+      setF({ name: "", phone: "", password: "" });
+      setAdding(false);
+      qc.invalidateQueries({ queryKey: STAFF });
+    },
+  });
+  const toggle = useMutation({
+    mutationFn: (u: Staff) => api.patch(`/hotel/staff/${u.id}`, { is_active: !u.is_active }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: STAFF }),
+  });
+  return (
+    <Panel icon={<Users className="size-5" />} title="Staff logins" sub="Cashiers confirm payments and run the orders screen. They choose their own password at first login.">
+      {q.isLoading ? <Skeleton className="h-16" /> : null}
+      <ul className="flex flex-col gap-2">
+        {q.data?.map((u) => (
+          <li key={u.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-subtle px-3 py-2 text-sm">
+            <span className={clsx(!u.is_active && "text-muted line-through")}>
+              <b>{u.name}</b> · {u.role === "hotel_admin" ? "Admin" : "Cashier"} · <span className="money">{u.phone}</span>
+            </span>
+            {u.role === "cashier" ? (
+              <span className="flex flex-wrap items-center gap-2">
+                <button onClick={() => toggle.mutate(u)} className="rounded-lg border border-line px-2 py-1 text-xs font-semibold text-muted hover:bg-surface">{u.is_active ? "Turn off" : "Turn on"}</button>
+                {u.is_active ? <ResetPassword url={`/hotel/staff/${u.id}/reset-password`} name={u.name} /> : null}
+              </span>
+            ) : null}
+          </li>
+        ))}
+      </ul>
+      {adding ? (
+        <form onSubmit={(e) => { e.preventDefault(); add.mutate(); }} className="mt-3 grid gap-2 sm:grid-cols-3">
+          <Input aria-label="Name" placeholder="Name" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} required minLength={2} />
+          <Input aria-label="Phone" type="tel" placeholder="0712 345 678" value={f.phone} onChange={(e) => setF({ ...f, phone: e.target.value })} required />
+          <PasswordInput aria-label="First password" placeholder="First password" autoComplete="new-password" value={f.password} onChange={(e) => setF({ ...f, password: e.target.value })} required minLength={8} />
+          <Button type="submit" busy={add.isPending} className="sm:col-span-3">Add cashier</Button>
+        </form>
+      ) : (
+        <button onClick={() => setAdding(true)} className="mt-3 text-sm font-semibold text-brand underline">Add a cashier</button>
+      )}
+      <ErrorNote error={add.error ?? toggle.error} />
+    </Panel>
+  );
+}
+
 export function SettingsPage() {
   const isAdmin = useIsAdmin();
   const { data, isLoading, error } = useHotelSettings();
@@ -398,6 +453,7 @@ export function SettingsPage() {
       </div>
 
       <LocationPanel lat={data.lat} lng={data.lng} canEdit={isAdmin} />
+      {isAdmin ? <StaffPanel /> : null}
 
       {editing === "identity" ? <IdentitySheet name={data.name} phone={data.phone} till={data.till_number} onClose={() => setEditing(null)} /> : null}
       {editing === "hours" ? <HoursSheet hours={data.hours} onClose={() => setEditing(null)} /> : null}

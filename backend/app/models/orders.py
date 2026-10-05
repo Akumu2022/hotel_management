@@ -9,6 +9,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    SmallInteger,
     String,
     UniqueConstraint,
 )
@@ -56,7 +57,9 @@ class Order(Base):
             "till_amount",
             "commission_amount",
             "platform_bonus",
+            "eat_in_fee",
         ),
+        CheckConstraint("eat_in_fee <= service_fee", name="eat_in_fee_within_service_fee"),
         CheckConstraint("food_net = items_total - order_discount", name="food_net_sum"),
         CheckConstraint(
             "till_amount = food_net + service_fee + rider_fee_in_till - platform_bonus",
@@ -74,6 +77,8 @@ class Order(Base):
         ),
         CheckConstraint(
             "(type = 'pickup' AND rider_fee_mode = 'none' AND rider_fee = 0)"
+            " OR (type = 'eat_in' AND rider_fee_mode = 'none' AND rider_fee = 0"
+            " AND payment_method = 'mpesa' AND arrive_at IS NOT NULL)"
             " OR (type = 'delivery' AND rider_fee_mode IN ('included', 'cash')"
             " AND payment_method = 'mpesa' AND lat IS NOT NULL AND lng IS NOT NULL)",
             name="type_rules",
@@ -117,6 +122,10 @@ class Order(Base):
     # Platform-funded bonus (DECISIONS D19): lowers what the customer pays; the platform owes
     # the hotel this amount (ledger bonus_credit), so the hotel's food sale stays whole.
     platform_bonus: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    # Eat in (D28): the owner's markup, already inside service_fee (platform money, so the
+    # ledger and statements treat it as service fee); kept apart only to show it.
+    eat_in_fee: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    arrive_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     bonus_kind: Mapped[str | None] = mapped_column(String(16))
 
     customer_trans_code: Mapped[str | None] = mapped_column(String(12))
@@ -210,4 +219,27 @@ class OrderEvent(Base):
     actor_type: Mapped[str] = mapped_column(String(12))
     actor_id: Mapped[uuid.UUID | None] = mapped_column()
     reason: Mapped[str | None] = mapped_column(String(300))
+    created_at: Mapped[datetime] = created_at()
+
+
+class Rating(Base):
+    """Customer's stars for one completed order (D28): the hotel always, the rider on
+    deliveries. One per order."""
+
+    __tablename__ = "ratings"
+    __table_args__ = (
+        CheckConstraint("hotel_stars BETWEEN 1 AND 5", name="hotel_stars_range"),
+        CheckConstraint(
+            "rider_stars IS NULL OR rider_stars BETWEEN 1 AND 5", name="rider_stars_range"
+        ),
+        CheckConstraint("(rider_stars IS NULL) = (rider_id IS NULL)", name="rider_with_stars"),
+    )
+
+    id: Mapped[uuid.UUID] = uuid_pk()
+    order_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("orders.id"), unique=True)
+    hotel_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("hotels.id"), index=True)
+    rider_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"), index=True)
+    hotel_stars: Mapped[int] = mapped_column(SmallInteger)
+    rider_stars: Mapped[int | None] = mapped_column(SmallInteger)
+    comment: Mapped[str | None] = mapped_column(String(500))
     created_at: Mapped[datetime] = created_at()

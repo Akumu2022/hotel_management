@@ -117,7 +117,7 @@ export function rememberOrder(o: RecentOrder) {
 
 // --- Delivery or pickup (chosen in the order panel, used at checkout) -------------------------
 
-export type Mode = "delivery" | "pickup";
+export type Mode = "delivery" | "pickup" | "eat_in";
 const modeStore = createStore<Mode>("order-mode-v1", "delivery");
 export const orderMode = modeStore;
 export const useOrderMode = () => useSyncExternalStore(modeStore.subscribe, modeStore.get);

@@ -32,5 +32,16 @@ services:
       db:
         condition: service_healthy
 
+  web:
+    build: ./web
+    command: npm run dev -- --host 0.0.0.0
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./web:/app
+      - /app/node_modules
+    depends_on:
+      - api
+
 volumes:
   pgdata:

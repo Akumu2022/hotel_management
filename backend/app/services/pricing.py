@@ -5,7 +5,7 @@ Always in this order:
   2. item discount per line (best single item discount; percent floored once)
   3. items_total  = sum of discounted lines
   4. order discount or promo on items_total (best single one; percent floored once)
-  5. service fee
+  5. service fee (+ the eat-in markup on eat-in orders, D28: platform money like the fee)
   6. rider fee (delivery only; in the Till amount only for option A)
   7. platform bonus (stamp card or free delivery; the larger one, never both; D19)
   8. till_amount  = food_net + service_fee + rider_fee_in_till - platform_bonus
@@ -106,7 +106,7 @@ class Quote:
     order_discount: int
     order_discount_id: uuid.UUID | None
     food_net: int
-    service_fee: int
+    service_fee: int  # includes eat_in_fee
     rider_fee: int
     rider_fee_in_till: int
     till_amount: int
@@ -116,6 +116,7 @@ class Quote:
     bonus_kind: str | None  # "stamp" | "free_delivery"
     promo_discount_id: uuid.UUID | None  # the promo, if it was applied
     promo_error: str | None  # why a supplied promo code was not applied
+    eat_in_fee: int = 0
 
 
 def pct(bp: int, amount: int) -> int:
@@ -261,7 +262,8 @@ def calculate(
         promo_error = "promo_not_better"
 
     # Steps 5-6.
-    service_fee = rates.service_fee
+    eat_in_fee = rates.eat_in_fee if order_type == "eat_in" else 0
+    service_fee = rates.service_fee + eat_in_fee
     rider_fee = rates.rider_fee if order_type == "delivery" else 0
     rider_fee_in_till = rider_fee if rider_fee_mode == "included" else 0
 
@@ -292,12 +294,13 @@ def calculate(
         bonus_kind=bonus_kind,
         promo_discount_id=usable_promo.id if promo_applied else None,
         promo_error=promo_error,
+        eat_in_fee=eat_in_fee,
     )
 
 
 def _check_type(order_type: str, rider_fee_mode: str) -> None:
-    if order_type == "pickup" and rider_fee_mode == "none":
+    if order_type in ("pickup", "eat_in") and rider_fee_mode == "none":
         return
     if order_type == "delivery" and rider_fee_mode in ("included", "cash"):
         return
-    raise PricingError("bad_order_type", "Choose delivery (fee option A or B) or pickup")
+    raise PricingError("bad_order_type", "Choose delivery (fee option A or B), pickup or eat in")

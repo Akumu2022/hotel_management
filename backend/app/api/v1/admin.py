@@ -21,9 +21,10 @@ from app.schemas.admin import (
     UserPatch,
     hotel_values,
 )
+from app.schemas.auth import TempPasswordOut
 from app.schemas.common import Page
-from app.services import audit, routing, settings
-from app.services.auth import revoke_all
+from app.services import audit, ratings, routing, settings
+from app.services.auth import reset_password, revoke_all
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -87,15 +88,35 @@ def _unique_violation(e: IntegrityError) -> AppError:
 @router.get("/hotels", response_model=Page[HotelOut])
 async def list_hotels(_: SuperAdmin, session: Session, cursor: str | None = None, limit: int = 50):
     rows, next_cursor = await paginate(session, select(Hotel), Hotel, cursor, limit)
-    return Page[HotelOut](items=[HotelOut.model_validate(r) for r in rows], next_cursor=next_cursor)
+    stars = await ratings.hotel_stars(session, [r.id for r in rows])
+    items = []
+    for r in rows:
+        out = HotelOut.model_validate(r)
+        out.rating, out.rating_count = stars[r.id].average, stars[r.id].count
+        items.append(out)
+    return Page[HotelOut](items=items, next_cursor=next_cursor)
 
 
 @router.post("/hotels", response_model=HotelOut, status_code=201)
 async def create_hotel(body: HotelCreate, admin: SuperAdmin, session: Session):
+    """Only the owner creates hotels (D28), optionally with the hotel admin's login, who must
+    choose their own password at first login."""
     hotel = Hotel(**hotel_values(body))
     session.add(hotel)
     try:
         await session.flush()
+        if body.admin is not None:
+            session.add(
+                User(
+                    role="hotel_admin",
+                    hotel_id=hotel.id,
+                    name=body.admin.name,
+                    phone=body.admin.phone,
+                    password_hash=hash_password(body.admin.password),
+                    must_change_password=True,
+                )
+            )
+            await session.flush()
     except IntegrityError as e:
         raise _unique_violation(e) from None
     await audit.log(
@@ -104,7 +125,7 @@ async def create_hotel(body: HotelCreate, admin: SuperAdmin, session: Session):
         action="hotel.create",
         target_type="hotel",
         target_id=hotel.id,
-        details=body.model_dump(mode="json"),
+        details=body.model_dump(mode="json", exclude={"admin": {"password"}}),
     )
     await session.commit()
     await session.refresh(hotel)
@@ -220,3 +241,21 @@ async def patch_user(user_id: uuid.UUID, body: UserPatch, admin: SuperAdmin, ses
     await session.commit()
     await session.refresh(user)
     return UserOut.model_validate(user)
+
+
+@router.post("/users/{user_id}/reset-password", response_model=TempPasswordOut)
+async def reset_user_password(user_id: uuid.UUID, admin: SuperAdmin, session: Session):
+    """D28: any staff or rider. The temporary password is shown once."""
+    user = await session.get(User, user_id, with_for_update=True)
+    if user is None:
+        raise not_found("User not found")
+    temp = await reset_password(session, user)
+    await audit.log(
+        session,
+        actor_id=admin.id,
+        action="user.password_reset",
+        target_type="user",
+        target_id=user.id,
+    )
+    await session.commit()
+    return TempPasswordOut(temp_password=temp)

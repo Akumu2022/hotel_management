@@ -22,7 +22,7 @@ type HistoryRow = {
   hotel_name: string;
   hotel_slug: string;
   status: string;
-  type: "delivery" | "pickup";
+  type: "delivery" | "pickup" | "eat_in";
   payment_method: "mpesa" | "cash";
   created_at: string;
   till_amount: number;

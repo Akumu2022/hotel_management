@@ -36,6 +36,8 @@ from app.services.settings import PlatformSettings
 
 IDEMPOTENCY_TTL = timedelta(hours=24)
 CODE_ALPHABET = "ACDEFGHJKMNPQRTUVWXY34679"  # no 0/O, 1/I/L, 2/Z, 5/S, 8/B look-alikes
+EAT_IN_MIN_NOTICE = timedelta(minutes=10)  # D28
+EAT_IN_MAX_AHEAD = timedelta(hours=12)
 CANCELLABLE = ("awaiting_payment", "checking_payment", "paid")
 
 
@@ -256,6 +258,7 @@ def quote_out(p: Priced) -> QuoteOut:
         order_discount=q.order_discount,
         food_net=q.food_net,
         service_fee=q.service_fee,
+        eat_in_fee=q.eat_in_fee,
         rider_fee=q.rider_fee,
         rider_fee_in_till=q.rider_fee_in_till,
         rider_fee_cash=q.rider_fee - q.rider_fee_in_till,
@@ -310,7 +313,7 @@ async def _check_can_order(session: AsyncSession, body: OrderIn, p: Priced, now:
             409, "option_b_unavailable", "Please include the rider fee in your M-Pesa payment"
         )
     if body.payment_method == "cash":
-        if body.type != "pickup":
+        if body.type != "pickup":  # eat in is paid first (D28)
             raise AppError(422, "cash_pickup_only", "Cash is for pickup orders only")
         if not p.hotel.cash_pickup_enabled:
             raise AppError(409, "cash_disabled", "This hotel only accepts M-Pesa")
@@ -320,6 +323,12 @@ async def _check_can_order(session: AsyncSession, body: OrderIn, p: Priced, now:
                 409,
                 "cash_cap",
                 f"First cash orders are limited to KES {cap:,}. Pay by M-Pesa or order less.",
+            )
+    if body.type == "eat_in":
+        soonest, latest = now + EAT_IN_MIN_NOTICE, now + EAT_IN_MAX_AHEAD
+        if not soonest <= body.arrive_at <= latest:
+            raise AppError(
+                422, "bad_arrival", "Choose an arrival time from 10 minutes to 12 hours from now"
             )
     if body.type == "delivery":
         if p.too_far:
@@ -418,6 +427,8 @@ async def place(
             commission_amount=q.commission_amount,
             platform_bonus=q.platform_bonus,
             bonus_kind=q.bonus_kind,
+            eat_in_fee=q.eat_in_fee,
+            arrive_at=body.arrive_at if body.type == "eat_in" else None,
             discount_id=discount_id,
             delivery_code=f"{secrets.randbelow(10_000):04d}" if body.type == "delivery" else None,
             # Snapshot: the distance the fee was priced on; customer, hotel and rider all see it.
