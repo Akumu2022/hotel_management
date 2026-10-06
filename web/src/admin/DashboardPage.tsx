@@ -1,4 +1,4 @@
-/** Super admin home: payments, commission and earnings across hotels (DECISIONS D19). */
+/** Super admin home: payments, commission and earnings across hotels. */
 import { Reports } from "../components/Reports";
 
 export function AdminDashboardPage() {

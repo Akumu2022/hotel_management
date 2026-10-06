@@ -78,5 +78,51 @@ overridden per hotel.
 
 ## Deployment
 
-`docker-compose.yml` and `backend/Dockerfile` are kept for deployment (M9); they are not used
-during development.
+`docker-compose.yml` runs the database, API and web app (it is what development uses too).
+Before real customers use a server, run the launch check and fix every `[FAIL]`:
+
+```powershell
+docker compose exec api python -m app.cli check-production
+```
+
+It verifies `APP_ENV=production`, strong `JWT_SECRET` and `FORWARDER_KEY`, an HTTPS-only login
+cookie, a non-default database password, real `CORS_ORIGINS`, and that the payment simulator
+(which can mark an order paid with no money) is off. `[WARN]` lines are the three optional
+extras below. The demo seed (`python -m app.cli seed-demo`) refuses to run in production.
+Settings live in `.env` (see `.env.example`).
+
+### Web Push (alarms when the browser is closed)
+
+```powershell
+docker compose exec api python -m app.cli vapid-keys   # put the three lines in .env
+```
+
+Needs HTTPS. Staff and riders then see "Alerts when Chakula is closed" under the bell and turn
+it on per device. Hotels are woken for new orders and payments to confirm, riders for open or
+assigned jobs, the super admin for decisions. Signing out turns it off on that device.
+
+### Shared rate limits (more than one API process)
+
+```powershell
+docker compose --profile scale up -d redis     # then REDIS_URL=redis://redis:6379/0 in .env
+```
+
+Without `REDIS_URL` limits are counted in memory, which is correct for one process. If Redis
+can't be reached the API counts in memory instead of refusing requests.
+
+### Road routing (distance, the customer's live map)
+
+Distances and the dotted route use OSRM. The free public server is for the pilot only: it can
+take 10 s or more and has no guarantees. To run your own for Kenya:
+
+```powershell
+mkdir osrm-data; cd osrm-data
+curl -L -o kenya-latest.osm.pbf https://download.geofabrik.de/africa/kenya-latest.osm.pbf
+docker run --rm -v "${PWD}:/data" ghcr.io/project-osrm/osrm-backend osrm-extract -p /opt/car.lua /data/kenya-latest.osm.pbf
+docker run --rm -v "${PWD}:/data" ghcr.io/project-osrm/osrm-backend osrm-partition /data/kenya-latest.osrm
+docker run --rm -v "${PWD}:/data" ghcr.io/project-osrm/osrm-backend osrm-customize /data/kenya-latest.osrm
+cd ..; docker compose --profile routing up -d osrm
+```
+
+Then set `OSRM_URL=http://osrm:5000/route/v1/driving` in `.env` and restart the API. If routing
+is down, ordering and the map keep working with straight-line distances.

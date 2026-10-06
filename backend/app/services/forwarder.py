@@ -1,4 +1,4 @@
-"""SMS forwarder (M8, DECISIONS D26): the Android app on each hotel's Till phone sends M-Pesa
+"""SMS forwarder: the Android app on each hotel's Till phone sends M-Pesa
 messages here, so payments confirm themselves.
 
 Pairing: a hotel admin shows a one-time code (8 letters, 15 minutes). The app sends it once and

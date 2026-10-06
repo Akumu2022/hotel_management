@@ -1,12 +1,12 @@
 /**
- * Tracking without login (spec section 5): the long random token in the URL is the access.
+ * Tracking without login: the long random token in the URL is the access.
  * Doubles as the pay screen while the order awaits payment. Polls every 10 s until live
  * updates (SSE) arrive with the hotel order screen.
  */
 import { useMutation, useQuery } from "@tanstack/react-query";
 import clsx from "clsx";
 import { ArrowLeft, Check, ChefHat, Copy, Phone, ReceiptText, RotateCcw, Smartphone, Star, Store, Timer, XCircle } from "lucide-react";
-import { type ReactNode, useEffect, useState } from "react";
+import { type ReactNode, Suspense, lazy, useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 
 import { ErrorNote, Skeleton } from "../components/ui";
@@ -19,6 +19,7 @@ import { TopBar } from "./CustomerLayout";
 import { ConfirmDialog, HelpButton, JourneySteps, toast } from "./bits";
 import { useConfig } from "./OrderPanel";
 import { FoodImage } from "./FoodImage";
+const RiderMap = lazy(() => import("./RiderMap")); // map library loads only once a rider is live
 import { orderAgain } from "./store";
 import type { Track } from "./types";
 
@@ -224,7 +225,7 @@ function Timeline({ t }: { t: Track }) {
   );
 }
 
-/** D8: the rider reported the cash delivery fee unpaid; the customer is asked once. */
+/** The rider reported the cash delivery fee unpaid; the customer is asked once. */
 function FeeQuestion({ token, fee, onDone }: { token: string; fee: number; onDone: () => void }) {
   const tt = useT();
   useAlarm("customer-fee-question", 1, "payment", tt("Did you pay the rider {amount}?", { amount: money(fee) }));
@@ -257,7 +258,7 @@ function StarRow({ label, value, onChange }: { label: string; value: number; onC
   );
 }
 
-/** D28: once the food is in hand, rate the hotel (and the rider on deliveries). Once per order. */
+/** Once the food is in hand, rate the hotel (and the rider on deliveries). Once per order. */
 function RateCard({ t, token, onDone }: { t: Track; token: string; onDone: () => void }) {
   const tt = useT();
   const [hotel, setHotel] = useState(0);
@@ -302,7 +303,12 @@ export function TrackPage() {
     queryFn: () => api.get<Track>(`/track/${token}`),
     refetchInterval: (query) => (query.state.data && ["delivered", "collected", ...ENDED].includes(query.state.data.status) ? false : 30_000),
   });
-  useLive(token ? `/track/${token}/events` : null, () => void track.refetch());
+  const [ping, setPing] = useState<{ lat: number; lng: number; at: string } | null>(null);
+  useLive(token ? `/track/${token}/events` : null, (e) => {
+    // A rider position only moves the map; every other change reloads the order.
+    if (e.type === "rider_location" && typeof e.lat === "number" && typeof e.lng === "number") setPing({ lat: e.lat, lng: e.lng, at: String(e.at) });
+    else void track.refetch();
+  });
   const cancel = useMutation({ mutationFn: () => api.post(`/track/${token}/cancel`), onSuccess: () => track.refetch() });
   const [confirmCancel, setConfirmCancel] = useState(false);
   const navigate = useNavigate();
@@ -378,6 +384,12 @@ export function TrackPage() {
             </Card>
           ) : null}
 
+          {t.live && t.rider_name ? (
+            <Suspense fallback={<div className="h-56 animate-pulse rounded-2xl bg-subtle" />}>
+              <RiderMap token={token} live={t.live} ping={ping} riderName={t.rider_name} />
+            </Suspense>
+          ) : null}
+
           {t.type === "delivery" && t.delivery_code && !ended && !done ? (
             <Card className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
               <div>
@@ -412,7 +424,17 @@ export function TrackPage() {
           ) : null}
 
           {t.fee_question ? <FeeQuestion token={token!} fee={t.rider_fee} onDone={() => void track.refetch()} /> : null}
-          {t.can_rate ? <RateCard t={t} token={token!} onDone={() => void track.refetch()} /> : null}
+          {t.can_rate ? (
+            <RateCard
+              t={t}
+              token={token!}
+              onDone={() => {
+                void track.refetch();
+                // Rated = order finished: take them back to the hotels after a moment to read the thanks.
+                setTimeout(() => navigate("/", { replace: true }), 1800);
+              }}
+            />
+          ) : null}
           {t.rated ? <p className="text-center text-sm text-muted">{tt("Thanks for rating this order!")}</p> : null}
         </div>
 

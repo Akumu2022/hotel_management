@@ -1,4 +1,4 @@
-/** Super admin "Needs attention" (DECISIONS D19). Payment review belongs to each hotel; the duty
+/** Super admin "Needs attention". Payment review belongs to each hotel; the duty
  * person sees only orders not accepted in time, hotel items left open 15+ minutes (to chase by
  * phone), and items with no hotel (an unreadable SMS, an unknown Till), which they resolve. */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";

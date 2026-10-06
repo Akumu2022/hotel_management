@@ -1,4 +1,4 @@
-/** Order history for this phone (no accounts, DECISIONS D20): every order placed here, with what
+/** Order history for this phone (no accounts): every order placed here, with what
  * was paid, filterable. The phone keeps the orders' tracking tokens; the server answers for all of
  * them in one request. */
 import { useQuery } from "@tanstack/react-query";

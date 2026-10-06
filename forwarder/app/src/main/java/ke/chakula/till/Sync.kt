@@ -23,7 +23,7 @@ import org.json.JSONObject
 import java.util.concurrent.TimeUnit
 
 /**
- * Getting messages to the server reliably (DECISIONS D26), without a permanent notification:
+ * Getting messages to the server reliably, without a permanent notification:
  * - on every M-Pesa SMS, an upload job runs as soon as there is internet;
  * - every 15 minutes, a check-in job rescans the inbox for the last 3 days (catches anything
  *   missed while the phone was off, offline, or the app was killed), uploads, and reports health.

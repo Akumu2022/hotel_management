@@ -505,3 +505,44 @@ async def test_underpaid_order_leaves_the_waiting_list(client, db):
     await confirm(db, order, cashier_user, amount=700)
     assert (await client.get("/api/v1/hotel/payments/pending", headers=cashier)).json() == []
     assert len((await client.get("/api/v1/hotel/review-items", headers=cashier)).json()) == 1
+
+
+# --- The fabricating tool is development-only ----------------------------------------------------
+
+
+async def test_payment_simulator_is_off_in_production(client, db, monkeypatch):
+    from app.api.v1 import payments as payments_api
+    from app.core.config import Config
+    from tests.factories import auth_header, make_user
+
+    admin = auth_header(await make_user(db, "super_admin"))
+    body = {"till_number": "5551234", "code": "SJK3ABC12D", "amount": 500, "kind": "payment"}
+    assert (await client.get("/api/v1/admin/tools/status", headers=admin)).json() == {
+        "payment_simulator": True
+    }
+
+    prod = Config(app_env="production", payment_simulator="")
+    monkeypatch.setattr(payments_api, "get_config", lambda: prod)
+    assert (await client.get("/api/v1/admin/tools/status", headers=admin)).json() == {
+        "payment_simulator": False
+    }
+    r = await client.post("/api/v1/admin/test-payment", headers=admin, json=body)
+    assert r.status_code == 403 and r.json()["error"]["code"] == "simulator_disabled"
+
+    # Pasting a real SMS still works in production, and is logged.
+    sms = (
+        "SJK3ABC12D Confirmed.on 2/10/26 at 8:39 PMKSH500.00 received from 254711222333 "
+        "Jane Doe. New Account balance is KSH2,240.05."
+    )
+    r = await client.post(
+        "/api/v1/admin/test-sms", headers=admin, json={"till_number": "0000000", "raw_text": sms}
+    )
+    assert r.status_code == 200
+
+    # An explicit opt-in turns the simulator back on.
+    monkeypatch.setattr(
+        payments_api, "get_config", lambda: Config(app_env="production", payment_simulator="true")
+    )
+    assert (await client.get("/api/v1/admin/tools/status", headers=admin)).json() == {
+        "payment_simulator": True
+    }

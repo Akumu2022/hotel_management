@@ -1,4 +1,4 @@
-/** Super admin tools: every hotel's Till phone (SMS forwarder app, M8), and a payment simulator
+/** Super admin tools: every hotel's Till phone (SMS forwarder app), and a payment simulator
  * for testing: paste a real Till SMS and it runs through the same parser and matching. */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import clsx from "clsx";
@@ -19,6 +19,8 @@ function Simulator() {
   const [amount, setAmount] = useState("");
   const [kind, setKind] = useState<"sms" | "payment" | "reversal">("sms");
   const [raw, setRaw] = useState("");
+  const status = useQuery({ queryKey: ["admin", "tools-status"], queryFn: () => api.get<{ payment_simulator: boolean }>("/admin/tools/status") });
+  const canFake = status.data?.payment_simulator ?? false;
   const send = useMutation({
     mutationFn: () =>
       kind === "sms"
@@ -28,13 +30,14 @@ function Simulator() {
   });
   return (
     <section className="rounded-3xl border border-line bg-surface p-5">
-      <h2 className="flex items-center gap-2 text-[1rem] font-bold"><FlaskConical className="size-5 text-brand" /> Test payment</h2>
-      <p className="mb-4 text-sm text-muted">Paste a real Till SMS (or fake one) and it runs through the parser and matching exactly as the SMS app (M8) will send it.</p>
+      <h2 className="flex items-center gap-2 text-[1rem] font-bold"><FlaskConical className="size-5 text-brand" /> {canFake ? "Test payment" : "Paste a missed SMS"}</h2>
+      <p className="mb-4 text-sm text-muted">{canFake ? "Paste a real Till SMS (or fake one) and it runs through the parser and matching exactly as the SMS app sends it." : "If the Till phone missed a payment message, paste the whole M-Pesa SMS here. It is read and matched like any other, and logged."}</p>
       <div className="flex flex-col gap-2.5">
         <select aria-label="Till" value={till} onChange={(e) => setTill(e.target.value)} className="h-11 rounded-xl border border-line bg-surface px-3 text-sm">
           <option value="">Choose a hotel's Till…</option>
           {hotels.data?.items.map((h) => <option key={h.id} value={h.till_number}>{h.name} · {h.till_number}</option>)}
         </select>
+        {canFake ? (
         <div className="grid grid-cols-3 gap-1 rounded-xl bg-subtle p-1 text-sm font-semibold">
           {(
             [
@@ -46,6 +49,7 @@ function Simulator() {
             <button key={k} onClick={() => setKind(k)} className={clsx("h-9 rounded-lg", kind === k ? "bg-surface shadow-sm" : "text-muted")}>{label}</button>
           ))}
         </div>
+        ) : null}
         {kind === "sms" ? (
           <textarea
             aria-label="M-Pesa SMS text"

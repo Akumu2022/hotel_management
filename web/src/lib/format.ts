@@ -36,7 +36,7 @@ export function isoToLocal(iso: string | null): string {
 }
 
 /**
- * Shrink a photo on the phone before upload (spec section 10): long side 1600 px, JPEG 85 %.
+ * Shrink a photo on the phone before upload: long side 1600 px, JPEG 85 %.
  * The server re-encodes to WebP anyway; this just saves the hotel's mobile data.
  */
 export async function compressImage(file: File): Promise<Blob> {

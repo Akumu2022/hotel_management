@@ -1,5 +1,5 @@
 /**
- * Till phone (SMS forwarder app, M8, DECISIONS D26): pairing and live status. Used in the hotel's
+ * Till phone (SMS forwarder app): pairing and live status. Used in the hotel's
  * Settings (its own phone) and the super admin's Till phones page (every hotel).
  */
 import { useMutation, useQueryClient } from "@tanstack/react-query";

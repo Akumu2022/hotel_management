@@ -131,7 +131,7 @@ export function ModePicker({
       disabled: false,
     },
     {
-      // D28: order ahead, pay first, the food is ready when you sit down.
+      // Order ahead, pay first, the food is ready when you sit down.
       value: "eat_in" as const,
       emoji: "🍽️",
       title: t("Eat in"),
@@ -332,7 +332,7 @@ export function etaText(prepMinutes: number, mode: "delivery" | "pickup" | "eat_
   return `${round5(lo)}–${round5(hi)}`;
 }
 
-// --- Platform bonuses (DECISIONS D19) ------------------------------------------------------------
+// --- Platform bonuses ------------------------------------------------------------
 
 /** The bonus as a receipt line, e.g. "Free delivery −KES 100". */
 export function BonusLine({ q }: { q: Quote | undefined }) {

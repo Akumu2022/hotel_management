@@ -36,7 +36,7 @@ class JobRun(Base):
 
 
 class Setting(Base):
-    """Admin-entered business settings (D1). Values are validated by services.settings."""
+    """Admin-entered business settings. Values are validated by services.settings."""
 
     __tablename__ = "settings"
 

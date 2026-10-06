@@ -40,7 +40,7 @@ class OrderIn(QuoteIn):
     lat: float | None = Field(None, ge=-90, le=90)
     lng: float | None = Field(None, ge=-180, le=180)
     landmark: str | None = Field(None, max_length=300)
-    arrive_at: datetime | None = None  # eat in (D28): when the customer will come to eat
+    arrive_at: datetime | None = None  # eat in: when the customer will come to eat
     # The total the customer saw. If the server's total differs, placement is refused with
     # 409 price_changed and the new quote, so the customer confirms the new amount.
     expected_total: int = Field(ge=0, strict=True)
@@ -93,7 +93,7 @@ class QuoteOut(Schema):
     rider_fee_estimated: bool = False  # true until a pin is dropped: fee shown is "from"
     too_far: bool = False
     max_delivery_km: float | None = None
-    # Platform bonuses (D19)
+    # Platform bonuses
     platform_bonus: int = 0
     bonus_kind: str | None = None  # stamp | free_delivery
     free_delivery_min_food: int | None = None  # food total for free delivery (option A)
@@ -125,6 +125,19 @@ class TrackItem(Schema):
 class TrackEvent(Schema):
     status: str
     at: datetime
+
+
+class TrackLive(Schema):
+    """Where the rider is, while the food is on the road (customer's live map)."""
+
+    rider_lat: float
+    rider_lng: float
+    at: datetime
+    live: bool  # false when the last position is over 5 minutes old
+    dest_lat: float
+    dest_lng: float
+    hotel_lat: float | None = None
+    hotel_lng: float | None = None
 
 
 class TrackOut(Schema):
@@ -162,6 +175,7 @@ class TrackOut(Schema):
     rider_name: str | None = None
     rider_phone: str | None = None
     rider_photo_url: str | None = None
-    can_rate: bool = False  # D28: finished and not rated yet
+    can_rate: bool = False  # finished and not rated yet
     rated: bool = False
-    fee_question: bool = False  # D8: "Did you pay the rider KES X?" awaiting an answer
+    fee_question: bool = False  # "Did you pay the rider KES X?" awaiting an answer
+    live: TrackLive | None = None

@@ -8,6 +8,7 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {
     port: 5173,
+    allowedHosts: true, // lets a dev tunnel (https://….trycloudflare.com) reach the dev server
     // In Docker on Windows, edits made on the host don't reach the container as file events,
     // so Vite would keep serving old code. VITE_POLL=1 (set in docker-compose) checks instead.
     watch: process.env.VITE_POLL ? { usePolling: true, interval: 1000 } : undefined,

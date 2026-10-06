@@ -1,4 +1,4 @@
-"""Admin-entered business settings (DECISIONS D1).
+"""Admin-entered business settings.
 
 Stored one row per key in `settings`. Percentages are stored as basis points and money as whole
 KES. Admins type percentages as plain numbers (10, 12.5); `percent_to_bp` converts them.
@@ -41,7 +41,7 @@ class CommissionTier(BaseModel):
     fee: int = Field(ge=0, le=100_000, strict=True)
 
 
-# Owner's tiers (DECISIONS D19): on the food total only, excluding service and rider fees.
+# Owner's tiers: on the food total only, excluding service and rider fees.
 DEFAULT_TIERS = [
     CommissionTier(up_to=500, fee=20),
     CommissionTier(up_to=1000, fee=30),
@@ -77,7 +77,7 @@ class PlatformSettings(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    # "tiers" = flat fee by food total (D19); "percent" = commission_bp of the food total.
+    # "tiers" = flat fee by food total; "percent" = commission_bp of the food total.
     commission_mode: str = Field("tiers", pattern="^(tiers|percent)$")
     commission_tiers: list[CommissionTier] = Field(
         default_factory=lambda: list(DEFAULT_TIERS), min_length=1, max_length=12
@@ -86,9 +86,9 @@ class PlatformSettings(BaseModel):
     commission_step_fee: int = Field(10, ge=0, le=100_000, strict=True)
     commission_bp: int = Field(1000, ge=0, le=MAX_COMMISSION_BP)
     service_fee: int = Field(20, ge=0, le=10_000)
-    # Eat in (D28): the owner's markup on each eat-in order, platform money. 0 = none.
+    # Eat in: the owner's markup on each eat-in order, platform money. 0 = none.
     eat_in_fee: int = Field(30, ge=0, le=10_000, strict=True)
-    # Rider fee (DECISIONS D14, D16): "bands" = fixed price per distance band;
+    # Rider fee: "bands" = fixed price per distance band;
     # "per_km" = base + per-km price, never below the minimum, rounded up to KES 10.
     rider_fee_mode: str = Field("per_km", pattern="^(bands|per_km)$")
     rider_fee_bands: list[RiderFeeBand] = Field(
@@ -112,9 +112,9 @@ class PlatformSettings(BaseModel):
     rider_payout_default: str = Field("instant", pattern="^(instant|weekly)$")
     # WhatsApp number customers can message for help (2547XXXXXXXX); empty = not shown.
     support_whatsapp: str = Field("", pattern=r"^(|254[17]\d{8})$")
-    # Where hotels send what they owe the platform (D24): M-Pesa Send Money.
+    # Where hotels send what they owe the platform: M-Pesa Send Money.
     platform_mpesa_number: str = Field("254742554713", pattern=r"^254[17]\d{8}$")
-    # Bonuses, platform-funded (D19). 0 turns each off.
+    # Bonuses, platform-funded. 0 turns each off.
     stamp_every: int = Field(5, ge=0, le=100, strict=True)  # every Nth completed order
     stamp_reward: int = Field(100, ge=0, le=10_000, strict=True)  # KES off that order
     free_delivery_min_food: int = Field(1500, ge=0, le=1_000_000, strict=True)
@@ -229,7 +229,7 @@ class HotelRates:
     service_fee: int
     rider_fee: int
     eat_in_fee: int = 0
-    # Flat tiers (D19); empty = percent commission_bp. A per-hotel percent deal overrides tiers.
+    # Flat tiers; empty = percent commission_bp. A per-hotel percent deal overrides tiers.
     commission_tiers: tuple[tuple[int, int], ...] = ()
     commission_step: int = 1000
     commission_step_fee: int = 10

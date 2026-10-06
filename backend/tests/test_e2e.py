@@ -109,7 +109,7 @@ async def place(client, w, **kw) -> dict:
 
 
 def sms(code: str, amount: int, *, phone="254712000111", at: datetime | None = None) -> str:
-    """A Till SMS in the real format (docs/sms_samples)."""
+    """A Till SMS in the real format (backend/tests/data)."""
     t = (at or utcnow()) + EAT
     hour = t.strftime("%I").lstrip("0") or "12"
     return (

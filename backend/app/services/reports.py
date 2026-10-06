@@ -1,4 +1,4 @@
-"""Dashboard reports for hotel admins and the super admin (DECISIONS D19).
+"""Dashboard reports for hotel admins and the super admin.
 
 Everything is worked out from the append-only ledger, so the numbers always agree with the
 weekly statements. Dates are Kenya days; a range is inclusive of both ends.

@@ -14,7 +14,7 @@ export type PublicHotel = {
   lat: number | null;
   lng: number | null;
   prep_minutes: number;
-  rating: number | null; // average stars (D28)
+  rating: number | null; // average stars
   rating_count: number;
 };
 
@@ -85,7 +85,7 @@ export type Quote = {
   rider_fee_estimated: boolean;
   too_far: boolean;
   max_delivery_km: number | null;
-  // Platform bonuses (DECISIONS D19)
+  // Platform bonuses
   platform_bonus: number;
   bonus_kind: "stamp" | "free_delivery" | null;
   free_delivery_min_food: number | null;
@@ -102,6 +102,17 @@ export type OrderPlaced = {
   till_amount: number;
   payment_method: "mpesa" | "cash";
   expires_at: string | null;
+};
+
+export type TrackLive = {
+  rider_lat: number;
+  rider_lng: number;
+  at: string;
+  live: boolean;
+  dest_lat: number;
+  dest_lng: number;
+  hotel_lat: number | null;
+  hotel_lng: number | null;
 };
 
 export type Track = {
@@ -150,6 +161,7 @@ export type Track = {
   fee_question: boolean;
   can_rate: boolean;
   rated: boolean;
+  live: TrackLive | null;
 };
 
 export type PublicConfig = {

@@ -1,4 +1,4 @@
-/** Hotel settings: identity (name, Till, phone; editable by the hotel admin, D20), options,
+/** Hotel settings: identity (name, Till, phone; editable by the hotel admin), options,
  * location and opening hours. The Till number is the most important fact here, so it's big. */
 import { ErrorBoundary, MapFailed } from "../components/ErrorBoundary";
 import clsx from "clsx";
@@ -210,7 +210,7 @@ function LocationPanel({ lat, lng, canEdit }: { lat: number | null; lng: number 
       {lat == null ? <p className="mb-3 rounded-xl bg-warn-soft px-3 py-2 text-sm font-medium text-warn">Not set yet: customers can't get delivery until you drop your pin.</p> : null}
       <Suspense fallback={<Skeleton className="h-72" />}>
         <ErrorBoundary fallback={(retry) => <MapFailed retry={retry} />}>
-          <MapPicker value={pin} onChange={(p) => canEdit && setPin(p)} checkZone={false} height="h-72" />
+          <MapPicker value={pin} onChange={(p) => canEdit && setPin(p)} checkZone={false} height="h-80" precise />
         </ErrorBoundary>
       </Suspense>
       {canEdit && changed ? (
@@ -233,7 +233,7 @@ function LocationPanel({ lat, lng, canEdit }: { lat: number | null; lng: number 
 
 const PHONES = ["hotel", "forwarder"];
 
-/** The Till phone app (M8): connect a phone, and see that it's working. */
+/** The Till phone app: connect a phone, and see that it's working. */
 function TillPhonePanel() {
   const q = useQuery({ queryKey: PHONES, queryFn: () => api.get<{ devices: TillPhone[] }>("/hotel/forwarder"), refetchInterval: 30_000 });
   const unpair = useUnpair((id) => `/hotel/forwarder/${id}`, PHONES);
@@ -266,7 +266,7 @@ function TillPhonePanel() {
 type Staff = { id: string; role: string; name: string; phone: string; is_active: boolean };
 const STAFF = ["hotel", "staff"];
 
-/** D28: the hotel admin adds cashiers, turns them off, and resets their passwords. */
+/** The hotel admin adds cashiers, turns them off, and resets their passwords. */
 function StaffPanel() {
   const qc = useQueryClient();
   const q = useQuery({ queryKey: STAFF, queryFn: () => api.get<Staff[]>("/hotel/staff") });

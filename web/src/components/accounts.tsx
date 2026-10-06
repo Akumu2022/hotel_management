@@ -1,4 +1,4 @@
-/** Shared bits for people: star ratings (D28) and admin password resets (D28). */
+/** Shared bits for people: star ratings and admin password resets. */
 import { useMutation } from "@tanstack/react-query";
 import { KeyRound, Star } from "lucide-react";
 

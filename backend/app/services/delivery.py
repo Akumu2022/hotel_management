@@ -1,4 +1,4 @@
-"""Deliveries (spec section 8, DECISIONS D7, D8, D21).
+"""Deliveries.
 
 Ready -> Picked up -> On the way -> Delivered   (or Failed delivery, classified by the admin)
 
@@ -9,7 +9,7 @@ Rider fee, as the spec's table:
   A + instant  hotel hands the fee over with the food; hotel and rider both confirm; the ledger
                entry is written once both have. A "not received" goes to the admin.
   A + weekly   on delivery: hotel owes the platform, platform owes the rider (weekly payout).
-  B            on delivery the rider confirms "Fee received", or claims "Fee not paid" (D8):
+  B            on delivery the rider confirms "Fee received", or claims "Fee not paid":
                the customer is asked; "No" or no answer in 24 h -> platform compensates the rider
                (weekly payout, capped per week), the customer's number loses option B.
 """
@@ -31,7 +31,7 @@ from app.models import (
     RiderProfile,
     RiderStrike,
 )
-from app.services import events, ledger, payments, riders, settings
+from app.services import events, ledger, payments, push, riders, settings
 
 CLAIMABLE = ("accepted", "preparing", "ready")
 ON_JOB = ("accepted", "preparing", "ready", "picked_up", "on_the_way")
@@ -185,6 +185,14 @@ async def assign(
     order.rider_seen_at = None  # rings the rider until they see it
     order.fee_hotel_confirmed_at = order.fee_rider_confirmed_at = None
     _event(session, order, "admin", admin_id, "rider reassigned" if previous else "rider assigned")
+    push.notify(
+        session,
+        title=f"New job for you: #{order.code}",
+        body="Open Chakula and tap Got it.",
+        url="/rider",
+        tag="rider-assigned",
+        rider_id=rider_id,
+    )
     await session.flush()
     return order
 
@@ -386,7 +394,7 @@ async def cash_fee_received(
     return order
 
 
-# --- D8: option B fee not paid ----------------------------------------------------------------
+# --- option B fee not paid ----------------------------------------------------------------
 
 
 async def fee_not_paid(
@@ -473,7 +481,7 @@ async def _penalize_customer(session, phone: str) -> None:
 
 
 async def answer_timeouts(session: AsyncSession, now: datetime) -> int:
-    """Job: no answer from the customer within 24 h counts as "No" (D8)."""
+    """Job: no answer from the customer within 24 h counts as "No"."""
     stale = (
         (
             await session.execute(
@@ -492,7 +500,7 @@ async def answer_timeouts(session: AsyncSession, now: datetime) -> int:
     return len(stale)
 
 
-# --- D7: failed delivery -----------------------------------------------------------------------
+# --- failed delivery -----------------------------------------------------------------------
 
 
 async def report_failed(
@@ -525,10 +533,87 @@ async def report_failed(
     return order
 
 
+async def admin_close(
+    session: AsyncSession,
+    order_id: uuid.UUID,
+    outcome: str,
+    reason: str,
+    admin_id: uuid.UUID,
+    now: datetime,
+    *,
+    rider_paid_cash: bool | None = None,
+) -> Order:
+    """The way out of a delivery nobody is finishing (rider's phone died, rider vanished, the
+    customer confirms they got the food by phone). Only once the food has left the hotel.
+
+    "delivered" follows the rider's own delivery rules without the code. "failed" files the same
+    review item a rider's failed delivery does, so the admin then decides whose fault it was
+    and refunds, pay and strikes follow the existing rules."""
+    order = await _lock(session, order_id)
+    if order.status in ("delivered", "failed_delivery"):
+        return order  # a double tap changes nothing
+    if order.status not in ("picked_up", "on_the_way"):
+        raise _wrong(order, "close")
+    if outcome == "failed":
+        await _move(
+            session,
+            order,
+            "failed_delivery",
+            actor_type="admin",
+            actor_id=admin_id,
+            reason=reason,
+            closed_at=now,
+        )
+        order.reason = f"Delivery failed: {reason}"
+        await payments.open_review(
+            session,
+            type="failed_delivery",
+            hotel_id=order.hotel_id,
+            order_id=order.id,
+            reason=f"Closed by admin: {reason}",
+        )
+    elif outcome == "delivered":
+        cash = order.rider_fee_mode == "cash"
+        if cash and rider_paid_cash is None:
+            raise AppError(
+                422, "rider_paid_cash_required", "Say whether the customer paid the rider's fee"
+            )
+        await _move(
+            session,
+            order,
+            "delivered",
+            actor_type="admin",
+            actor_id=admin_id,
+            reason=reason,
+            delivered_at=now,
+            closed_at=now,
+        )
+        customer = await session.get(Customer, order.customer_phone, with_for_update=True)
+        if customer is not None:
+            customer.completed_orders += 1
+        rider_id = order.rider_id
+        if order.rider_fee_mode == "included" and await _payout_mode(session, rider_id) == "weekly":
+            await ledger.record_rider_fee(
+                session, order, rider_id=rider_id, payout_mode="weekly", created_by=admin_id
+            )
+        elif cash and rider_paid_cash:
+            await ledger.record_rider_fee(
+                session, order, rider_id=rider_id, payout_mode="instant", created_by=admin_id
+            )
+        elif cash:  # the customer did not pay the rider at the door: the platform does
+            await ledger.record_rider_compensation(
+                session, order, rider_id=rider_id, created_by=admin_id
+            )
+    else:
+        raise AppError(422, "bad_action", "Choose delivered or failed")
+    await session.flush()
+    return order
+
+
 async def classify_failure(
     session: AsyncSession, item: ReviewItem, fault: str, admin_id: uuid.UUID, now: datetime
 ) -> None:
-    """The super admin decides whose fault a failed delivery was (D7 table)."""
+    """The super admin decides whose fault a failed delivery was."""
     order = await _lock(session, item.order_id)
     if order.status != "failed_delivery":
         raise _wrong(order, "classify")

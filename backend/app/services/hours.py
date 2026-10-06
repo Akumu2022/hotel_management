@@ -1,4 +1,4 @@
-"""Opening hours and "can this hotel take an order now" (DECISIONS D4).
+"""Opening hours and "can this hotel take an order now".
 
 Hours are local Africa/Nairobi times per weekday (0 = Monday). A closing time at or before the
 opening time means the hotel closes after midnight. Orders stop `order_cutoff_minutes` before

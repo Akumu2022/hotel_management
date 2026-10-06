@@ -1,4 +1,4 @@
-"""Does the name on the M-Pesa message belong to the person who ordered? (owner, D25)
+"""Does the name on the M-Pesa message belong to the person who ordered?
 
 The name typed at checkout is compared with the payer's name on the Till SMS, word by word, in
 any order: "James Kamau" matches "KAMAU DANIEL JAMES" (2 names) and "James Onyango" (1 name).

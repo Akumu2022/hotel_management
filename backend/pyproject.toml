@@ -20,6 +20,8 @@ dependencies = [
     "pillow==11.*",
     "python-multipart==0.0.*",
     "tzdata",
+    "redis==5.*",
+    "pywebpush==2.*",
 ]
 
 [project.optional-dependencies]

@@ -9,7 +9,7 @@ export function homeFor(role: string | undefined) {
   return role === "super_admin" ? "/admin" : role === "rider" ? "/rider" : "/hotel";
 }
 
-/** Change your own password. Required after an admin reset (D28), where the temporary password
+/** Change your own password. Required after an admin reset, where the temporary password
  * is the "current" one. */
 export function PasswordPage() {
   const navigate = useNavigate();

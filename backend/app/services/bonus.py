@@ -1,4 +1,4 @@
-"""Platform-funded customer bonuses (DECISIONS D19).
+"""Platform-funded customer bonuses.
 
 - Stamp card: every `stamp_every`-th completed order earns `stamp_reward` KES off one order.
   Rewards are counted from orders, not stored: earned = completed // N, used = live orders that
@@ -7,7 +7,7 @@
 - All bonuses stop for the day once `bonus_daily_budget` (Kenya day, all hotels) is used up.
   A bonus is only offered if it fits in what is left, so the budget is never exceeded.
 
-Phone numbers are not verified (D9), so nothing here is given to a new number: a stamp needs
+Phone numbers are not verified, so nothing here is given to a new number: a stamp needs
 real orders that a hotel marked collected or a rider delivered.
 """
 

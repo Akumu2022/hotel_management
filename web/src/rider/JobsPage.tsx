@@ -1,4 +1,4 @@
-/** Rider jobs (DECISIONS D21): go online, take a job, follow the steps, prove delivery with the
+/** Rider jobs: go online, take a job, follow the steps, prove delivery with the
  * customer's 4-digit code. Big buttons for one-handed use on a bike. */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import clsx from "clsx";
@@ -256,9 +256,9 @@ function MyJob({ j, act }: { j: Job; act: (path: string, body?: unknown) => Prom
   );
 }
 
-/** While online, share the phone's location with dispatch (D27): every 30 s, or sooner after
+/** While online, share the phone's location with dispatch: every 30 s, or sooner after
  * moving 100 m. Stops the moment the rider goes offline. Works while this screen is open. */
-function useShareLocation(online: boolean) {
+function useShareLocation(online: boolean, onTheRoad = false) {
   const [state, setState] = useState<"off" | "on" | "denied" | "unavailable">("off");
   useEffect(() => {
     if (!online) {
@@ -270,21 +270,76 @@ function useShareLocation(online: boolean) {
       return;
     }
     let last: { lat: number; lng: number; at: number } | null = null;
+    // Coming back to the app (a call, another app, a locked screen): send where we are at once.
+    const back = () => {
+      if (document.visibilityState === "visible") last = null;
+    };
+    document.addEventListener("visibilitychange", back);
     const id = navigator.geolocation.watchPosition(
       (pos) => {
         setState("on");
         const p = { lat: pos.coords.latitude, lng: pos.coords.longitude, at: Date.now() };
         const moved = last ? Math.hypot((p.lat - last.lat) * 111_000, (p.lng - last.lng) * 111_000) : Infinity;
-        if (last && p.at - last.at < 30_000 && moved < 100) return;
+        // With food on the road the customer watches live: every 10 s or 40 m, else 30 s / 100 m.
+        if (last && p.at - last.at < (onTheRoad ? 10_000 : 30_000) && moved < (onTheRoad ? 40 : 100)) return;
         last = p;
         void api.post("/rider/location", { lat: p.lat, lng: p.lng, accuracy_m: Math.round(pos.coords.accuracy) }).catch(() => undefined);
       },
       (err) => setState(err.code === err.PERMISSION_DENIED ? "denied" : "unavailable"),
       { enableHighAccuracy: true, maximumAge: 10_000, timeout: 30_000 },
     );
-    return () => navigator.geolocation.clearWatch(id);
-  }, [online]);
+    return () => {
+      navigator.geolocation.clearWatch(id);
+      document.removeEventListener("visibilitychange", back);
+    };
+  }, [online, onTheRoad]);
   return state;
+}
+
+/** Keep the screen on while food is on the road, so the browser keeps sharing the location. */
+function useKeepAwake(active: boolean) {
+  useEffect(() => {
+    if (!active || !("wakeLock" in navigator)) return;
+    let lock: WakeLockSentinel | null = null;
+    let stopped = false;
+    const take = async () => {
+      try {
+        lock = await navigator.wakeLock.request("screen");
+        if (stopped) void lock.release();
+      } catch {
+        /* low battery or not allowed: the notice below still asks the rider to keep it open */
+      }
+    };
+    void take();
+    const again = () => document.visibilityState === "visible" && void take(); // released when hidden
+    document.addEventListener("visibilitychange", again);
+    return () => {
+      stopped = true;
+      document.removeEventListener("visibilitychange", again);
+      void lock?.release();
+    };
+  }, [active]);
+}
+
+/** True once the app has been out of sight for a minute or more while delivering, until the
+ * rider dismisses it: the customer saw "location paused" meanwhile. */
+function useWasAway(active: boolean) {
+  const [away, setAway] = useState(false);
+  useEffect(() => {
+    if (!active) {
+      setAway(false);
+      return;
+    }
+    let hiddenAt: number | null = null;
+    const onChange = () => {
+      if (document.visibilityState === "hidden") hiddenAt = Date.now();
+      else if (hiddenAt && Date.now() - hiddenAt >= 60_000) setAway(true);
+      if (document.visibilityState === "visible") hiddenAt = null;
+    };
+    document.addEventListener("visibilitychange", onChange);
+    return () => document.removeEventListener("visibilitychange", onChange);
+  }, [active]);
+  return [away, () => setAway(false)] as const;
 }
 
 type Earnings = { owed: number; payouts: { id: string; amount: number; mpesa_code: string; paid_at: string }[] };
@@ -322,7 +377,10 @@ export function JobsPage({ me }: { me: RiderMe }) {
   const qc = useQueryClient();
   const jobs = useQuery({ queryKey: ["rider", "jobs"], queryFn: () => api.get<Job[]>("/rider/jobs"), refetchInterval: 20_000 });
   const history = useQuery({ queryKey: ["rider", "history"], queryFn: () => api.get<Job[]>("/rider/jobs/history") });
-  const location = useShareLocation(me.is_online);
+  const onTheRoad = (jobs.data ?? []).some((j) => j.mine && (j.status === "picked_up" || j.status === "on_the_way"));
+  const location = useShareLocation(me.is_online, onTheRoad);
+  useKeepAwake(onTheRoad);
+  const [wasAway, clearAway] = useWasAway(onTheRoad);
   const earnings = useQuery({ queryKey: ["rider", "earnings"], queryFn: () => api.get<Earnings>("/rider/earnings") });
   const refresh = () => {
     void qc.invalidateQueries({ queryKey: ["rider"] });
@@ -348,7 +406,7 @@ export function JobsPage({ me }: { me: RiderMe }) {
   const mine = (jobs.data ?? []).filter((j) => j.mine);
   const open = (jobs.data ?? []).filter((j) => !j.mine);
   const assignedNew = mine.filter((j) => !j.seen);
-  // Ring until the action is done (D22): a job given to you until "Got it"; open jobs while
+  // Ring until the action is done: a job given to you until "Got it"; open jobs while
   // you're online and free until you (or another rider) take one.
   useAlarm("rider-assigned", assignedNew.length, "job", "New job for you");
   useAlarm("rider-open", me.is_online && mine.length === 0 ? open.length : 0, "job", "Delivery job waiting");
@@ -378,6 +436,19 @@ export function JobsPage({ me }: { me: RiderMe }) {
         ) : location === "denied" ? (
           <p className="rounded-2xl bg-warn-soft px-4 py-3 text-sm font-semibold text-warn">Turn on location for this site so dispatch can see where you are and send you the nearest jobs.</p>
         ) : null
+      ) : null}
+
+      {onTheRoad ? (
+        <div role="status" className="rounded-2xl border border-line bg-surface px-4 py-3 text-sm">
+          <p className="font-semibold">Keep Chakula open while you deliver.</p>
+          <p className="text-muted">Your screen stays on so the customer can follow you on the map. If you switch apps for long, they'll see your location as paused.</p>
+        </div>
+      ) : null}
+      {wasAway ? (
+        <div role="alert" className="flex items-start gap-3 rounded-2xl bg-warn-soft px-4 py-3 text-sm font-semibold text-warn">
+          <span className="flex-1">Chakula was in the background, so your location wasn't shared for a while. It's sharing again now.</span>
+          <button onClick={clearAway} className="shrink-0 underline">OK</button>
+        </div>
       ) : null}
 
       <div className="grid grid-cols-2 gap-3">

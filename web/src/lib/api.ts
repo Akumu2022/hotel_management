@@ -17,10 +17,10 @@ export class ApiError extends Error {
 }
 
 const BASE = "/api/v1";
-// D29: only the (non-secret) profile is kept in the browser, to draw the screens. The refresh
+// Only the (non-secret) profile is kept in the browser, to draw the screens. The refresh
 // token is an httpOnly cookie the page can't read; the 15-minute access token lives in memory.
 const USER_STORE = "chakula-user";
-const OLD_STORE = "hotel-auth"; // before D29: whole session incl. refresh token. Migrated once.
+const OLD_STORE = "hotel-auth"; // before the refresh token moved to a cookie: whole session incl. refresh token. Migrated once.
 
 export type Me = {
   id: string;
@@ -28,7 +28,7 @@ export type Me = {
   hotel_id: string | null;
   name: string;
   phone: string;
-  must_change_password?: boolean; // after an admin reset (D28)
+  must_change_password?: boolean; // after an admin reset
 };
 
 /** What login, refresh and sign-up return. The refresh token comes as a cookie, not here. */
@@ -108,6 +108,8 @@ export const auth = {
     return accessToken ? true : refresh();
   },
   async logout() {
+    // Stop closed-browser alerts for this person while we can still prove who they are.
+    await import("./push").then((m) => m.disablePush()).catch(() => undefined);
     save(null);
     await request("POST", "/auth/logout", undefined, { auth: false }).catch(() => {});
   },

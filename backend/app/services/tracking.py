@@ -1,4 +1,4 @@
-"""Rider live location (owner 2026-10-03, DECISIONS D27).
+"""Rider live location.
 
 The rider's phone sends a GPS fix about every 30 seconds while the rider is online, and only
 then: going offline stops tracking. The latest fix shows on the admin's Dispatch map next to
@@ -30,7 +30,7 @@ async def record(
         raise AppError(403, "not_approved", "Only approved riders share their location")
     if not p.is_online:
         raise AppError(409, "offline", "Location is only shared while you're online")
-    # D28: a rough fix (weak GPS, Wi-Fi guess) would make the rider jump on the map. Keep the
+    # A rough fix (weak GPS, Wi-Fi guess) would make the rider jump on the map. Keep the
     # last good one while it is fresh; with nothing better, a rough fix still beats none.
     rough = accuracy_m is not None and accuracy_m > MAX_ACCURACY_M
     fresh = p.last_location_at is not None and now - p.last_location_at < STALE_AFTER
@@ -82,6 +82,19 @@ async def record(
             "at": now.isoformat(),
         },
     )
+    # The customer whose food this rider is carrying watches the same fix (live map).
+    for o in jobs:
+        if o.status in ("picked_up", "on_the_way"):
+            events.emit(
+                session,
+                f"order:{o.tracking_token}",
+                {
+                    "type": "rider_location",
+                    "lat": p.last_lat,
+                    "lng": p.last_lng,
+                    "at": now.isoformat(),
+                },
+            )
     return p
 
 

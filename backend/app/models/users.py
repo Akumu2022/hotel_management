@@ -37,7 +37,7 @@ class User(Base):
     phone: Mapped[str] = mapped_column(String(12), unique=True)
     password_hash: Mapped[str] = mapped_column(String(200))
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
-    # Set by an admin's password reset (D28): the temporary password must be changed at login.
+    # Set by an admin's password reset: the temporary password must be changed at login.
     must_change_password: Mapped[bool] = mapped_column(
         Boolean, default=False, server_default="false"
     )
@@ -58,7 +58,7 @@ class RefreshToken(Base):
 
 
 class RiderProfile(Base):
-    """Rider KYC (DECISIONS D21). The super admin reviews every application; only approved
+    """Rider KYC. The super admin reviews every application; only approved
     riders see or take jobs. ID photos and the selfie are private files (never public URLs)."""
 
     __tablename__ = "rider_profiles"
@@ -95,7 +95,7 @@ class RiderProfile(Base):
     payout_mode: Mapped[str] = mapped_column(String(8), default="instant", server_default="instant")
     is_online: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    # Live location (D27): the latest GPS fix from the rider's phone, sent only while online.
+    # Live location: the latest GPS fix from the rider's phone, sent only while online.
     last_lat: Mapped[float | None] = mapped_column(Float)
     last_lng: Mapped[float | None] = mapped_column(Float)
     last_accuracy_m: Mapped[int | None] = mapped_column(SmallInteger)
@@ -103,7 +103,7 @@ class RiderProfile(Base):
 
 
 class RiderPing(Base):
-    """Where a rider was during a job, every ~30 s (D27): for disputes ("I was at the gate").
+    """Where a rider was during a job, every ~30 s: for disputes ("I was at the gate").
     Kept 30 days."""
 
     __tablename__ = "rider_pings"
@@ -119,7 +119,7 @@ class RiderPing(Base):
 
 
 class RiderStrike(Base):
-    """A rider-fault failed delivery (D7). Two in 30 days suspends the rider."""
+    """A rider-fault failed delivery. Two in 30 days suspends the rider."""
 
     __tablename__ = "rider_strikes"
 

@@ -1,4 +1,4 @@
-"""Quotes and order placement (spec sections 5, 12, 13; DECISIONS D4).
+"""Quotes and order placement.
 
 Placement is idempotent: the Idempotency-Key row is inserted with ON CONFLICT DO NOTHING in the
 same transaction that creates the order. Concurrent duplicates block on the unique index until
@@ -36,7 +36,7 @@ from app.services.settings import PlatformSettings
 
 IDEMPOTENCY_TTL = timedelta(hours=24)
 CODE_ALPHABET = "ACDEFGHJKMNPQRTUVWXY34679"  # no 0/O, 1/I/L, 2/Z, 5/S, 8/B look-alikes
-EAT_IN_MIN_NOTICE = timedelta(minutes=10)  # D28
+EAT_IN_MIN_NOTICE = timedelta(minutes=10)
 EAT_IN_MAX_AHEAD = timedelta(hours=12)
 CANCELLABLE = ("awaiting_payment", "checking_payment", "paid")
 
@@ -166,7 +166,7 @@ async def price(
 
     customer = await session.get(Customer, body.phone) if body.phone else None
 
-    # Rider fee by distance from the hotel (owner decision, DECISIONS D14).
+    # Rider fee by distance from the hotel.
     rates = settings.effective_for_hotel(values, hotel)
     distance = None
     estimated = too_far = False
@@ -313,7 +313,7 @@ async def _check_can_order(session: AsyncSession, body: OrderIn, p: Priced, now:
             409, "option_b_unavailable", "Please include the rider fee in your M-Pesa payment"
         )
     if body.payment_method == "cash":
-        if body.type != "pickup":  # eat in is paid first (D28)
+        if body.type != "pickup":  # eat in is paid first
             raise AppError(422, "cash_pickup_only", "Cash is for pickup orders only")
         if not p.hotel.cash_pickup_enabled:
             raise AppError(409, "cash_disabled", "This hotel only accepts M-Pesa")
@@ -336,7 +336,7 @@ async def _check_can_order(session: AsyncSession, body: OrderIn, p: Priced, now:
             raise AppError(
                 422, "too_far", f"That's more than {km:g} km from {p.hotel.name}. Choose pickup."
             )
-        # D16: with a drawn area, the pin must be inside it. Without one, the limit is the
+        # With a drawn area, the pin must be inside it. Without one, the limit is the
         # furthest delivery distance from the hotel, which needs the hotel's location.
         zone = p.settings.delivery_zone
         if zone:
@@ -433,7 +433,7 @@ async def place(
             delivery_code=f"{secrets.randbelow(10_000):04d}" if body.type == "delivery" else None,
             # Snapshot: the distance the fee was priced on; customer, hotel and rider all see it.
             distance_km=p.distance_km if body.type == "delivery" else None,
-            # Cash pickup is paid at collection, so it never expires (DECISIONS D12c).
+            # Cash pickup is paid at collection, so it never expires.
             expires_at=(
                 now + timedelta(minutes=p.settings.unpaid_expiry_minutes)
                 if body.payment_method == "mpesa"

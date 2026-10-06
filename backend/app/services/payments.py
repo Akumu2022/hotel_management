@@ -1,7 +1,7 @@
-"""Payments and matching (spec sections 6, 13, 14; DECISIONS D5, D17).
+"""Payments and matching.
 
 Every payment is a row in `payments` keyed by its unique M-Pesa transaction code, whatever its
-source: cashier (manual), forwarder SMS (M8), or Daraja later. Confirmation runs the same checks
+source: cashier (manual), forwarder SMS, or Daraja later. Confirmation runs the same checks
 for all sources:
 
   1. the payment reached THIS hotel's Till,
@@ -26,7 +26,7 @@ from app.core.errors import AppError
 from app.core.phone import normalize_phone
 from app.models import Hotel, Order, OrderEvent, Payment, Product, ReviewItem
 from app.models.orders import OrderItem
-from app.services import events, ledger, names, settings
+from app.services import events, ledger, names, push, settings
 
 CODE_RE = re.compile(r"^[A-Z0-9]{10}$")
 PAID_AT_TOLERANCE = timedelta(minutes=2)
@@ -120,6 +120,24 @@ async def open_review(
     )
     session.add(item)
     await session.flush()
+    if hotel_id is None or type in ("failed_delivery", "fee_dispute"):
+        push.notify(
+            session,
+            title="Needs your decision",
+            body=reason,
+            url="/admin/review",
+            tag="admin-review",
+            admins=True,
+        )
+    else:
+        push.notify(
+            session,
+            title="Payment to confirm",
+            body=reason,
+            url="/hotel/payments",
+            tag="hotel-payments",
+            hotel_id=hotel_id,
+        )
     return item
 
 
@@ -188,7 +206,7 @@ async def apply_payment(
         return Outcome("too_old", order.status, "That payment was made before this order")
 
     if order.status == "expired":
-        # D5: money after expiry. Within the grace period the cashier chooses Reinstate or Refund.
+        # Money after expiry. Within the grace period the cashier chooses Reinstate or Refund.
         payment.status = "review"
         grace = timedelta(hours=values.late_payment_grace_hours)
         late_by = (payment.paid_at - order.expires_at) if order.expires_at else timedelta(0)
@@ -278,7 +296,7 @@ async def confirm_manual(
     cashier_id: uuid.UUID,
     now: datetime,
 ) -> Outcome:
-    """Cashier read the Till phone's SMS and typed the code and amount (spec section 6)."""
+    """Cashier read the Till phone's SMS and typed the code and amount."""
     code = normalize_code(code)
     if amount <= 0:
         raise AppError(422, "bad_amount", "Enter the amount shown in the M-Pesa message")
@@ -329,7 +347,7 @@ async def confirm_manual(
 async def submit_customer_code(
     session: AsyncSession, order_id: uuid.UUID, raw_code: str, now: datetime
 ) -> Outcome:
-    """Customer typed their M-Pesa code (D5: this pauses expiry). If the payment is already
+    """Customer typed their M-Pesa code (this pauses expiry). If the payment is already
     known (from an SMS), it is matched straight away."""
     code = normalize_code(raw_code)
     order = await _lock_order(session, order_id)
@@ -386,14 +404,14 @@ async def record_incoming(
     sms_message_id: uuid.UUID | None = None,
     now: datetime,
 ) -> tuple[Payment, Outcome | None]:
-    """A payment seen on a Till (the forwarder app, M8; or the admin's paste-SMS tool).
-    Stored first, then matched; repeats are no-ops (unique code).
+    """A payment seen on a Till (the forwarder app, or the admin's paste-SMS tool).
+     Stored first, then matched; repeats are no-ops (unique code).
 
-    With the customer's code: that order, whatever the payer's name (people pay for each
-    other). Without a code, an order is chosen only when exactly one waiting order fits the
-    amount, the visible phone digits and, when the SMS has a name, at least one checkout name
-    (D25); two names beat one. A full (unmasked) number equal to the checkout number is enough
-    on its own (D28). Anything else goes to the hotel's review queue."""
+     With the customer's code: that order, whatever the payer's name (people pay for each
+     other). Without a code, an order is chosen only when exactly one waiting order fits the
+     amount, the visible phone digits and, when the SMS has a name, at least one checkout name
+    ; two names beat one. A full (unmasked) number equal to the checkout number is enough
+     on its own. Anything else goes to the hotel's review queue."""
     code = normalize_code(code)
     payment = await _insert_payment(
         session,
@@ -416,7 +434,7 @@ async def record_incoming(
         await session.execute(select(Hotel).where(Hotel.till_number == till_number))
     ).scalar_one_or_none()
     if hotel is None:
-        # The platform's own Till (settlements, M7) or an unknown Till.
+        # The platform's own Till (settlements) or an unknown Till.
         return payment, None
 
     # 1. The customer already entered this code.
@@ -435,7 +453,7 @@ async def record_incoming(
     ).scalar_one_or_none()
 
     # 2. No code entered: match only if exactly one pending order at this hotel has the same
-    #    amount and (when known) the same visible phone digits (spec section 6).
+    #    amount and (when known) the same visible phone digits.
     if order is None:
         candidates = (
             (
@@ -454,7 +472,7 @@ async def record_incoming(
         )
         full = _full_phone(phone_digits)
         if full:
-            # D28: the SMS shows the whole number, so it identifies the customer by itself.
+            # The SMS shows the whole number, so it identifies the customer by itself.
             candidates = [o for o in candidates if o.customer_phone == full]
         elif phone_digits:
             tail = re.sub(r"\D", "", phone_digits)[-3:]
@@ -528,7 +546,7 @@ async def record_incoming(
 
 
 async def record_reversal(session: AsyncSession, code: str, now: datetime) -> Payment | None:
-    """M-Pesa reversed a payment: flag the linked order immediately (spec section 6)."""
+    """M-Pesa reversed a payment: flag the linked order immediately."""
     code = normalize_code(code)
     payment = (
         await session.execute(select(Payment).where(Payment.trans_code == code).with_for_update())
@@ -582,7 +600,7 @@ RESOLUTIONS = {
     "no_sms": ("dismiss",),
     "reversal": ("cancel_order", "dismiss"),
     "parse_failed": ("dismiss",),
-    # Delivery items (D7, D8, D21): the super admin decides, never the hotel.
+    # Delivery items: the super admin decides, never the hotel.
     "failed_delivery": ("customer_fault", "rider_fault", "hotel_fault"),
     "fee_dispute": ("pay_rider", "no_payment"),
 }
@@ -723,7 +741,7 @@ async def resolve(
     elif action == "dismiss" and item.type == "no_sms":
         # "We checked: the money never came." Close the order, or the every-minute check finds
         # it still waiting and opens the same item again. Money arriving later is a late
-        # payment (D5), handled as usual.
+        # payment, handled as usual.
         if order and order.status == "checking_payment":
             order.status = "expired"
             order.closed_at = now

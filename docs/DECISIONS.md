@@ -181,6 +181,31 @@ At 100 orders/day, manual payment confirmation means about 20 code entries per c
 - **Hotels are created only by the owner** (super admin), from an admin screen that also creates the hotel admin's login. There is no hotel self-sign-up.
 - **Coordinates:** hotel locations can also be typed/pasted as `lat, lng` (e.g. from Google Maps). Rider GPS fixes worse than 100 m accuracy are not used for the live position.
 
+## D31. Launch hardening and stuck deliveries (owner request, 2026-10-06)
+
+- **Stuck deliveries have a way out.** Dispatch shows **Close delivery…** on any delivery whose food has left the hotel. The super admin picks *Customer got the food* or *It could not be delivered*, and writes what happened (shown to the customer, rider and hotel, and audit-logged).
+  - *Delivered* follows the rider's own rules without the code (the customer's completed-order count, and the rider fee as usual). For cash-fee deliveries the admin says whether the customer paid the rider; if not, Chakula pays the rider (D8).
+  - *Could not be delivered* files the usual failed-delivery decision under Needs attention, where the admin picks whose fault it was, and refunds, rider pay and strikes follow D7. A double tap changes nothing.
+  - Not available before pickup (use Swap rider or Cancel & refund there).
+- **The alarm can be silenced, not hidden.** The bell offers *Silence for 10 min / 30 min / 1 h*. Sound, vibration and the system notification stop; the bell, badge and tab title stay. It rings again when something new arrives or time is up. This relaxes D22's "no silence button".
+- **The payment simulator is development-only.** `POST /admin/test-payment` (any code, any amount) is refused when `APP_ENV=production`, unless `PAYMENT_SIMULATOR=true` is set (and `check-production` then fails). Pasting a real SMS (`/admin/test-sms`) stays, for messages the Till phone missed, and every use is audit-logged with the text. The Tools page hides what the server disables.
+- **Web Push** (replaces "deferred to M9" in D6). Staff and riders can turn on alerts per device; nothing about what rings or when changes. Hotel: new order, payment to confirm. Rider: delivery waiting (online riders), job assigned. Super admin: decisions needed. Same tag replaces an earlier notification. The page's own alarm is used when it is open and visible. Off until VAPID keys are set.
+- **Rider location (D27 limit).** A web page can only share location while it's open. Now: the screen stays awake while the rider carries an order, a fresh position is sent the moment the app returns to the front, a notice asks the rider to keep Chakula open, and one tells them if it was away for a minute or more. The customer sees "location paused" after 5 minutes. The lasting fix is a native rider app with a foreground location service (the Till app's Kotlin base can be reused); until it exists, dispatch has the map and the Close delivery action.
+- **Shared rate limits** with `REDIS_URL` (see README); in-memory otherwise, and in-memory if Redis is down.
+- **Routing server** is configurable (`OSRM_URL`); README explains how to run your own.
+- **Launch check:** `python -m app.cli check-production` lists what must be fixed before going live. `seed-demo` refuses to run in production and no longer uses a password written in the code (`DEMO_PASSWORD` or a random one, printed once).
+- **Tests:** the real-SMS sample moved to `backend/tests/data/` so tests run from the `backend` folder alone.
+- **Hotel hours restored** after testing: 06:00 to 23:30 every day, order cutoff 15 minutes.
+
+## D30. Customer live rider map (owner request, 2026-10-06)
+
+- **When:** on the customer's tracking page, once the rider has collected the food (picked up / on the way). Not before, not after delivery, and never another order's rider. Pickup and eat-in orders have no map.
+- **What the customer sees:** a map with the hotel, their pin, and the rider gliding along. A dotted orange line flows from the rider to the door along the road (the straight line is shown until the road route arrives, or if routing is unavailable) and shortens as the rider gets closer. Under the title: distance, "about N min" (20 km/h motorbike estimate) and "Live / Updated Ns ago". Over 5 minutes without a position it says the rider's location is paused. Fully translated for Kiswahili.
+- **How:** each rider position is pushed to that order's live channel (`rider_location`) and also returned in `GET /track/{token}` as `live`. `GET /track/{token}/route` returns the road line (OSRM, cached 60 s on a ~110 m grid, failures cached 30 s, 15 s timeout, 30 requests/min per client).
+- **Rider app:** while carrying an order it sends a position every 10 s or 40 m (was 30 s / 100 m). Idle riders are unchanged.
+- **Privacy:** only the rider's first name, phone and photo (already shown) and the position, and only while the food is on the road. The customer's own pin is theirs already.
+- **Limits:** the public OSRM demo server can take 10 s or more, so the first road line may arrive late; self-host OSRM at scale. Like D27, positions only flow while the rider's Chakula screen is open.
+
 ## D27. Rider live location (owner, 2026-10-03)
 
 - While a rider is **online**, the rider screen sends the phone's GPS position every 30 s, or sooner after moving 100 m. Going offline stops it. Riders see "Sharing your location with dispatch". Only approved, online riders can send a position.
@@ -379,14 +404,14 @@ Measured in Chrome:
   - **Two auto-rejects in a row** switch "Accepting orders" off.
   
   The auto-reject job handles each order separately, so one failure cannot block the others.
-- **Web Push is deferred to deployment (M9).** The library could not be downloaded on the development connection. Until then, alerts reach the board while it is open: the alarm keeps ringing in a background tab once switched on, but not when the browser is closed.
+- **Web Push** is built (see D31). It needs VAPID keys and HTTPS; without it, alerts reach the board only while it is open: the alarm keeps ringing in a background tab once switched on, but not when the browser is closed.
 - **Live-update URLs carry the 15-minute access token** (EventSource cannot send headers). Uvicorn's own access log is therefore off (`--no-access-log`); the app's JSON request log records paths without query strings.
 - **Development note:** on Windows, "localhost" tries IPv6 first and added about 2 s to every request; the Vite proxy now targets `127.0.0.1`.
 
 ## D17. Payments (M4)
 
 - **The SMS app stays M8** (owner, 2026-10-02). Until then, cashiers confirm by reading the Till phone's SMS (code and amount). An admin "Paste SMS" tool runs a pasted message through the exact parser and matching the M8 app will use.
-- **The parser is built from real Till SMS** (`docs/sms_samples/till_payments.txt`, with names and numbers anonymised). Spaces between parts are optional (phone apps hide some), and the date is read as day/month/year in EAT. Any non-whole-shilling amount, unreadable date or unknown wording is **flagged for a human, never guessed**. Reversals are only acted on when the message contains a known transaction code.
+- **The parser is built from real Till SMS** (`backend/tests/data/till_payments.txt`, with names and numbers anonymised). Spaces between parts are optional (phone apps hide some), and the date is read as day/month/year in EAT. Any non-whole-shilling amount, unreadable date or unknown wording is **flagged for a human, never guessed**. Reversals are only acted on when the message contains a known transaction code.
 - **The same checks apply to every confirmation source** (manual, SMS, Daraja later): the payment went to this hotel's Till, the amount is exact, it was paid after the order was created (2 minutes' tolerance), and the code is unique. One code can never confirm two orders; a database unique constraint and a row lock enforce this.
 - **Underpaid:** the order is held in review. The cashier either **refunds what was paid** (it is returned in full with no commission or fee, and the order is cancelled) or **accepts the shortfall** (the hotel absorbs it). One order is never split across several M-Pesa payments.
 - **Overpaid:** the order is confirmed, and "refund the extra" is queued for the hotel admin.
@@ -426,6 +451,6 @@ The visual style follows the owner's reference designs (Bonfol, D.CC, Epic Eats)
 
 ## Open inputs needed from the owner
 
-- [x] ~~Real M-Pesa Till SMS sample(s)~~: received 2 Oct 2026 (docs/sms_samples). More samples (especially a reversal) are welcome; each becomes a test.
+- [x] ~~Real M-Pesa Till SMS sample(s)~~: received 2 Oct 2026 (backend/tests/data). More samples (especially a reversal) are welcome; each becomes a test.
 - [x] ~~Delivery zone boundary~~: the admin now draws it (D14). Still needed: each hotel's real location and the real delivery area.
 - [ ] Hotel list: names, Till numbers, phones, hours (needed by M2; placeholders are fine until then).

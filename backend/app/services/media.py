@@ -1,7 +1,7 @@
 """Image upload: decode with Pillow, drop EXIF (location!), re-encode to WebP plus a thumbnail.
 
 Storage is behind a tiny interface: a local folder in development, Cloudflare R2 in production
-(added at deploy, M9). Keys are random, so files can be cached forever.
+(added at deploy). Keys are random, so files can be cached forever.
 """
 
 import io

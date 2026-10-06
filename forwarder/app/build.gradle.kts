@@ -14,7 +14,7 @@ android {
         versionCode = 1
         versionName = "1.0.0"
         // Prefilled server address on the pairing screen; editable there.
-        buildConfigField("String", "DEFAULT_SERVER", "\"${project.findProperty("chakulaServer") ?: "https://"}\"")
+        buildConfigField("String", "DEFAULT_SERVER", "\"${project.findProperty("chakulaServer") ?: ""}\"")
     }
 
     buildTypes {

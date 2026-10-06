@@ -1,4 +1,4 @@
-/** Super admin: commission tiers and customer bonuses (DECISIONS D19). */
+/** Super admin: commission tiers and customer bonuses. */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import clsx from "clsx";
 import { Gift, Percent, Plus, Stamp, Trash2, Truck, Wallet } from "lucide-react";

@@ -29,7 +29,7 @@ from app.services.auth import reset_password, revoke_all
 router = APIRouter(prefix="/admin", tags=["admin"])
 
 
-# --- Settings (D1) ----------------------------------------------------------------------------
+# --- Settings ----------------------------------------------------------------------------
 
 
 @router.get("/settings", response_model=SettingsOut)
@@ -99,7 +99,7 @@ async def list_hotels(_: SuperAdmin, session: Session, cursor: str | None = None
 
 @router.post("/hotels", response_model=HotelOut, status_code=201)
 async def create_hotel(body: HotelCreate, admin: SuperAdmin, session: Session):
-    """Only the owner creates hotels (D28), optionally with the hotel admin's login, who must
+    """Only the owner creates hotels, optionally with the hotel admin's login, who must
     choose their own password at first login."""
     hotel = Hotel(**hotel_values(body))
     session.add(hotel)
@@ -245,7 +245,7 @@ async def patch_user(user_id: uuid.UUID, body: UserPatch, admin: SuperAdmin, ses
 
 @router.post("/users/{user_id}/reset-password", response_model=TempPasswordOut)
 async def reset_user_password(user_id: uuid.UUID, admin: SuperAdmin, session: Session):
-    """D28: any staff or rider. The temporary password is shown once."""
+    """Any staff or rider. The temporary password is shown once."""
     user = await session.get(User, user_id, with_for_update=True)
     if user is None:
         raise not_found("User not found")

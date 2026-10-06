@@ -8,7 +8,7 @@ import pytest
 
 from app.services.sms_parser import parse
 
-SAMPLES = Path(__file__).resolve().parents[2] / "docs" / "sms_samples" / "till_payments.txt"
+SAMPLES = Path(__file__).resolve().parent / "data" / "till_payments.txt"
 
 
 def blocks() -> list[str]:

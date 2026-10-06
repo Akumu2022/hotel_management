@@ -90,7 +90,7 @@ export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputE
   },
 );
 
-/** Password box with a show/hide eye (D28). */
+/** Password box with a show/hide eye. */
 export const PasswordInput = forwardRef<HTMLInputElement, Omit<InputHTMLAttributes<HTMLInputElement>, "type">>(
   function PasswordInput({ className, ...rest }, ref) {
     const [shown, setShown] = useState(false);

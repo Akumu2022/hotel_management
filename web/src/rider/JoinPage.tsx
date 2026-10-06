@@ -1,4 +1,4 @@
-/** Become a rider (DECISIONS D21): three simple steps, one submission at the end.
+/** Become a rider: three simple steps, one submission at the end.
  *  1. Your details  2. Photos (ID front, ID back, selfie)  3. Check & send
  * Every problem is shown in words under its field; nothing is sent until everything is right,
  * and the account is created only when the whole application arrives complete. */

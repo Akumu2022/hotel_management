@@ -27,7 +27,7 @@ class OutcomeOut(Schema):
 class HotelOrderOut(Schema):
     id: uuid.UUID
     code: str
-    platform_bonus: int = 0  # paid to the hotel by the platform on its statement (D19)
+    platform_bonus: int = 0  # paid to the hotel by the platform on its statement
     rider_name: str | None = None
     rider_phone: str | None = None
     rider_photo_url: str | None = None
@@ -51,9 +51,9 @@ class HotelOrderOut(Schema):
     ready_at: datetime | None = None
     prep_minutes: int | None = None
     landmark: str | None = None
-    arrive_at: datetime | None = None  # eat in (D28)
+    arrive_at: datetime | None = None  # eat in
     reason: str | None = None
-    payer_name: str | None = None  # from the Till SMS (D25)
+    payer_name: str | None = None  # from the Till SMS
     name_match: int | None = None  # 2 two names, 1 one name, 0 none, None unknown
 
 
@@ -109,7 +109,7 @@ class RefundSentIn(Input):
 
 
 class TestPaymentIn(Input):
-    """Admin simulator for an M-Pesa payment arriving on a Till (stands in for M8)."""
+    """Admin simulator for an M-Pesa payment arriving on a Till (stands in for the phone app)."""
 
     till_number: str = Field(pattern=r"^\d{5,10}$")
     code: str = Field(min_length=8, max_length=20)
@@ -120,7 +120,7 @@ class TestPaymentIn(Input):
 
 
 class TestSmsIn(Input):
-    """Paste a real Till SMS: it goes through the parser and matching like an M8 message."""
+    """Paste a real Till SMS: it goes through the parser and matching like a phone-app message."""
 
     till_number: str = Field(pattern=r"^\d{5,10}$")
     raw_text: str = Field(min_length=10, max_length=1000)

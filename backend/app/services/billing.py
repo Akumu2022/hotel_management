@@ -1,4 +1,4 @@
-"""Weekly statements, hotel payments to the platform, auto-pause, rider payouts (M7, D24).
+"""Weekly statements, hotel payments to the platform, auto-pause, rider payouts.
 
 The money stays where it is paid: customers pay each hotel's Till, so each hotel owes the
 platform its commission and service fees (plus rider fees it held for weekly-paid riders), less
@@ -90,7 +90,7 @@ async def _week_totals(session, hotel_id, start: datetime, end: datetime) -> dic
     t = {k: int(v) for k, v in rows}
     g = t.get
     return {
-        # Charges are the stored per-order amounts (spec section 11); refunds show as credits.
+        # Charges are the stored per-order amounts; refunds show as credits.
         "commission": g("commission", 0),
         "service_fee": g("service_fee", 0),
         "rider_fees_held": g("rider_fee_held", 0),

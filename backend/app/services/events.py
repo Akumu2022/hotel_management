@@ -42,7 +42,12 @@ def publish(channel: str, payload: dict) -> None:
 @event.listens_for(Session, "after_commit")
 def _after_commit(sync_session: Session) -> None:
     for channel, payload in sync_session.info.pop(_KEY, []):
-        publish(channel, payload)
+        if channel == "push":  # a Web Push message, not a screen update
+            from app.services import push
+
+            push.schedule(payload)
+        else:
+            publish(channel, payload)
 
 
 @event.listens_for(Session, "after_soft_rollback")
@@ -72,6 +77,33 @@ async def stream(channel: str) -> AsyncIterator[str]:
             _subscribers.pop(channel, None)
 
 
+def _push_for(session, order) -> None:
+    """Wake the people whose alarm this change starts. Same tag = replaces, never stacks."""
+    from app.services import push
+
+    waiting_for_hotel = order.status == "paid" or (
+        order.status == "awaiting_payment" and order.payment_method == "cash"
+    )
+    if waiting_for_hotel:
+        push.notify(
+            session,
+            title=f"New order #{order.code}",
+            body="Accept or reject it now.",
+            url="/hotel/orders",
+            tag="hotel-orders",
+            hotel_id=order.hotel_id,
+        )
+    if order.type == "delivery" and order.status == "ready" and order.rider_id is None:
+        push.notify(
+            session,
+            title="Delivery job waiting",
+            body="A delivery is ready to be taken.",
+            url="/rider",
+            tag="rider-open",
+            online_riders=True,
+        )
+
+
 def order_changed(session, order, extra: dict | None = None) -> None:
     """Tell the hotel's screen, the customer's tracking page and the admin board."""
     payload = {
@@ -84,6 +116,7 @@ def order_changed(session, order, extra: dict | None = None) -> None:
     emit(session, f"hotel:{order.hotel_id}", payload)
     emit(session, f"order:{order.tracking_token}", payload)
     emit(session, "admin", payload)
+    _push_for(session, order)
     if order.type == "delivery":
         # Riders' job lists refresh on this; no customer details go to the riders channel.
         emit(

@@ -1,4 +1,4 @@
-"""Rider sign-up and KYC review (DECISIONS D21).
+"""Rider sign-up and KYC review.
 
 Riders register themselves; the super admin reviews every application and is the only one who
 sees ID photos. Hotels never manage riders.
@@ -120,7 +120,7 @@ async def apply(
     now: datetime,
     **details,
 ) -> User:
-    """The whole application in one request (owner, D21): details, three photos and consent.
+    """The whole application in one request: details, three photos and consent.
     Nothing is created unless all of it is valid, so there are no half-finished sign-ups."""
     if not consent:
         raise AppError(

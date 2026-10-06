@@ -1,4 +1,4 @@
-"""Customer ratings (D28): 1-5 stars for the hotel on every finished order, and for the rider on
+"""Customer ratings: 1-5 stars for the hotel on every finished order, and for the rider on
 deliveries. One rating per order, from the tracking link (customers have no login)."""
 
 import uuid

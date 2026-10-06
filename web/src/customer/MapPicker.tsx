@@ -1,13 +1,18 @@
 import "leaflet/dist/leaflet.css";
 
 import L from "leaflet";
-import { AlertTriangle, CheckCircle2, LocateFixed } from "lucide-react";
+import { AlertTriangle, CheckCircle2, LocateFixed, Search } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { type LngLat, pointInZone } from "../lib/geo";
 import { useT } from "../lib/i18n";
 
 type Point = { lat: number; lng: number };
+
+// Hotels can only be pinned within 20 km of Bungoma town CBD.
+const CBD = L.latLng(0.5636, 34.5606);
+const CBD_RADIUS_M = 20_000;
+const withinCbd = (p: Point) => CBD.distanceTo(L.latLng(p.lat, p.lng)) <= CBD_RADIUS_M;
 
 /**
  * Tap the map (or use GPS) to drop a pin. When a delivery zone is given, everything outside it
@@ -21,6 +26,7 @@ export default function MapPicker({
   height = "h-64",
   checkZone = true,
   rangeKm,
+  precise = false,
 }: {
   zone?: LngLat[];
   value: Point | null;
@@ -29,13 +35,18 @@ export default function MapPicker({
   height?: string;
   checkZone?: boolean;
   rangeKm?: number; // no drawn area: show how far riders go from the hotel
+  precise?: boolean; // hotel admins: place search + satellite layer for an exact pin
 }) {
   const t = useT();
   const el = useRef<HTMLDivElement>(null);
   const map = useRef<L.Map | null>(null);
   const marker = useRef<L.CircleMarker | null>(null);
+  const accuracy = useRef<L.Circle | null>(null);
+  const [accuracyM, setAccuracyM] = useState<number | null>(null);
   const [locating, setLocating] = useState(false);
   const [gpsError, setGpsError] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
+  const [searching, setSearching] = useState(false);
 
   const hasZone = checkZone && zone.length >= 3;
   const inside = value && hasZone ? pointInZone(value.lat, value.lng, zone) : null;
@@ -46,7 +57,15 @@ export default function MapPicker({
     map.current = m;
     // Give the map a view first: layers added to a map with no view aren't attached yet.
     m.setView(value ? [value.lat, value.lng] : hotel ? [hotel.lat, hotel.lng] : [0.5636, 34.5606], value ? 15 : hotel ? 14 : 12);
-    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: "© OpenStreetMap" }).addTo(m);
+    const street = L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: "© OpenStreetMap" }).addTo(m);
+    if (precise) {
+      const sat = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", { maxZoom: 19, attribution: "Imagery © Esri" });
+      m.setMaxBounds(CBD.toBounds(CBD_RADIUS_M * 2.4));
+      m.setMinZoom(10);
+      L.circle(CBD, { radius: CBD_RADIUS_M, color: "#dc4b12", weight: 2.5, dashArray: "6 6", fillOpacity: 0.03, interactive: false }).addTo(m);
+      if (!value) m.setView(CBD, 13);
+      L.control.layers({ Map: street, Satellite: sat }, undefined, { position: "topright" }).addTo(m);
+    }
     const ring = zone.map(([lng, lat]) => L.latLng(lat, lng));
     if (hasZone) {
       // Grey everything outside the delivery area so it stands out.
@@ -74,7 +93,15 @@ export default function MapPicker({
         .bindTooltip(hotel.name, { direction: "top", offset: [0, -16] })
         .addTo(m);
     }
-    m.on("click", (e: L.LeafletMouseEvent) => onChange({ lat: e.latlng.lat, lng: e.latlng.lng }));
+    m.on("click", (e: L.LeafletMouseEvent) => {
+      const p = { lat: e.latlng.lat, lng: e.latlng.lng };
+      if (precise && !withinCbd(p)) return setGpsError("That's more than 20 km from Bungoma town. Pin a spot inside the dashed circle.");
+      setGpsError(null);
+      accuracy.current?.remove();
+      accuracy.current = null;
+      setAccuracyM(null);
+      onChange(p);
+    });
     return () => {
       m.remove();
       map.current = null;
@@ -92,27 +119,82 @@ export default function MapPicker({
     else marker.current = L.circleMarker(ll, { radius: 11, color: "#fff", weight: 3, fillColor: color, fillOpacity: 1 }).addTo(m);
   }, [value, inside]);
 
+  async function find(e: React.FormEvent) {
+    e.preventDefault();
+    const q = query.trim();
+    if (!q) return;
+    setSearching(true);
+    setGpsError(null);
+    try {
+      const box = CBD.toBounds(CBD_RADIUS_M * 2);
+      const vb = [box.getWest(), box.getNorth(), box.getEast(), box.getSouth()].join(",");
+      const r = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=ke&viewbox=${vb}&bounded=1&q=${encodeURIComponent(`${q}, Bungoma`)}`);
+      const hits = (await r.json()) as { lat: string; lon: string }[];
+      if (!hits.length) setGpsError("Couldn't find that within 20 km of Bungoma town. Try a nearby landmark, then tap the map.");
+      else {
+        const ll = { lat: Number(hits[0].lat), lng: Number(hits[0].lon) };
+        if (withinCbd(ll)) map.current?.setView([ll.lat, ll.lng], 18);
+        else setGpsError("That result is outside the 20 km Bungoma area.");
+      }
+    } catch {
+      setGpsError("Search isn't available right now. Pan the map instead.");
+    }
+    setSearching(false);
+  }
+
   function locate() {
-    if (!navigator.geolocation) return setGpsError("Location isn't available here. Tap the map instead.");
+    if (!navigator.geolocation || !window.isSecureContext)
+      return setGpsError(
+        window.isSecureContext
+          ? "Location isn't available on this device. Tap the map instead."
+          : "Your browser blocks GPS on this connection (it needs https). Tap the map instead.",
+      );
     setLocating(true);
     setGpsError(null);
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         setLocating(false);
         const p = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+        if (precise && !withinCbd(p)) return setGpsError("You're more than 20 km from Bungoma town. Search or tap the map inside the dashed circle.");
         onChange(p);
-        map.current?.setView([p.lat, p.lng], 16);
+        const m = map.current;
+        if (!m) return;
+        m.setView([p.lat, p.lng], pos.coords.accuracy > 100 ? 16 : 18);
+        // Show how sure the phone is, so they can check the pin and tap the map to correct it.
+        accuracy.current?.remove();
+        accuracy.current = L.circle([p.lat, p.lng], { radius: pos.coords.accuracy, color: "#2563eb", weight: 1, fillOpacity: 0.12, interactive: false }).addTo(m);
+        setAccuracyM(Math.round(pos.coords.accuracy));
       },
-      () => {
+      (err) => {
         setLocating(false);
-        setGpsError("Couldn't get your location. Tap the map instead.");
+        setGpsError(
+          err.code === err.PERMISSION_DENIED
+            ? "Location is turned off for this site. Allow it in your browser settings, or tap the map instead."
+            : err.code === err.TIMEOUT
+              ? "Couldn't get a GPS fix in time. Move near a window and try again, or tap the map."
+              : "Couldn't get your location. Tap the map instead.",
+        );
       },
-      { enableHighAccuracy: true, timeout: 15_000 },
+      { enableHighAccuracy: true, timeout: 20_000, maximumAge: 0 },
     );
   }
 
   return (
     <div className="flex flex-col gap-2.5">
+      {precise ? (
+        <form onSubmit={find} className="flex gap-2">
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search a place in Bungoma town"
+            aria-label="Search for a place"
+            className="h-10 min-w-0 flex-1 rounded-xl border border-line bg-surface px-3.5 text-sm"
+          />
+          <button type="submit" disabled={searching} className="flex h-10 shrink-0 items-center gap-2 rounded-xl border border-line bg-surface px-3.5 text-sm font-semibold hover:bg-subtle disabled:opacity-60">
+            <Search className="size-4" /> Search
+          </button>
+        </form>
+      ) : null}
       <div ref={el} className={`isolate z-0 w-full overflow-hidden rounded-2xl border border-line ${height}`} role="application" aria-label="Map: tap to set the location" />
       <div className="flex flex-wrap items-center gap-2">
         <button
@@ -134,6 +216,7 @@ export default function MapPicker({
       ) : value && (inside === true || !hasZone) ? (
         <p className="flex items-center gap-2 text-sm font-medium text-ok">
           <CheckCircle2 className="size-4" /> {t("Pin set. Tap the map to move it.")}
+          {accuracyM != null ? ` (GPS ±${accuracyM} m)` : ""}
         </p>
       ) : null}
       {gpsError ? <p className="text-sm text-bad">{gpsError}</p> : null}

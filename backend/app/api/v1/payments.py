@@ -1,4 +1,4 @@
-"""M4 payments: customer code entry, hotel confirmation / review / cash / refunds, admin tools."""
+"""Payments: customer code entry, hotel confirmation / review / cash / refunds, admin tools."""
 
 import uuid
 from datetime import datetime, timedelta
@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy import exists, func, or_, select
 
 from app.api.deps import HotelAdmin, HotelStaff, Session, SuperAdmin, get_scoped, scoped_select
+from app.core.config import get_config
 from app.core.errors import AppError, not_found
 from app.core.ratelimit import limit
 from app.core.time import utcnow
@@ -25,7 +26,7 @@ from app.schemas.payments import (
     TestPaymentIn,
     TestSmsIn,
 )
-from app.services import ledger, media, payments, sms_parser
+from app.services import audit, ledger, media, payments, sms_parser
 
 customer = APIRouter(tags=["payments"])
 hotel = APIRouter(prefix="/hotel", tags=["hotel payments"])
@@ -297,9 +298,9 @@ async def refund_sent(refund_id: uuid.UUID, body: RefundSentIn, user: HotelStaff
 # --- Admin ------------------------------------------------------------------------------------
 
 
-# Payment review belongs to each hotel (DECISIONS D19). The super admin sees only what needs
+# Payment review belongs to each hotel. The super admin sees only what needs
 # the duty person: items with no hotel (an unreadable SMS, an unknown Till) and hotel items
-# left open longer than ESCALATE_AFTER (D5), to chase by phone.
+# left open longer than ESCALATE_AFTER, to chase by phone.
 ESCALATE_AFTER = timedelta(minutes=15)
 
 
@@ -351,11 +352,26 @@ async def admin_review_count(_: SuperAdmin, session: Session):
     return {"open": n}
 
 
+@admin.get("/tools/status")
+async def tools_status(_: SuperAdmin):
+    return {"payment_simulator": get_config().payment_simulator_enabled}
+
+
 @admin.post("/test-payment")
-async def test_payment(body: TestPaymentIn, _: SuperAdmin, session: Session):
-    """Simulate an M-Pesa message on a Till, as the M8 forwarder will send. For testing the
-    matching rules before the SMS app exists."""
+async def test_payment(body: TestPaymentIn, user: SuperAdmin, session: Session):
+    """Fabricate a payment on a Till to try the matching rules. Development only: on a live
+    server it would let anyone with an admin login mark an order paid with no money received."""
+    if not get_config().payment_simulator_enabled:
+        raise AppError(403, "simulator_disabled", "The payment simulator is off on this server.")
     now = utcnow()
+    await audit.log(
+        session,
+        actor_id=user.id,
+        action="payment.simulate",
+        target_type="till",
+        target_id=body.till_number,
+        details={"kind": body.kind, "code": body.code, "amount": body.amount},
+    )
     if body.kind == "reversal":
         payment = await payments.record_reversal(session, body.code, now)
         await session.commit()
@@ -380,10 +396,19 @@ async def test_payment(body: TestPaymentIn, _: SuperAdmin, session: Session):
 
 
 @admin.post("/test-sms")
-async def test_sms(body: TestSmsIn, _: SuperAdmin, session: Session):
-    """Parse a pasted Till SMS and run it through matching, as the M8 SMS app will."""
+async def test_sms(body: TestSmsIn, user: SuperAdmin, session: Session):
+    """Parse a pasted Till SMS and run it through matching, as the Till phone app does. Stays on
+    in production for real messages the phone missed; every use is audit-logged with the text."""
     now = utcnow()
     parsed = sms_parser.parse(body.raw_text)
+    await audit.log(
+        session,
+        actor_id=user.id,
+        action="payment.paste_sms",
+        target_type="till",
+        target_id=body.till_number,
+        details={"text": body.raw_text[:500], "read_as": parsed.status},
+    )
     out = {
         "parse_status": parsed.status,
         "code": parsed.code,

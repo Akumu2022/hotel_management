@@ -1,4 +1,4 @@
-"""Weekly statements and payments to the platform (M7, DECISIONS D24)."""
+"""Weekly statements and payments to the platform."""
 
 import uuid
 

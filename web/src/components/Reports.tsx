@@ -1,5 +1,5 @@
 /**
- * Dashboard reports (DECISIONS D19), shared by the hotel admin (their hotel) and the super
+ * Dashboard reports, shared by the hotel admin (their hotel) and the super
  * admin (all hotels, commission). Numbers come from the ledger, so they match statements.
  * Charts are plain SVG/CSS bars: readable on a phone, nothing to download.
  */

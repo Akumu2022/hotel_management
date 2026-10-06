@@ -1,4 +1,4 @@
-/** Super admin: review rider applications (DECISIONS D21). ID photos load through the admin-only
+/** Super admin: review rider applications. ID photos load through the admin-only
  * endpoint with the login token; they are never cached or linked publicly. */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import clsx from "clsx";

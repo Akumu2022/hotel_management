@@ -116,6 +116,17 @@ def _reset_rate_limits():
 
 
 @pytest.fixture(autouse=True)
+def _push_off_unless_a_test_turns_it_on(monkeypatch):
+    """The dev server has real Web Push keys in its environment; tests must never send."""
+    from app.core.config import Config
+    from app.services import push
+
+    monkeypatch.setattr(
+        push, "get_config", lambda: Config(vapid_private_key="", vapid_public_key="")
+    )
+
+
+@pytest.fixture(autouse=True)
 def _no_network_routing(monkeypatch):
     """Tests never call the routing server: road distance falls back to straight line."""
     from app.services import routing
@@ -124,4 +135,5 @@ def _no_network_routing(monkeypatch):
         return None
 
     monkeypatch.setattr(routing, "_osrm", _offline)
+    monkeypatch.setattr(routing, "route_points", _offline)
     routing._cache.clear()

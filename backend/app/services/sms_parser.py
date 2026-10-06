@@ -1,4 +1,4 @@
-"""M-Pesa Till SMS parser (spec section 7). Built from real Till messages (docs/sms_samples).
+"""M-Pesa Till SMS parser. Built from real Till messages (backend/tests/data).
 
 Real sample format (names/numbers anonymised in the samples file):
 

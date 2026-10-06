@@ -105,10 +105,10 @@ class Order(Base):
     lat: Mapped[float | None] = mapped_column(Float)
     lng: Mapped[float | None] = mapped_column(Float)
     landmark: Mapped[str | None] = mapped_column(String(300))
-    # Hotel -> customer distance the rider fee was priced on (km, 1 decimal). DECISIONS D16.
+    # Hotel -> customer distance the rider fee was priced on (km, 1 decimal)..
     distance_km: Mapped[float | None] = mapped_column(Float)
 
-    # Money snapshot, whole KES (spec section 12).
+    # Money snapshot, whole KES.
     items_total: Mapped[int] = mapped_column(Integer)
     order_discount: Mapped[int] = mapped_column(Integer)
     food_net: Mapped[int] = mapped_column(Integer)
@@ -119,10 +119,10 @@ class Order(Base):
     commission_bp: Mapped[int] = mapped_column(Integer)
     commission_amount: Mapped[int] = mapped_column(Integer)
     discount_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("discounts.id"))
-    # Platform-funded bonus (DECISIONS D19): lowers what the customer pays; the platform owes
+    # Platform-funded bonus: lowers what the customer pays; the platform owes
     # the hotel this amount (ledger bonus_credit), so the hotel's food sale stays whole.
     platform_bonus: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
-    # Eat in (D28): the owner's markup, already inside service_fee (platform money, so the
+    # Eat in: the owner's markup, already inside service_fee (platform money, so the
     # ledger and statements treat it as service fee); kept apart only to show it.
     eat_in_fee: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     arrive_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -131,16 +131,16 @@ class Order(Base):
     customer_trans_code: Mapped[str | None] = mapped_column(String(12))
     delivery_code: Mapped[str | None] = mapped_column(String(4))
     rider_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"), index=True)
-    # Delivery (DECISIONS D21). Option A instant: hotel hands the fee over with the food and
+    # Delivery. Option A instant: hotel hands the fee over with the food and
     # both sides confirm; the ledger entry is written once both have.
     assigned_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # The rider has seen this job (took it, tapped "Got it", or acted on it). An assignment by
-    # the admin rings the rider until then (D23).
+    # the admin rings the rider until then.
     rider_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     fee_hotel_confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     fee_rider_confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     delivery_code_attempts: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
-    # Option B "fee not paid" (D8): rider claims after delivery; the customer is asked.
+    # Option B "fee not paid": rider claims after delivery; the customer is asked.
     fee_not_paid_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     customer_fee_answer: Mapped[str | None] = mapped_column(String(3))  # yes | no
     prep_minutes: Mapped[int | None] = mapped_column(Integer)
@@ -223,7 +223,7 @@ class OrderEvent(Base):
 
 
 class Rating(Base):
-    """Customer's stars for one completed order (D28): the hotel always, the rider on
+    """Customer's stars for one completed order: the hotel always, the rider on
     deliveries. One per order."""
 
     __tablename__ = "ratings"

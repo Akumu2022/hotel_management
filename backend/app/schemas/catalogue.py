@@ -10,6 +10,19 @@ Money = Annotated[int, Field(ge=0, le=1_000_000, strict=True)]
 Name = Annotated[str, Field(min_length=1, max_length=80)]
 
 
+# Hotels can only be pinned within 20 km of Bungoma town CBD (mirrors the hotel admin map).
+HOTEL_CBD = (0.5636, 34.5606)
+HOTEL_RADIUS_KM = 20.0
+
+
+def _km_from_cbd(lat: float, lng: float) -> float:
+    import math
+
+    p1, p2 = math.radians(HOTEL_CBD[0]), math.radians(lat)
+    a = math.sin((p2 - p1) / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(math.radians(lng - HOTEL_CBD[1]) / 2) ** 2
+    return 12742 * math.asin(math.sqrt(a))
+
+
 class Input(Schema):
     model_config = ConfigDict(extra="forbid")
 
@@ -174,7 +187,7 @@ class DiscountIn(Input):
     ends_at: datetime | None = None
     max_uses: int | None = Field(None, ge=1, le=1_000_000)
     is_active: bool = True
-    # Happy hour (D19), Kenya time: weekdays bitmask Mon = 1 ... Sun = 64, and a daily window
+    # Happy hour, Kenya time: weekdays bitmask Mon = 1 ... Sun = 64, and a daily window
     # in minutes from midnight (15:00-17:00 = 900-1020). Leave out for every day / all day.
     days_mask: int | None = Field(None, ge=1, le=127)
     daily_from: int | None = Field(None, ge=0, le=1439)
@@ -275,7 +288,7 @@ class HotelSettingsOut(Schema):
 
 
 class HotelSettingsIn(Input):
-    # Identity, editable by the hotel admin (DECISIONS D20); every change is audit-logged.
+    # Identity, editable by the hotel admin; every change is audit-logged.
     name: str | None = Field(None, min_length=2, max_length=120)
     phone: Phone | None = None
     till_number: str | None = Field(None, pattern=r"^\d{5,10}$")
@@ -295,6 +308,8 @@ class HotelSettingsIn(Input):
             raise ValueError("Send latitude and longitude together")
         if (self.lat is None) != (self.lng is None):
             raise ValueError("Set both latitude and longitude, or neither")
+        if self.lat is not None and self.lng is not None and _km_from_cbd(self.lat, self.lng) > HOTEL_RADIUS_KM:
+            raise ValueError(f"The hotel must be within {HOTEL_RADIUS_KM:.0f} km of Bungoma town")
         return self
 
 
@@ -315,7 +330,7 @@ class PublicHotel(Schema):
     lat: float | None = None
     lng: float | None = None
     prep_minutes: int = 15  # typical (median) prep time of its dishes, for time estimates
-    rating: float | None = None  # average stars (D28); None until rated
+    rating: float | None = None  # average stars; None until rated
     rating_count: int = 0
 
 

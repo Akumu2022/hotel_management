@@ -76,5 +76,5 @@ class RiderOut(Schema):
     reviewed_by_name: str | None = None
     is_online: bool
     created_at: datetime
-    rating: float | None = None  # average stars from customers (D28)
+    rating: float | None = None  # average stars from customers
     rating_count: int = 0

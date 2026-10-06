@@ -1,5 +1,5 @@
 /**
- * What the hotel owes the platform (M7, DECISIONS D24). Customers pay the hotel's own Till, so
+ * What the hotel owes the platform. Customers pay the hotel's own Till, so
  * each week the hotel sends the commission and service fees (plus rider fees it held) to the
  * platform's M-Pesa number, then enters the M-Pesa code here. It counts once the super admin
  * sees the money arrive. Overdue or over the limit = orders paused until it's paid.

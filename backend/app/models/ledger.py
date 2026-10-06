@@ -27,9 +27,9 @@ ENTRY_TYPES: dict[str, tuple[str, str, str]] = {
     "service_fee": ("obligation", "hotel", "platform"),
     "commission_reversal": ("obligation", "platform", "hotel"),
     "service_fee_reversal": ("obligation", "platform", "hotel"),
-    "bonus_credit": ("obligation", "platform", "hotel"),  # platform-funded bonus (D19)
+    "bonus_credit": ("obligation", "platform", "hotel"),  # platform-funded bonus
     "bonus_credit_reversal": ("obligation", "hotel", "platform"),
-    # Rider-fault failed delivery (D7): the hotel refunded the customer; the platform makes
+    # Rider-fault failed delivery: the hotel refunded the customer; the platform makes
     # the hotel whole on its statement.
     "failed_delivery_credit": ("obligation", "platform", "hotel"),
     "refund": ("payment", "hotel", "customer"),
@@ -37,7 +37,7 @@ ENTRY_TYPES: dict[str, tuple[str, str, str]] = {
     "rider_fee_held": ("obligation", "hotel", "platform"),  # option A weekly
     "rider_fee_owed": ("obligation", "platform", "rider"),  # option A weekly
     "rider_fee_cash": ("payment", "customer", "rider"),  # option B
-    "rider_compensation": ("obligation", "platform", "rider"),  # option B unpaid (D8)
+    "rider_compensation": ("obligation", "platform", "rider"),  # option B unpaid
     "settlement": ("payment", "hotel", "platform"),
     "rider_payout": ("payment", "platform", "rider"),
 }
@@ -53,7 +53,7 @@ class LedgerEntry(Base):
         one_of("from_party", PARTIES),
         one_of("to_party", PARTIES),
         CheckConstraint("amount > 0", name="amount_positive"),
-        # Idempotency guards (spec section 13, D3: refund entries are keyed per refund).
+        # Idempotency guards (refund entries are keyed per refund).
         Index(
             "uq_ledger_order_entry",
             "order_id",
@@ -131,7 +131,7 @@ class Statement(Base):
     commission_total: Mapped[int] = mapped_column(Integer)
     service_fee_total: Mapped[int] = mapped_column(Integer)
     rider_fees_held: Mapped[int] = mapped_column(Integer)
-    # D24: what the platform owed the hotel that week (bonuses, failed-delivery credits), and the
+    # What the platform owed the hotel that week (bonuses, failed-delivery credits), and the
     # balance carried in from before (negative = the hotel had paid ahead).
     credits_total: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     opening_balance: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
@@ -142,7 +142,7 @@ class Statement(Base):
 
 
 class Settlement(Base):
-    """A hotel's payment to the platform (D24): sent by M-Pesa to the platform's number, claimed
+    """A hotel's payment to the platform: sent by M-Pesa to the platform's number, claimed
     in the app with its code, and confirmed by the super admin against their M-Pesa SMS. Only a
     confirmed settlement is written to the ledger."""
 

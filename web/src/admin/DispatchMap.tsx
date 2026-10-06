@@ -1,5 +1,5 @@
 /**
- * Dispatch map (D27): riders' live positions against the hotels they collect from and the
+ * Dispatch map: riders' live positions against the hotels they collect from and the
  * customers they deliver to. Loaded only on the Dispatch page (Leaflet is big).
  */
 import "leaflet/dist/leaflet.css";

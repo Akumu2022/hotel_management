@@ -64,7 +64,7 @@ function usePaymentsToAct() {
   return (pending.data ?? []).filter((p) => p.customer_trans_code).length + (review.data?.length ?? 0) + (refunds.data?.length ?? 0);
 }
 
-/** Every hotel page: live updates, and alarms that ring until the action is done (D22). */
+/** Every hotel page: live updates, and alarms that ring until the action is done. */
 function HotelAlarms() {
   const qc = useQueryClient();
   useLive("/hotel/events", (e) => {
@@ -208,6 +208,11 @@ export function HotelLayout() {
             </div>
           </header>
           <main className="min-w-0 flex-1 px-4 pb-24 md:px-0 md:pb-0">
+            {isAdmin && settings && settings.lat == null && section !== "settings" ? (
+              <Link to="/hotel/settings" className="mb-5 flex items-center gap-2 rounded-2xl bg-warn-soft px-4 py-3 text-sm font-semibold text-warn">
+                <AlertTriangle className="size-4 shrink-0" /> Pin your hotel on the map so customers can order delivery. Tap to set it now.
+              </Link>
+            ) : null}
             {isAdmin ? <div className="mb-5 empty:hidden"><BillStrip /></div> : null}
             <Outlet />
           </main>

@@ -9,9 +9,10 @@
     <string name="code_label">Pairing code</string>
     <string name="label_label">Name for this phone</string>
     <string name="pair">Connect</string>
-    <string name="err_server">Enter the server address, starting with https://</string>
+    <string name="err_server">Enter the server address, starting with http:// or https://</string>
     <string name="err_code">The code has 8 letters, like ACDE-F347</string>
     <string name="err_clock">This phone\'s clock is wrong. Turn on automatic date and time.</string>
+    <string name="err_tls">Secure connection failed. If this server uses http:// (not https://), change the address and try again.</string>
     <string name="err_network">Couldn\'t reach the server: %1$s</string>
 
     <string name="status_ok">Working: payments are sent automatically</string>

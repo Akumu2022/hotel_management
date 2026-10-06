@@ -5,16 +5,17 @@ import { createRoot } from "react-dom/client";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 
 import { Skeleton } from "./components/ui";
-import { CheckoutPage } from "./customer/CheckoutPage";
 import { CustomerLayout } from "./customer/CustomerLayout";
 import { HomePage } from "./customer/HomePage";
-import { HotelPage } from "./customer/HotelPage";
-import { OrdersPage } from "./customer/OrdersPage";
-import { TrackPage } from "./customer/TrackPage";
 import "./index.css";
 import "./lib/theme";
 import { ApiError, auth } from "./lib/api";
 
+// Only the home screen is bundled up front; the other customer pages load on first visit.
+const HotelPage = lazy(() => import("./customer/HotelPage").then((m) => ({ default: m.HotelPage })));
+const CheckoutPage = lazy(() => import("./customer/CheckoutPage").then((m) => ({ default: m.CheckoutPage })));
+const TrackPage = lazy(() => import("./customer/TrackPage").then((m) => ({ default: m.TrackPage })));
+const OrdersPage = lazy(() => import("./customer/OrdersPage").then((m) => ({ default: m.OrdersPage })));
 // Staff areas are split out so customers on slow networks never download them.
 const LoginPage = lazy(() => import("./pages/LoginPage").then((m) => ({ default: m.LoginPage })));
 const PasswordPage = lazy(() => import("./pages/PasswordPage").then((m) => ({ default: m.PasswordPage })));

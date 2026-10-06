@@ -1,6 +1,6 @@
 /**
  * Hotel order board (spec section 10, D.CC "Order queues" style). Live over SSE; a loud
- * repeating alert plays while any new order is waiting (D6), until someone taps Accept.
+ * repeating alert plays while any new order is waiting, until someone taps Accept.
  */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import clsx from "clsx";
@@ -13,7 +13,7 @@ import { money } from "../lib/format";
 import { useAlarmUnlocked } from "../lib/alarm";
 import { useHotelSettings, useIsAdmin } from "./hooks";
 
-/** Who paid, from the Till SMS, and whether it's the name given at checkout (D25). Someone
+/** Who paid, from the Till SMS, and whether it's the name given at checkout. Someone
  * else paying is normal (a friend, a parent), so this informs; it never blocks. */
 function PayerName({ name, match }: { name: string; match: number | null }) {
   const tone = match === 2 ? "text-ok" : match === 1 ? "text-muted" : match === 0 ? "text-warn" : "text-muted";
@@ -71,7 +71,7 @@ const CANCEL_REASONS: [string, string][] = [
   ["customer_asked", "The customer asked to cancel"],
   ["other", "Something else"],
 ];
-const TIMEOUT_MIN = 10; // D6 default; the server enforces the configured value
+const TIMEOUT_MIN = 10; // default; the server enforces the configured value
 
 // --- Cards --------------------------------------------------------------------------------------
 
@@ -103,7 +103,7 @@ function OrderCard({ o, onAction, canCancel }: { o: BoardOrder; onAction: (o: Bo
         </div>
         <div className="flex flex-col items-end gap-1">
           {o.type === "eat_in" ? (
-            // D28: eat in must stand out: the customer is coming to sit down at this time.
+            // Eat in must stand out: the customer is coming to sit down at this time.
             <Badge tone="warn">
               <UtensilsCrossed className="mr-1 inline size-3.5" />
               EAT IN{o.arrive_at ? ` · arrives ${new Intl.DateTimeFormat("en-KE", { hour: "numeric", minute: "2-digit", timeZone: "Africa/Nairobi" }).format(new Date(o.arrive_at))}` : ""}

@@ -1,4 +1,4 @@
-"""SMS forwarder (M8, DECISIONS D26): the Till phone app's endpoints, and pairing screens."""
+"""SMS forwarder: the Till phone app's endpoints, and pairing screens."""
 
 import uuid
 from datetime import UTC, datetime

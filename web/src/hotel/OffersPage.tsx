@@ -8,7 +8,9 @@ import type { Offer, Product, Upload } from "../lib/types";
 import { keys, useIsAdmin, useOffers, useProducts, useSave } from "./hooks";
 
 function OfferSheet({ offer, products, onClose }: { offer: Offer | null; products: Product[]; onClose: () => void }) {
-  const [title, setTitle] = useState(offer?.title ?? "");
+  const [headline, setHeadline] = useState(offer?.title.split("\n")[0] ?? "");
+  const [subline, setSubline] = useState(offer?.title.split("\n").slice(1).join(" ") ?? "");
+  const title = subline.trim() ? `${headline.trim()}\n${subline.trim()}` : headline.trim();
   const [productId, setProductId] = useState(offer?.product_id ?? "");
   const [starts, setStarts] = useState(isoToLocal(offer?.starts_at ?? new Date().toISOString()));
   const [ends, setEnds] = useState(isoToLocal(offer?.ends_at ?? null));
@@ -56,13 +58,13 @@ function OfferSheet({ offer, products, onClose }: { offer: Offer | null; product
       }
     >
       <form id="offer-form" onSubmit={submit} className="flex flex-col gap-4">
-        <p className="text-sm text-muted">Offers appear as banners on the customer home screen.</p>
+        <p className="text-sm text-muted">Offers appear as banners on the customer home screen: the headline in big letters, the highlight line in a yellow tag. Use a photo with the dish on the right.</p>
         <button
           type="button"
           onClick={() => file.current?.click()}
           className="relative flex aspect-[2/1] w-full items-center justify-center overflow-hidden rounded-card border border-line bg-page text-muted"
         >
-          {imageUrl ? <img src={imageUrl} alt="" className="size-full object-cover" /> : (
+          {imageUrl ? <img src={imageUrl} alt="" className="size-full object-contain" /> : (
             <span className="flex flex-col items-center gap-1 text-sm"><Camera className="size-6" />Banner photo</span>
           )}
           {upload.isPending ? <span className="absolute inset-0 flex items-center justify-center bg-surface/70">Uploading…</span> : null}
@@ -84,8 +86,11 @@ function OfferSheet({ offer, products, onClose }: { offer: Offer | null; product
             e.target.value = "";
           }}
         />
-        <Field label="Title" hint='e.g. "Pilau Friday: 20% off"'>
-          {(id) => <Input id={id} value={title} onChange={(e) => setTitle(e.target.value)} required minLength={2} maxLength={120} />}
+        <Field label="Headline" hint='e.g. "PIZZA WEDNESDAY"'>
+          {(id) => <Input id={id} value={headline} onChange={(e) => setHeadline(e.target.value)} required minLength={2} maxLength={40} />}
+        </Field>
+        <Field label="Highlight line" hint='e.g. "Buy one Get One Free!"'>
+          {(id) => <Input id={id} value={subline} onChange={(e) => setSubline(e.target.value)} maxLength={60} />}
         </Field>
         <Field label="Links to dish" hint="Optional">
           {(id) => (
@@ -141,11 +146,11 @@ export function OffersPage() {
             return (
               <Card key={o.id} className="overflow-hidden">
                 <div className="aspect-[2/1] bg-page">
-                  {o.image_url ? <img src={o.image_url} alt="" loading="lazy" className="size-full object-cover" /> : null}
+                  {o.image_url ? <img src={o.image_url} alt="" loading="lazy" className="size-full object-contain" /> : null}
                 </div>
                 <div className="flex items-start justify-between gap-2 p-3">
                   <div>
-                    <p className="font-semibold">{o.title}</p>
+                    <p className="font-semibold whitespace-pre-line">{o.title}</p>
                     <p className="text-sm text-muted">{when(o.starts_at)} → {when(o.ends_at)}</p>
                   </div>
                   <div className="flex flex-col items-end gap-2">

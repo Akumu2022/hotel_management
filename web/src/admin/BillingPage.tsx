@@ -1,5 +1,5 @@
 /**
- * Super admin billing (M7, DECISIONS D24): hotel payments to confirm against the platform's own
+ * Super admin billing: hotel payments to confirm against the platform's own
  * M-Pesa messages, what each hotel owes, and rider payouts. A claimed payment counts only once
  * confirmed here; confirming can lift an unpaid-balance pause at once.
  */

@@ -1,5 +1,5 @@
 /**
- * Cashier's payment desk (spec section 6, M4): confirm M-Pesa payments by reading the Till
+ * Cashier's payment desk: confirm M-Pesa payments by reading the Till
  * phone, record cash, work the review queue, and send refunds.
  * Never accept screenshots or forwarded messages: only the Till phone's own SMS.
  */
@@ -83,7 +83,7 @@ function ConfirmCard({ o, auto }: { o: PendingOrder; auto: boolean }) {
   const [code, setCode] = useState(o.customer_trans_code ?? "");
   const [amount, setAmount] = useState("");
   const [result, setResult] = useState<{ ok: boolean; text: string } | null>(null);
-  // D28: with a working Till phone the SMS confirms the order; typing is only the fallback.
+  // With a working Till phone the SMS confirms the order; typing is only the fallback.
   const [manual, setManual] = useState(false);
   useEffect(() => setCode(o.customer_trans_code ?? ""), [o.customer_trans_code]);
   const refresh = () => qc.invalidateQueries({ queryKey: ["hotel", "payments"] });

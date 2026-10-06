@@ -1,5 +1,5 @@
 /**
- * Alarms that ring until the action is done (owner rule, DECISIONS D22).
+ * Alarms that ring until the action is done.
  *
  * - One looping sound (WebAudio buffer, loop=true) keeps playing in background tabs, where
  *   timers are slowed down; it stops only when no screen reports anything waiting.
@@ -7,7 +7,9 @@
  *   it, so staff never hunt for an "enable" button.
  * - While ringing: the tab title flashes, phones vibrate, and when the tab is hidden a system
  *   notification stays up (requireInteraction) until the action is done.
- * Without Web Push (deployment, M9) nothing rings once the browser itself is closed.
+ * - "Silence" mutes sound, vibration and the system notification for a while. It never hides
+ *   anything: the bell and badge stay, and it rings again when something new arrives or time is up.
+ * Without Web Push (deployment) nothing rings once the browser itself is closed.
  */
 import { useEffect, useSyncExternalStore } from "react";
 
@@ -24,6 +26,9 @@ let unlocked = false;
 let titleTimer: ReturnType<typeof setInterval> | null = null;
 let vibrateTimer: ReturnType<typeof setInterval> | null = null;
 let notification: Notification | null = null;
+let silencedUntil = 0;
+let silencedCounts: Record<string, number> = {};
+let silenceTimer: ReturnType<typeof setTimeout> | null = null;
 let baseTitle = typeof document !== "undefined" ? document.title : "";
 
 /** What is waiting right now, for the notification bell. Same list the sound uses. */
@@ -81,18 +86,30 @@ function stopSound() {
   playingTone = null;
 }
 
+/** Silenced right now? A new reason, or a bigger count than when silenced, ends it early. */
+function isSilenced(): boolean {
+  if (Date.now() >= silencedUntil) return false;
+  for (const [id, r] of reasons) if (r.count > (silencedCounts[id] ?? 0)) return false;
+  return true;
+}
+
 function update() {
+  if (silencedUntil && !isSilenced()) {
+    silencedUntil = 0;
+    silencedCounts = {};
+  }
   const top = strongest();
+  const loud = silencedUntil ? null : top;
   // Sound
-  if (!top) stopSound();
-  else if (ctx && unlocked && playingTone !== top.tone) {
+  if (!loud) stopSound();
+  else if (ctx && unlocked && playingTone !== loud.tone) {
     stopSound();
     source = ctx.createBufferSource();
-    source.buffer = buffer(ctx, top.tone);
+    source.buffer = buffer(ctx, loud.tone);
     source.loop = true;
     source.connect(ctx.destination);
     source.start();
-    playingTone = top.tone;
+    playingTone = loud.tone;
   }
   // Title flash
   if (top && !titleTimer) {
@@ -109,20 +126,20 @@ function update() {
     document.title = baseTitle;
   }
   // Vibration (phones)
-  if (top && !vibrateTimer && "vibrate" in navigator) {
+  if (loud && !vibrateTimer && "vibrate" in navigator) {
     vibrateTimer = setInterval(() => navigator.vibrate?.([300, 150, 300]), 2400);
-  } else if (!top && vibrateTimer) {
+  } else if (!loud && vibrateTimer) {
     clearInterval(vibrateTimer);
     vibrateTimer = null;
   }
   // System notification while the tab is hidden; it stays until the action is done.
-  if (top && document.hidden && typeof Notification !== "undefined" && Notification.permission === "granted") {
-    if (!notification || notification.title !== top.title) {
+  if (loud && document.hidden && typeof Notification !== "undefined" && Notification.permission === "granted") {
+    if (!notification || notification.title !== loud.title) {
       notification?.close();
-      notification = new Notification(top.title, { body: `${top.count} waiting. Open Chakula to act.`, tag: "chakula-alarm", requireInteraction: true });
+      notification = new Notification(loud.title, { body: `${loud.count} waiting. Open Chakula to act.`, tag: "chakula-alarm", requireInteraction: true });
       notification.onclick = () => window.focus();
     }
-  } else if (notification && (!top || !document.hidden)) {
+  } else if (notification && (!loud || !document.hidden)) {
     notification.close();
     notification = null;
   }
@@ -179,6 +196,30 @@ export function useActiveAlarms(): ActiveAlarm[] {
   return useSyncExternalStore(
     (fn) => (listeners.add(fn), () => listeners.delete(fn)),
     () => active,
+  );
+}
+
+/** Mute the sound for a while. Anything new (or more of the same) rings again at once. */
+export function silenceAlarm(minutes: number) {
+  silencedUntil = Date.now() + minutes * 60_000;
+  silencedCounts = Object.fromEntries([...reasons].map(([id, r]) => [id, r.count]));
+  if (silenceTimer) clearTimeout(silenceTimer);
+  silenceTimer = setTimeout(update, minutes * 60_000 + 50);
+  update();
+}
+
+export function resumeAlarm() {
+  silencedUntil = 0;
+  silencedCounts = {};
+  if (silenceTimer) clearTimeout(silenceTimer);
+  update();
+}
+
+/** When the current silence ends (ms since epoch), or 0 when the alarm is live. */
+export function useSilencedUntil(): number {
+  return useSyncExternalStore(
+    (fn) => (listeners.add(fn), () => listeners.delete(fn)),
+    () => silencedUntil,
   );
 }
 

@@ -1,4 +1,4 @@
-/** Super admin dispatch (DECISIONS D21): every delivery in progress, who has it, and assign or
+/** Super admin dispatch: every delivery in progress, who has it, and assign or
  * reassign until pickup. Riders can also take open jobs themselves. Live over SSE. */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import clsx from "clsx";
@@ -59,7 +59,7 @@ const ago = (iso: string) => {
   return m < 1 ? "just now" : m < 60 ? `${m} min ago` : `at ${clock.format(new Date(iso))}`;
 };
 
-/** What dispatch needs to know about a rider at a glance (owner, D25). */
+/** What dispatch needs to know about a rider at a glance. */
 function riderState(r: RiderBrief): { label: string; cls: string } {
   if (r.active_jobs) return { label: `On ${r.active_jobs} job${r.active_jobs === 1 ? "" : "s"}`, cls: "bg-warn-soft text-warn" };
   if (r.is_online) return { label: "Free · ready for a job", cls: "bg-ok-soft text-ok" };
@@ -94,6 +94,56 @@ function mins(iso: string | null) {
   return iso ? Math.round((Date.now() - new Date(iso).getTime()) / 60000) : null;
 }
 
+/** The way out of a delivery nobody is finishing: the customer confirms by phone, or it failed. */
+function CloseDelivery({ o, onDone }: { o: Row; onDone: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [outcome, setOutcome] = useState<"delivered" | "failed">("delivered");
+  const [reason, setReason] = useState("");
+  const [paid, setPaid] = useState<boolean | null>(null);
+  const cash = o.rider_fee_mode === "cash";
+  const close = useMutation({
+    mutationFn: () => api.post(`/admin/dispatch/${o.id}/close`, { outcome, reason: reason.trim(), rider_paid_cash: outcome === "delivered" && cash ? paid : null }),
+    onSuccess: () => {
+      setOpen(false);
+      onDone();
+    },
+  });
+  const ready = reason.trim().length >= 5 && (outcome !== "delivered" || !cash || paid !== null);
+  return (
+    <>
+      <button onClick={() => setOpen(true)} className="h-10 rounded-xl border border-line bg-surface px-3 text-sm font-semibold hover:bg-subtle">Close delivery…</button>
+      {open ? (
+        <div className="fixed inset-0 z-[2000] flex items-end justify-center bg-black/50 p-4 sm:items-center" onClick={() => setOpen(false)}>
+          <div role="dialog" aria-modal="true" aria-label={`Close #${o.code}`} onClick={(e) => e.stopPropagation()} className="w-full max-w-md rounded-3xl bg-surface p-6">
+            <h2 className="text-xl font-bold">Close #{o.code}</h2>
+            <p className="mt-1 text-sm text-muted">Use this when the delivery is stuck: the rider can't finish it. Call the customer first. This is logged with your name.</p>
+            <div className="mt-4 grid grid-cols-2 gap-2 text-sm font-semibold">
+              <button onClick={() => setOutcome("delivered")} className={clsx("rounded-xl border-2 p-3 text-left", outcome === "delivered" ? "border-ok bg-ok-soft" : "border-line")}>Customer got the food</button>
+              <button onClick={() => setOutcome("failed")} className={clsx("rounded-xl border-2 p-3 text-left", outcome === "failed" ? "border-bad bg-bad-soft" : "border-line")}>It could not be delivered</button>
+            </div>
+            <label className="mt-4 block text-sm font-semibold" htmlFor={`why-${o.id}`}>What happened? (the customer, the rider and the hotel can see it)</label>
+            <textarea id={`why-${o.id}`} value={reason} onChange={(e) => setReason(e.target.value)} rows={3} maxLength={200} className="mt-1 w-full rounded-xl border border-line bg-surface p-3 text-sm outline-none focus:border-brand" />
+            {outcome === "delivered" && cash ? (
+              <div className="mt-3">
+                <p className="text-sm font-semibold">Did the customer pay the rider {money(o.rider_fee)} in cash?</p>
+                <div className="mt-1 grid grid-cols-2 gap-2 text-sm font-semibold">
+                  <button onClick={() => setPaid(true)} className={clsx("h-10 rounded-xl border-2", paid === true ? "border-ok bg-ok-soft" : "border-line")}>Yes</button>
+                  <button onClick={() => setPaid(false)} className={clsx("h-10 rounded-xl border-2", paid === false ? "border-ok bg-ok-soft" : "border-line")}>No, Chakula pays the rider</button>
+                </div>
+              </div>
+            ) : null}
+            <ErrorNote error={close.error} />
+            <div className="mt-5 grid grid-cols-2 gap-2">
+              <button onClick={() => setOpen(false)} className="h-12 rounded-xl border border-line font-semibold">Back</button>
+              <button onClick={() => close.mutate()} disabled={!ready || close.isPending} className="h-12 rounded-xl bg-brand font-semibold text-white disabled:opacity-50">{outcome === "delivered" ? "Mark delivered" : "Mark failed"}</button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </>
+  );
+}
+
 export function DispatchPage() {
   const qc = useQueryClient();
   const board = useQuery({ queryKey: ["admin", "dispatch"], queryFn: () => api.get<{ orders: Row[]; riders: RiderBrief[]; finished: Finished[] }>("/admin/dispatch"), refetchInterval: 20_000 });
@@ -102,7 +152,7 @@ export function DispatchPage() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "dispatch"] }),
   });
   // A delivery no rider can take (none online, or none at all) stops the alarm by being
-  // cancelled & refunded here, with the same rules as Needs attention -> Find order (D24).
+  // cancelled & refunded here, with the same rules as Needs attention -> Find order.
   const cancel = useMutation({
     mutationFn: ({ order, reason }: { order: string; reason: string }) =>
       api.post(`/admin/orders/${order}/cancel`, { reason, note: reason === "other" ? "No rider available" : null }),
@@ -188,6 +238,7 @@ export function DispatchPage() {
                           ))}
                         </select>
                       ) : null}
+                      {["picked_up", "on_the_way"].includes(o.status) ? <span className="ml-auto"><CloseDelivery o={o} onDone={() => void qc.invalidateQueries({ queryKey: ["admin", "dispatch"] })} /></span> : null}
                       {canAssign && !o.rider_id ? (
                         <select
                           aria-label={`Cancel and refund #${o.code}`}

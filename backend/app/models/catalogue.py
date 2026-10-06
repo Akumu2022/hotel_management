@@ -107,7 +107,7 @@ class Discount(Base):
     ends_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     max_uses: Mapped[int | None] = mapped_column(Integer)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
-    # Happy hour (DECISIONS D19), Kenya time: weekdays bitmask (Mon = 1 ... Sun = 64) and a
+    # Happy hour, Kenya time: weekdays bitmask (Mon = 1 ... Sun = 64) and a
     # daily window in minutes from midnight. NULL = every day / all day.
     days_mask: Mapped[int | None] = mapped_column(Integer)
     daily_from: Mapped[int | None] = mapped_column(Integer)

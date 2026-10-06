@@ -47,14 +47,14 @@ class ForwarderDevice(Base):
     last_heartbeat_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = created_at()
-    # M8 (D26): what the phone last reported, for the "Till phone" status screens.
+    # What the phone last reported, for the "Till phone" status screens.
     app_version: Mapped[str | None] = mapped_column(String(20))
     last_sms_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     last_report: Mapped[dict] = mapped_column(JSONB, default=dict, server_default="{}")
 
 
 class ForwarderPairing(Base):
-    """A one-time code shown on screen to pair a Till phone (M8, D26). Only its hash is kept."""
+    """A one-time code shown on screen to pair a Till phone. Only its hash is kept."""
 
     __tablename__ = "forwarder_pairings"
 
@@ -125,7 +125,7 @@ class Payment(Base):
     order_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("orders.id"))
     settlement_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("settlements.id"))
     status: Mapped[str] = mapped_column(String(10))
-    # D25: the payer's name from the Till SMS and how well it matches the checkout name
+    # The payer's name from the Till SMS and how well it matches the checkout name
     # (2 = two names, 1 = one name, 0 = none, null = unknown, e.g. typed by the cashier).
     payer_name: Mapped[str | None] = mapped_column(String(120))
     name_match: Mapped[int | None] = mapped_column(SmallInteger)
@@ -156,7 +156,7 @@ class ReviewItem(Base):
 
 
 class Refund(Base):
-    """One approved refund. D3: split into food / service fee / rider fee parts so commission
+    """One approved refund. split into food / service fee / rider fee parts so commission
     can be reversed pro rata; excess_amount returns an overpayment. Total per order <= amount
     paid is checked under a row lock on the order."""
 

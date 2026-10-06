@@ -30,7 +30,7 @@ function useAttentionCount() {
   return (items.data?.open ?? 0) + (alerts.data?.unaccepted.length ?? 0);
 }
 
-/** Ring until done (D22): orders not accepted, deliveries without a rider for 5+ minutes, and
+/** Ring until done: orders not accepted, deliveries without a rider for 5+ minutes, and
  * items only the admin can resolve. Stale hotel items show a badge but don't ring: the hotel
  * resolves those; the admin can only call. */
 function AdminAlarms() {
@@ -56,7 +56,7 @@ function AdminAlarms() {
   return null;
 }
 
-/** Hotel payments to the platform waiting for the admin to check their M-Pesa (M7). */
+/** Hotel payments to the platform waiting for the admin to check their M-Pesa. */
 function usePendingSettlements() {
   const q = useQuery({ queryKey: ["admin", "billing", "pending"], queryFn: () => api.get<{ pending: number }>("/admin/billing/pending/count"), refetchInterval: 30_000 });
   return q.data?.pending ?? 0;

@@ -1,4 +1,4 @@
-"""Background jobs (spec section 4). Each is safe to run twice: conditional updates and
+"""Background jobs. Each is safe to run twice: conditional updates and
 "one open review item per order and type" make a repeat a no-op.
 
 They run in the API process every minute (one process at launch, spec section 4). Tests call
@@ -32,7 +32,7 @@ log = logging.getLogger("app.jobs")
 
 async def expire_unpaid(session: AsyncSession, now: datetime) -> int:
     """M-Pesa orders still awaiting payment after their expiry time. Orders where the customer
-    entered a code are in checking_payment and never expire here (D5)."""
+    entered a code are in checking_payment and never expire here."""
     rows = (
         (
             await session.execute(
@@ -65,7 +65,7 @@ async def expire_unpaid(session: AsyncSession, now: datetime) -> int:
 
 
 async def flag_missing_payments(session: AsyncSession, now: datetime) -> int:
-    """Code entered, no matching payment 5 minutes later: alert the hotel (spec section 6)."""
+    """Code entered, no matching payment 5 minutes later: alert the hotel."""
     since = now - payments.NO_SMS_AFTER
     orders = (
         (
@@ -103,7 +103,7 @@ async def flag_missing_payments(session: AsyncSession, now: datetime) -> int:
 
 
 async def refund_late_payments_at_closing(session: AsyncSession, now: datetime) -> int:
-    """D5: a late payment still unresolved when the hotel closes defaults to Refund."""
+    """A late payment still unresolved when the hotel closes defaults to Refund."""
     values, _ = await settings.load(session)
     items = (
         (

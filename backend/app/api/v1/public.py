@@ -34,7 +34,7 @@ async def list_hotels(session: Session, storage: StorageDep):
         )
         card.rating, card.rating_count = stars[h.id].average, stars[h.id].count
         out.append((card, stars[h.id].rank_score))
-    # Open hotels first, then the best rated (D28), then by name.
+    # Open hotels first, then the best rated, then by name.
     out.sort(key=lambda c: (not c[0].is_open, -c[1], c[0].name))
     return [c for c, _ in out]
 
@@ -103,7 +103,7 @@ async def public_config(session: Session):
     values, _ = await settings.load(session)
     return {
         "delivery_zone": values.delivery_zone,
-        # Without a drawn area, hotels with a location deliver up to max_delivery_km (D16).
+        # Without a drawn area, hotels with a location deliver up to max_delivery_km.
         "delivery_available": True,
         "rider_fee": values.base_rider_fee,  # "from" price before a pin is dropped
         "rider_fee_bands": [b.model_dump() for b in values.rider_fee_bands],

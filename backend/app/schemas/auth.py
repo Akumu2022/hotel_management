@@ -11,7 +11,7 @@ class LoginIn(Schema):
 
 
 class RefreshIn(Schema):
-    # Browsers send the httpOnly cookie instead (D29); other clients may still send it here.
+    # Browsers send the httpOnly cookie instead; other clients may still send it here.
     refresh_token: str | None = Field(None, max_length=200)
 
 
@@ -25,7 +25,7 @@ class MeOut(Schema):
 
 
 class TokenOut(Schema):
-    """The refresh token is never in the body (D29): it travels only as an httpOnly cookie, so
+    """The refresh token is never in the body: it travels only as an httpOnly cookie, so
     page scripts can't read it. The access token lasts 15 minutes and is kept in memory."""
 
     access_token: str

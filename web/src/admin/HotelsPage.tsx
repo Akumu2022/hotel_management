@@ -1,5 +1,5 @@
-/** Owner's hotel list (D28): only the owner creates hotels, with the hotel admin's login, and can
- * reset any staff password. Locations can be pasted as "lat, lng" (e.g. from Google Maps). */
+/** Owner's hotel list: only the owner creates hotels, with the hotel admin's login, and can
+ * reset any staff password. Each hotel admin pins their own location on the map. */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Building2, Plus, Users } from "lucide-react";
 import { type FormEvent, useState } from "react";
@@ -22,16 +22,6 @@ type Hotel = {
 };
 type Staff = { id: string; role: string; name: string; phone: string; is_active: boolean };
 
-/** "-1.2833, 36.8167" (Google Maps copy) -> numbers, or null if it isn't a valid pair. */
-export function parseLatLng(text: string): { lat: number; lng: number } | null {
-  const m = text.trim().match(/^(-?\d{1,2}(?:\.\d+)?)\s*[,\s]\s*(-?\d{1,3}(?:\.\d+)?)$/);
-  if (!m) return null;
-  const lat = Number(m[1]);
-  const lng = Number(m[2]);
-  if (Math.abs(lat) > 90 || Math.abs(lng) > 180) return null;
-  return { lat: +lat.toFixed(6), lng: +lng.toFixed(6) };
-}
-
 const slugify = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 80);
 
 function StaffList({ hotel }: { hotel: Hotel }) {
@@ -53,32 +43,11 @@ function StaffList({ hotel }: { hotel: Hotel }) {
   );
 }
 
-function LocationEdit({ hotel }: { hotel: Hotel }) {
-  const qc = useQueryClient();
-  const [where, setWhere] = useState(hotel.lat != null ? `${hotel.lat}, ${hotel.lng}` : "");
-  const point = parseLatLng(where);
-  const save = useMutation({
-    mutationFn: () => api.patch(`/admin/hotels/${hotel.id}`, point!),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "hotels"] }),
-  });
-  return (
-    <div className="flex flex-wrap items-end gap-2">
-      <Field label="Exact location (lat, lng)" error={where && !point ? "Use the form -1.28333, 36.81667" : undefined}>
-        {(id) => <Input id={id} value={where} onChange={(e) => setWhere(e.target.value)} placeholder="-1.28333, 36.81667" className="w-64" />}
-      </Field>
-      <Button variant="secondary" onClick={() => save.mutate()} disabled={!point} busy={save.isPending}>Save location</Button>
-      {save.isSuccess ? <span className="text-sm text-ok">Saved</span> : null}
-      <ErrorNote error={save.error} />
-    </div>
-  );
-}
-
 function NewHotel({ onDone }: { onDone: () => void }) {
   const qc = useQueryClient();
-  const [f, setF] = useState({ name: "", slug: "", phone: "", till_number: "", where: "", admin_name: "", admin_phone: "", admin_password: "" });
+  const [f, setF] = useState({ name: "", slug: "", phone: "", till_number: "", admin_name: "", admin_phone: "", admin_password: "" });
   const set = (k: keyof typeof f) => (e: { target: { value: string } }) =>
     setF((v) => ({ ...v, [k]: e.target.value, ...(k === "name" && (!v.slug || v.slug === slugify(v.name)) ? { slug: slugify(e.target.value) } : {}) }));
-  const point = f.where ? parseLatLng(f.where) : null;
   const create = useMutation({
     mutationFn: () =>
       api.post("/admin/hotels", {
@@ -86,7 +55,6 @@ function NewHotel({ onDone }: { onDone: () => void }) {
         slug: f.slug,
         phone: f.phone,
         till_number: f.till_number,
-        ...(point ?? {}),
         admin: { name: f.admin_name, phone: f.admin_phone, password: f.admin_password },
       }),
     onSuccess: () => {
@@ -106,13 +74,6 @@ function NewHotel({ onDone }: { onDone: () => void }) {
         <Field label="Hotel phone">{(id) => <Input id={id} type="tel" value={f.phone} onChange={set("phone")} required />}</Field>
         <Field label="Till number">{(id) => <Input id={id} inputMode="numeric" value={f.till_number} onChange={set("till_number")} required />}</Field>
       </div>
-      <Field
-        label="Location (optional)"
-        hint="Paste latitude, longitude from Google Maps, e.g. -1.28333, 36.81667"
-        error={f.where && !point ? "Use the form -1.28333, 36.81667" : undefined}
-      >
-        {(id) => <Input id={id} value={f.where} onChange={set("where")} placeholder="-1.28333, 36.81667" />}
-      </Field>
       <p className="mt-2 text-sm font-bold">Hotel admin login</p>
       <Field label="Their name">{(id) => <Input id={id} value={f.admin_name} onChange={set("admin_name")} required minLength={2} />}</Field>
       <div className="grid grid-cols-2 gap-3">
@@ -120,7 +81,7 @@ function NewHotel({ onDone }: { onDone: () => void }) {
         <Field label="First password" hint="They change it at first login">{(id) => <PasswordInput id={id} autoComplete="new-password" value={f.admin_password} onChange={set("admin_password")} required minLength={8} />}</Field>
       </div>
       <ErrorNote error={create.error} />
-      <Button type="submit" size="lg" busy={create.isPending} disabled={!!f.where && !point}>Create hotel</Button>
+      <Button type="submit" size="lg" busy={create.isPending}>Create hotel</Button>
     </form>
   );
 }
@@ -149,20 +110,19 @@ export function HotelsPage() {
                 <p className="font-bold">{h.name} {h.status === "paused" ? <Badge tone="warn">Paused</Badge> : null}</p>
                 <p className="text-sm text-muted">
                   Till <span className="money">{h.till_number}</span> · <span className="money">{h.phone}</span> ·{" "}
-                  {h.lat != null ? <span className="money">{h.lat.toFixed(5)}, {h.lng?.toFixed(5)}</span> : <span className="text-bad">no location</span>}
+                  {h.lat != null ? <span className="text-ok">location pinned</span> : <span className="text-warn">location not pinned yet</span>}
                 </p>
               </div>
               <div className="flex items-center gap-3">
                 <Stars rating={h.rating} count={h.rating_count} />
                 <button onClick={() => setOpen(open === h.id ? null : h.id)} className="inline-flex items-center gap-1 rounded-lg border border-line px-2.5 py-1.5 text-sm font-semibold hover:bg-subtle">
-                  <Users className="size-4" /> Logins & location
+                  <Users className="size-4" /> Logins
                 </button>
               </div>
             </div>
             {open === h.id ? (
               <div className="mt-3 flex flex-col gap-3">
                 <StaffList hotel={h} />
-                <LocationEdit hotel={h} />
               </div>
             ) : null}
           </li>

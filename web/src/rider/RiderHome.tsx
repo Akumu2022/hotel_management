@@ -1,4 +1,4 @@
-/** Rider app shell (DECISIONS D21): KYC steps until the Chakula team approves, then jobs. */
+/** Rider app shell: KYC steps until the Chakula team approves, then jobs. */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import clsx from "clsx";
 import { Bike, Camera, CheckCircle2, Clock, IdCard, KeyRound, LogOut, ShieldAlert, ShieldCheck, UserRound } from "lucide-react";

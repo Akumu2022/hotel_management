@@ -22,7 +22,7 @@ class Hotel(Base):
     __tablename__ = "hotels"
     __table_args__ = (
         one_of("status", HOTEL_STATUSES),
-        # D1: blank = use the global default; when set, same bounds as the global setting.
+        # Blank = use the global default; when set, same bounds as the global setting.
         CheckConstraint(
             "commission_bp IS NULL OR commission_bp BETWEEN 0 AND 5000", name="commission_bp_range"
         ),

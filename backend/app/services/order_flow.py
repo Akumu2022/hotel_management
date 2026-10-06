@@ -1,7 +1,7 @@
-"""Hotel-side order status flow (spec section 9, DECISIONS D6, D12c).
+"""Hotel-side order status flow.
 
 Pickup:   Paid -> Accepted -> Preparing -> Ready -> Collected
-Delivery: Paid -> Accepted -> Preparing -> Ready -> (rider, M6)
+Delivery: Paid -> Accepted -> Preparing -> Ready -> (rider)
 Cash pickup starts in Awaiting payment and is accepted directly (after a confirmation call for
 first-time numbers); cash is recorded at collection if not before.
 
@@ -215,7 +215,7 @@ async def cancel_after_accept(
     now,
     actor_type: str = "staff",
 ) -> Order:
-    """The hotel can't finish an order it accepted (D24). Hotel admin (own hotel) or super admin.
+    """The hotel can't finish an order it accepted. Hotel admin (own hotel) or super admin.
     Everything received is refunded; a rider who took the job loses it from their list. Once the
     food is with a rider, the failed-delivery flow applies instead."""
     if reason_code not in CANCEL_REASONS:
@@ -251,7 +251,7 @@ async def cancel_after_accept(
     )
 
 
-# --- D6: acceptance timeout ---------------------------------------------------------------------
+# --- acceptance timeout ---------------------------------------------------------------------
 
 
 def waiting_since(order: Order) -> datetime:
@@ -271,7 +271,7 @@ async def unaccepted(session, hotel_id: uuid.UUID | None = None) -> list[Order]:
 
 async def auto_reject_late(session: AsyncSession, now: datetime) -> int:
     """10 minutes without Accept: reject with reason not_accepted_in_time (refund recorded).
-    Two auto-rejects in a row at a hotel switch its "Accepting orders" off (D6)."""
+    Two auto-rejects in a row at a hotel switch its "Accepting orders" off."""
     values, _ = await settings.load(session)
     limit = timedelta(minutes=values.acceptance_timeout_minutes)
     done = 0
@@ -329,7 +329,7 @@ async def _two_misses_in_a_row(session, hotel_id) -> bool:
 
 
 async def duty_alerts(session, now: datetime) -> list[dict]:
-    """Orders waiting longer than the duty-alert time (D6: 5 minutes), for the admin board."""
+    """Orders waiting longer than the duty-alert time (5 minutes), for the admin board."""
     values, _ = await settings.load(session)
     alert = timedelta(minutes=values.acceptance_alert_minutes)
     out = []

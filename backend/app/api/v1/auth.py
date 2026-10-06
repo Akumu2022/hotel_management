@@ -13,7 +13,7 @@ from app.services import audit, auth
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
-# D29: the refresh token lives in an httpOnly cookie that only /auth endpoints receive.
+# The refresh token lives in an httpOnly cookie that only /auth endpoints receive.
 REFRESH_COOKIE = "chakula_refresh"
 COOKIE_PATH = "/api/v1/auth"
 RefreshCookie = Annotated[str | None, Cookie(alias=REFRESH_COOKIE)]
@@ -89,7 +89,7 @@ async def me(user: CurrentUserDep, session: Session):
 async def change_password(
     body: ChangePasswordIn, user: CurrentUserDep, session: Session, response: Response
 ):
-    """Everyone can change their own password; required after an admin reset (D28)."""
+    """Everyone can change their own password; required after an admin reset."""
     row = await session.get(User, user.id, with_for_update=True)
     pair = await auth.change_password(session, row, body.current_password, body.new_password)
     await audit.log(

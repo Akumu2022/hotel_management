@@ -1,15 +1,15 @@
-"""Server-side price calculation (spec section 12). Pure: no database, no clock.
+"""Server-side price calculation. Pure: no database, no clock.
 
 Always in this order:
   1. line gross   = (item price + option prices) x quantity
   2. item discount per line (best single item discount; percent floored once)
   3. items_total  = sum of discounted lines
   4. order discount or promo on items_total (best single one; percent floored once)
-  5. service fee (+ the eat-in markup on eat-in orders, D28: platform money like the fee)
+  5. service fee (+ the eat-in markup on eat-in orders: platform money like the fee)
   6. rider fee (delivery only; in the Till amount only for option A)
-  7. platform bonus (stamp card or free delivery; the larger one, never both; D19)
+  7. platform bonus (stamp card or free delivery; the larger one, never both)
   8. till_amount  = food_net + service_fee + rider_fee_in_till - platform_bonus
-Commission is on food_net only, excluding service and rider fees: a flat tier fee (D19) or
+Commission is on food_net only, excluding service and rider fees: a flat tier fee or
 floor(rate x food_net) for a hotel on a percent deal.
 Discounts never take a line or the subtotal below zero. All amounts are whole-KES ints.
 """

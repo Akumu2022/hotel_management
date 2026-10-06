@@ -5,7 +5,7 @@
  * - Hotels, menus, offers, config: show the cached copy at once, refresh in the background.
  * - Everything else (orders, payments, tracking, staff APIs): network only. Never cache money.
  */
-const VERSION = "v1";
+const VERSION = "v2";
 const SHELL = `chakula-shell-${VERSION}`;
 const STATIC = `chakula-static-${VERSION}`;
 const DATA = `chakula-data-${VERSION}`;
@@ -82,4 +82,47 @@ self.addEventListener("fetch", (event) => {
     );
   }
   // Anything else goes straight to the network.
+});
+
+// --- Web Push: alarms when Chakula is closed ---------------------------------------------------
+// The page rings by itself while it is open and visible, so only show a notification when it
+// isn't. The notification stays up until it is opened or the cause is dealt with (same tag).
+self.addEventListener("push", (event) => {
+  let d = {};
+  try {
+    d = event.data ? event.data.json() : {};
+  } catch {
+    /* a message with no readable body still gets a generic notification */
+  }
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((list) => {
+      if (list.some((c) => c.visibilityState === "visible")) return;
+      return self.registration.showNotification(d.title || "Chakula", {
+        body: d.body || "Open Chakula to act.",
+        tag: d.tag || "chakula-alarm",
+        renotify: true,
+        requireInteraction: true,
+        icon: "/icon-192.png",
+        badge: "/icon-192.png",
+        vibrate: [300, 150, 300],
+        data: { url: d.url || "/" },
+      });
+    }),
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const url = (event.notification.data && event.notification.data.url) || "/";
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((list) => {
+      for (const c of list) {
+        if ("focus" in c) {
+          if ("navigate" in c) c.navigate(url);
+          return c.focus();
+        }
+      }
+      return self.clients.openWindow(url);
+    }),
+  );
 });

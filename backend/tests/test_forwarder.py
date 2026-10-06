@@ -68,7 +68,7 @@ def masked(order) -> str:
 def till_sms(
     code: str, amount: int, name: str = "JAMES KAMAU", phone: str = "2547******123", when=None
 ) -> str:
-    """A Till SMS in the real format (docs/sms_samples), dated now in Kenya time."""
+    """A Till SMS in the real format (backend/tests/data), dated now in Kenya time."""
     t = (when or utcnow()) + timedelta(hours=3)
     h = t.hour % 12 or 12
     ampm = "AM" if t.hour < 12 else "PM"

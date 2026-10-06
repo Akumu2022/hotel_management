@@ -22,6 +22,7 @@ from app.api.v1 import (
     orders_board,
     payments,
     public,
+    push,
     reports,
     riders,
 )
@@ -121,6 +122,7 @@ def create_app() -> FastAPI:
     v1.include_router(forwarder.device)
     v1.include_router(forwarder.hotel)
     v1.include_router(forwarder.admin)
+    v1.include_router(push.router)
     app.include_router(v1)
 
     # Development: serve uploaded photos from the local media folder (R2 in production).

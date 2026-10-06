@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import clsx from "clsx";
-import { ArrowRight, Bike, Clock, Star, Store, Timer, UtensilsCrossed } from "lucide-react";
+import { ArrowRight, Bike, Clock, Flame, Star, Store, Timer, UtensilsCrossed } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import { ErrorNote, Skeleton } from "../components/ui";
@@ -52,6 +52,50 @@ function HotelCard({ hotel }: { hotel: PublicHotel }) {
   );
 }
 
+/** "PIZZA WEDNESDAY\nBuy one Get One Free!" -> big headline + highlighted sub-line. */
+function splitTitle(title: string): [string, string] {
+  const [head, ...rest] = title.split("\n");
+  return [head.trim(), rest.join(" ").trim()];
+}
+
+function OfferBanner({ offer: o, cta }: { offer: PublicOffer; cta: string }) {
+  const [head, sub] = splitTitle(o.title);
+  const left = o.ends_at ? Math.max(0, new Date(o.ends_at).getTime() - Date.now()) : null;
+  const ending = left != null && left < 24 * 3600_000 ? (left < 3600_000 ? `${Math.max(1, Math.round(left / 60_000))} min left` : `${Math.round(left / 3600_000)} h left`) : null;
+  return (
+    <Link
+      to={`/h/${o.hotel_slug}`}
+      className="group relative flex h-48 w-[90%] shrink-0 snap-center overflow-hidden rounded-3xl bg-gradient-to-br from-brand to-[#7a1d00] text-white shadow-lg shadow-brand/20 sm:w-[32rem]"
+    >
+      {o.image_url ? (
+        // The photo fills all the space the text doesn't use, fading into the colour behind the words.
+        <img
+          src={o.image_url}
+          alt=""
+          className="absolute inset-y-0 right-0 h-full w-[68%] object-cover transition-transform duration-500 group-hover:scale-105"
+          style={{ maskImage: "linear-gradient(to right, transparent, #000 38%)", WebkitMaskImage: "linear-gradient(to right, transparent, #000 38%)" }}
+        />
+      ) : (
+        <span className="absolute top-3 right-4 text-8xl select-none">🔥</span>
+      )}
+      <span className="pointer-events-none absolute inset-0 bg-gradient-to-r from-black/50 via-black/10 to-transparent" />
+      <span className="relative flex w-[57%] flex-col justify-between p-4">
+        <span className="flex flex-wrap items-center gap-1.5">
+          <span className="truncate rounded-full bg-white/95 px-2.5 py-1 text-xs font-bold text-ink">{o.hotel_name}</span>
+          {ending ? <span className="rounded-full bg-black/45 px-2 py-1 text-xs font-semibold backdrop-blur">⏱ {ending}</span> : null}
+        </span>
+        <span className="block">
+          <span className="block text-2xl leading-[1.05] font-extrabold tracking-tight uppercase drop-shadow-[0_2px_6px_rgba(0,0,0,0.45)] sm:text-3xl">{head}</span>
+          {sub ? <span className="mt-2 inline-block rounded-lg bg-amber-300 px-2.5 py-1 text-sm font-extrabold text-ink">{sub}</span> : null}
+        </span>
+        <span className="flex items-center gap-1 text-sm font-bold">
+          {cta} <ArrowRight className="size-4 transition-transform group-hover:translate-x-1" />
+        </span>
+      </span>
+    </Link>
+  );
+}
+
 export function HomePage() {
   const t = useT();
   const hotels = useQuery({ queryKey: ["hotels"], queryFn: () => api.get<PublicHotel[]>("/hotels"), refetchInterval: 60_000 });
@@ -87,20 +131,12 @@ export function HomePage() {
 
         {offers.data?.length ? (
           <section className="mt-6">
-            <h2 className="mb-3 text-lg font-semibold">{t("Today's deals")}</h2>
-            <div className="no-scrollbar -mx-4 flex snap-x gap-3 overflow-x-auto px-4 sm:-mx-6 sm:px-6">
+            <h2 className="mb-3 flex items-center gap-2 text-lg font-semibold">
+              <Flame className="size-5 text-brand" /> {t("Today's deals")}
+            </h2>
+            <div className="no-scrollbar -mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-1 sm:-mx-6 sm:px-6">
               {offers.data.map((o) => (
-                <Link key={o.id} to={`/h/${o.hotel_slug}`} className="relative flex h-32 w-72 shrink-0 snap-start items-end overflow-hidden rounded-2xl bg-ink p-4 text-white">
-                  {o.image_url ? (
-                    <img src={o.image_url} alt="" className="absolute inset-0 size-full object-cover opacity-60" />
-                  ) : (
-                    <span className="absolute -top-2 right-2 text-8xl opacity-90">🔥</span>
-                  )}
-                  <span className="relative">
-                    <span className="mb-1 inline-block rounded-md bg-brand px-2 py-0.5 text-xs font-semibold">{o.hotel_name}</span>
-                    <span className="block text-lg leading-tight font-semibold">{o.title}</span>
-                  </span>
-                </Link>
+                <OfferBanner key={o.id} offer={o} cta={t("Order now")} />
               ))}
             </div>
           </section>
@@ -117,11 +153,19 @@ export function HomePage() {
           ) : hotels.error ? (
             <ErrorNote error={hotels.error} />
           ) : (
+            hotels.data!.length === 0 ? (
+              <div className="flex flex-col items-center gap-2 rounded-2xl border border-dashed border-line bg-surface px-6 py-12 text-center">
+                <span className="text-5xl">🍽️</span>
+                <p className="text-lg font-semibold">{t("No hotels are open right now")}</p>
+                <p className="max-w-xs text-sm text-muted">{t("New hotels are joining soon. Check back in a little while.")}</p>
+              </div>
+            ) : (
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
               {hotels.data!.map((h) => (
                 <HotelCard key={h.slug} hotel={h} />
               ))}
             </div>
+            )
           )}
         </section>
         <p className="mt-8 text-center text-xs text-muted">

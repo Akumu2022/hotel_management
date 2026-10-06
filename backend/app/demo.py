@@ -156,7 +156,7 @@ HOTELS = [
     ),
 ]
 
-# Bungoma CBD pick-up points (DECISIONS D14/D16): delivery fees are measured from here.
+# Bungoma CBD pick-up points: delivery fees are measured from here.
 LOCATIONS = {
     "noor-cafe": (0.5652, 34.5588),
     "jadelica": (0.5610, 34.5645),
@@ -166,10 +166,9 @@ LOCATIONS = {
     "tuutis": (0.5668, 34.5627),
 }
 
-STAFF_PASSWORD = "hotel-pass-123"
 
-
-async def seed(session: AsyncSession) -> list[str]:
+async def seed(session: AsyncSession, password: str) -> list[str]:
+    """Demo hotels, menus and one admin login per hotel, all with `password`."""
     now = utcnow()
     created = []
     for slug, name, phone, till, accent, staff_phone, menu in HOTELS:
@@ -197,7 +196,7 @@ async def seed(session: AsyncSession) -> list[str]:
                 hotel_id=hotel.id,
                 name=f"{name} Admin",
                 phone="254" + staff_phone[1:],
-                password_hash=hash_password(STAFF_PASSWORD),
+                password_hash=hash_password(password),
             )
         )
         first_product = None

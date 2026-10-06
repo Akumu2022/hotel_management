@@ -117,7 +117,7 @@ _TEMP_ALPHABET = "abcdefghjkmnpqrstuvwxyz23456789"
 
 
 async def reset_password(session: AsyncSession, user: User) -> str:
-    """D28: an admin resets someone's password. Returns the temporary password (shown once);
+    """An admin resets someone's password. Returns the temporary password (shown once);
     the user must change it at next login, and every open session is logged out."""
     temp = "".join(secrets.choice(_TEMP_ALPHABET) for _ in range(10))
     user.password_hash = hash_password(temp)

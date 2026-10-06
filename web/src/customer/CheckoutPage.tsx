@@ -1,5 +1,5 @@
 /**
- * One-screen checkout (spec section 5), written as four plain numbered steps. The phone sends
+ * One-screen checkout, written as four plain numbered steps. The phone sends
  * item IDs and choices only; every amount comes from POST /quotes. "Place order" carries an
  * Idempotency-Key created when checkout opens, so repeated taps make one order.
  */
@@ -128,7 +128,7 @@ export function CheckoutPage() {
   const [mapKey, setMapKey] = useState(0); // bump to re-centre the map on a saved place
 
   const zoneMode = config.data?.delivery_mode === "area";
-  // D16: with no drawn area, a hotel delivers once it has a map location.
+  // With no drawn area, a hotel delivers once it has a map location.
   const deliveryAvailable = !!config.data && (zoneMode || hotelInfo?.lat != null);
   useEffect(() => {
     if (config.data && hotelInfo && !deliveryAvailable && type === "delivery") orderMode.set("pickup");
@@ -150,7 +150,7 @@ export function CheckoutPage() {
   useEffect(() => {
     if (type !== "pickup") setPayment("mpesa"); // delivery and eat in are paid first
   }, [type]);
-  // Eat in (D28): minutes from now until the customer sits down.
+  // Eat in: minutes from now until the customer sits down.
   const [arriveIn, setArriveIn] = useState<number | null>(null);
 
   const riderFeeMode: RiderFeeMode = type === "delivery" ? feeMode : "none";

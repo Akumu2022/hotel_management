@@ -1,4 +1,4 @@
-"""M5: the hotel order board, status actions, and live updates (SSE) for hotels, customers and
+"""the hotel order board, status actions, and live updates (SSE) for hotels, customers and
 the admin duty board."""
 
 import uuid
@@ -187,7 +187,7 @@ async def track_events(token: str, session: Session):
 
 @admin.get("/alerts")
 async def alerts(_: SuperAdmin, session: Session):
-    """D6 duty alerts: paid orders not accepted after the alert time."""
+    """Duty alerts: paid orders not accepted after the alert time."""
     return {"unaccepted": await order_flow.duty_alerts(session, utcnow())}
 
 

@@ -11,3 +11,7 @@ media/
 private_media/
 .pgdata/
 web/public/downloads/*.apk
+*.egg-info/
+*.tsbuildinfo
+.till_sim.json
+osrm-data/

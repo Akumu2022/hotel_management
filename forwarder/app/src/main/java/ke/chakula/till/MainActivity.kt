@@ -97,7 +97,12 @@ class MainActivity : Activity() {
             } catch (e: ApiError) {
                 ui.post { button.isEnabled = true; showError(e.message) }
             } catch (e: Exception) {
-                ui.post { button.isEnabled = true; showError(getString(R.string.err_network, e.message ?: "")) }
+                val msg = e.message ?: ""
+                val tls = e is javax.net.ssl.SSLException || msg.contains("TLS", true) || msg.contains("SSL", true)
+                ui.post {
+                    button.isEnabled = true
+                    showError(if (tls && server.startsWith("https://")) getString(R.string.err_tls) else getString(R.string.err_network, msg))
+                }
             }
         }
     }

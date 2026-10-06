@@ -1,7 +1,7 @@
 /**
- * Things the phone remembers (spec section 5): the cart, the customer's name/phone/last
+ * Things the phone remembers: the cart, the customer's name/phone/last
  * location, and recent orders. All in localStorage, wrapped so private mode still works.
- * The cart holds one hotel only (DECISIONS D4). Prices here are for display; the server
+ * The cart holds one hotel only. Prices here are for display; the server
  * recalculates everything.
  */
 import { useSyncExternalStore } from "react";

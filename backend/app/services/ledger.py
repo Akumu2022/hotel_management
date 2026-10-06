@@ -1,4 +1,4 @@
-"""Append-only money ledger (spec section 12, DECISIONS D3).
+"""Append-only money ledger.
 
 Every function runs inside the caller's transaction and is idempotent: entries are inserted
 with ON CONFLICT DO NOTHING against the unique (order|refund|statement|settlement|payout,
@@ -89,7 +89,7 @@ async def record_payment(
     await _write(session, entry, amount, to_id=order.hotel_id, reference=reference, **common)
     await _write(session, "commission", order.commission_amount, from_id=order.hotel_id, **common)
     await _write(session, "service_fee", order.service_fee, from_id=order.hotel_id, **common)
-    # The customer paid less by this much; the platform makes it up to the hotel (D19).
+    # The customer paid less by this much; the platform makes it up to the hotel.
     await _write(session, "bonus_credit", order.platform_bonus, to_id=order.hotel_id, **common)
 
 
@@ -124,7 +124,7 @@ async def record_rider_fee(
 async def credit_failed_delivery(
     session: AsyncSession, order: Order, *, amount: int, created_by: uuid.UUID | None
 ) -> None:
-    """Rider-fault failed delivery (D7): the hotel refunded the customer; the platform owes the
+    """Rider-fault failed delivery: the hotel refunded the customer; the platform owes the
     hotel that amount on its statement."""
     await _write(
         session,
@@ -139,7 +139,7 @@ async def credit_failed_delivery(
 async def record_rider_compensation(
     session: AsyncSession, order: Order, *, rider_id: uuid.UUID, created_by: uuid.UUID | None
 ) -> None:
-    """Option B fee not paid by the customer: the platform owes the rider (D8)."""
+    """Option B fee not paid by the customer: the platform owes the rider."""
     await _write(
         session,
         "rider_compensation",
@@ -150,7 +150,7 @@ async def record_rider_compensation(
     )
 
 
-# --- Refunds (D3) -----------------------------------------------------------------------------
+# --- Refunds -----------------------------------------------------------------------------
 
 
 async def amount_paid(session: AsyncSession, order_id: uuid.UUID) -> int:
@@ -212,7 +212,7 @@ async def approve_refund(
 ) -> Refund:
     """Create a refund record and reverse commission pro rata, cumulatively:
     reversed_total = floor(rate x food refunded so far) (percent deals) or
-    floor(fee x food refunded / food) (flat tiers, D19); this refund reverses the difference.
+    floor(fee x food refunded / food) (flat tiers); this refund reverses the difference.
     Once everything paid has been refunded, the whole commission, the service fee and any
     platform bonus are reversed.
     `refund_id` (client-generated) makes a repeated request return the same refund."""
@@ -308,7 +308,7 @@ async def approve_refund(
 
 
 def _refund_event(session: AsyncSession, order: Order) -> None:
-    """Refunds to send ring the hotel until marked sent (D23)."""
+    """Refunds to send ring the hotel until marked sent."""
     events.emit(session, f"hotel:{order.hotel_id}", {"type": "refund", "order_id": str(order.id)})
     events.emit(session, "admin", {"type": "refund", "order_id": str(order.id)})
 
@@ -439,7 +439,7 @@ async def refund_unaccepted(
 ) -> Refund:
     """Money that reached the Till but was never accepted for the order (underpaid and
     refunded, or paid after expiry and refunded). It is recorded as received and returned in
-    full, with no commission or service fee: the hotel earned nothing from it (DECISIONS D17)."""
+    full, with no commission or service fee: the hotel earned nothing from it."""
     existing = await session.get(Refund, refund_id)
     if existing is not None:
         return existing

@@ -507,7 +507,7 @@ async def put_settings(
     return await _settings_out(session, hotel, storage)
 
 
-# --- Staff (D28) -------------------------------------------------------------------------------
+# --- Staff -------------------------------------------------------------------------------
 
 
 @router.get("/staff", response_model=list[UserOut])

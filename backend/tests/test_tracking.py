@@ -124,3 +124,74 @@ async def test_stale_location_is_not_live(db):
         )
         == 0
     )
+
+
+# --- Customer live map (rider's position on the tracking page) -----------------------------------
+
+
+async def test_customer_sees_rider_only_while_food_is_on_the_road(client, db, monkeypatch):
+    order = await ready_delivery(db)
+    order.lat, order.lng = 0.5700, 34.5650
+    await db.flush()
+    rider = await make_rider(db)
+    h = auth_header(rider)
+    track = f"{API}/track/{order.tracking_token}"
+
+    async def fix(lat, lng):
+        r = await client.post(f"{API}/rider/location", headers=h, json={"lat": lat, "lng": lng})
+        assert r.status_code == 204
+
+    # Claimed, not yet collected: a position exists but must not be shown.
+    await client.post(f"{API}/rider/jobs/{order.id}/claim", headers=h)
+    await fix(0.5600, 34.5600)
+    assert (await client.get(track)).json()["live"] is None
+
+    staff = auth_header(await make_user(db, "cashier", await _hotel(db, order)))
+    await client.post(f"{API}/hotel/orders/{order.id}/handed-to-rider", headers=staff)
+    await client.post(
+        f"{API}/rider/jobs/{order.id}/picked-up", headers=h, json={"fee_received": True}
+    )
+    await client.post(f"{API}/rider/jobs/{order.id}/on-the-way", headers=h)
+
+    sent = []
+    monkeypatch.setattr(tracking.events, "emit", lambda s, ch, payload: sent.append((ch, payload)))
+    await fix(0.5650, 34.5620)
+    live = (await client.get(track)).json()["live"]
+    assert (live["rider_lat"], live["rider_lng"], live["live"]) == (0.5650, 34.5620, True)
+    assert (live["dest_lat"], live["dest_lng"]) == (0.5700, 34.5650)
+    # Pushed to this customer's channel, with nothing but the position.
+    ch = f"order:{order.tracking_token}"
+    assert (
+        ch,
+        {"type": "rider_location", "lat": 0.5650, "lng": 34.5620, "at": sent[-1][1]["at"]},
+    ) in sent
+
+    # The road line comes from the routing service; without it the map draws a straight line.
+    async def road(*a):
+        return [[0.5650, 34.5620], [0.5700, 34.5650]]
+
+    monkeypatch.setattr("app.api.v1.ordering.routing.route_points", road)
+    assert (await client.get(f"{track}/route")).json()["points"] == [
+        [0.5650, 34.5620],
+        [0.5700, 34.5650],
+    ]
+
+    # A stale fix is flagged, not hidden.
+    profile = await db.get(RiderProfile, rider.id)
+    profile.last_location_at = utcnow() - timedelta(minutes=6)
+    await db.flush()
+    assert (await client.get(track)).json()["live"]["live"] is False
+
+    # Delivered: the position disappears again.
+    r = await client.post(
+        f"{API}/rider/jobs/{order.id}/delivered", headers=h, json={"code": order.delivery_code}
+    )
+    assert r.status_code == 200
+    assert (await client.get(track)).json()["live"] is None
+    assert (await client.get(f"{track}/route")).json()["points"] is None
+
+
+async def test_live_map_unknown_token_and_pickup_orders(client, db):
+    assert (await client.get(f"{API}/track/nope-nope/route")).status_code == 404
+    order = await ready_delivery(db)  # no rider yet
+    assert (await client.get(f"{API}/track/{order.tracking_token}")).json()["live"] is None

@@ -1,4 +1,4 @@
-"""Dashboard reports (DECISIONS D19): hotel admins see their hotel, the super admin all."""
+"""Dashboard reports: hotel admins see their hotel, the super admin all."""
 
 import csv
 import io

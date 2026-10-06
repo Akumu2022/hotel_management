@@ -1,6 +1,6 @@
 /**
  * Super admin: where we deliver, what delivery costs, and where each hotel is (fees are measured
- * from the hotel). DECISIONS D14.
+ * from the hotel)..
  */
 import "leaflet/dist/leaflet.css";
 
@@ -63,7 +63,7 @@ function Card({ title, subtitle, children, action }: { title: string; subtitle?:
   );
 }
 
-/** Where hotels send what they owe (M7). */
+/** Where hotels send what they owe. */
 function PlatformNumberCard({ current }: { current: string }) {
   const qc = useQueryClient();
   const [value, setValue] = useState<string | null>(null);

@@ -32,9 +32,10 @@ from app.schemas.orders import (
     QuoteOut,
     TrackEvent,
     TrackItem,
+    TrackLive,
     TrackOut,
 )
-from app.services import delivery, ledger, media, orders, ratings
+from app.services import delivery, ledger, media, orders, ratings, routing, tracking
 from app.services.media import Storage
 
 router = APIRouter(tags=["ordering"])
@@ -181,6 +182,51 @@ async def track(token: str, session: Session, storage: StorageDep):
             else None
         ),
         fee_question=order.fee_not_paid_at is not None and order.customer_fee_answer is None,
+        live=_live(order, hotel, profile, utcnow()),
+    )
+
+
+ON_THE_ROAD = ("picked_up", "on_the_way")
+
+
+def _live(order, hotel, profile, now) -> TrackLive | None:
+    """Only while the food is on the road, only this order's rider, only the latest position."""
+    if (
+        order.status not in ON_THE_ROAD
+        or profile is None
+        or profile.last_lat is None
+        or profile.last_location_at is None
+        or order.lat is None
+        or order.lng is None
+    ):
+        return None
+    return TrackLive(
+        rider_lat=profile.last_lat,
+        rider_lng=profile.last_lng,
+        at=profile.last_location_at,
+        live=tracking.is_live(profile, now),
+        dest_lat=order.lat,
+        dest_lng=order.lng,
+        hotel_lat=hotel.lat if hotel else None,
+        hotel_lng=hotel.lng if hotel else None,
+    )
+
+
+class RouteOut(Schema):
+    points: list[list[float]] | None
+
+
+@router.get(
+    "/track/{token}/route", response_model=RouteOut, dependencies=[Depends(limit("route", 30))]
+)
+async def track_route(token: str, session: Session):
+    """The road from the rider to the customer's pin, for the live map's dotted line."""
+    order = await _by_token(session, token)
+    profile = await session.get(RiderProfile, order.rider_id) if order.rider_id else None
+    if _live(order, None, profile, utcnow()) is None:
+        return RouteOut(points=None)
+    return RouteOut(
+        points=await routing.route_points(profile.last_lat, profile.last_lng, order.lat, order.lng)
     )
 
 
@@ -192,7 +238,7 @@ async def cancel(token: str, session: Session):
     return {"status": order.status}
 
 
-# --- Order history (DECISIONS D20) -----------------------------------------------------------
+# --- Order history -----------------------------------------------------------
 # There are no customer accounts: the phone remembers its orders' tracking tokens and asks for
 # all of them at once. A token is the secret, so nobody can list someone else's orders by phone.
 
@@ -287,7 +333,7 @@ class FeeAnswerIn(Input):
 
 @router.post("/track/{token}/rider-fee-answer", dependencies=[Depends(limit("fee_answer", 10))])
 async def rider_fee_answer(token: str, body: FeeAnswerIn, session: Session):
-    """D8: the customer says whether they paid the rider's cash fee."""
+    """The customer says whether they paid the rider's cash fee."""
     order = await _by_token(session, token)
     order = await delivery.customer_answer(session, order, "yes" if body.paid else "no", utcnow())
     await session.commit()
@@ -302,7 +348,7 @@ class RatingIn(Schema):
 
 @router.post("/track/{token}/rating", status_code=204, dependencies=[Depends(limit("rating", 10))])
 async def rate(token: str, body: RatingIn, session: Session):
-    """D28: stars for the hotel (and the rider on deliveries), once per finished order."""
+    """Stars for the hotel (and the rider on deliveries), once per finished order."""
     order = (
         await session.execute(select(Order).where(Order.tracking_token == token))
     ).scalar_one_or_none()

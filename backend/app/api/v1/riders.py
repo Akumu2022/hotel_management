@@ -1,4 +1,4 @@
-"""Riders (DECISIONS D21): sign-up and KYC review, delivery jobs, the admin dispatch board."""
+"""Riders: sign-up and KYC review, delivery jobs, the admin dispatch board."""
 
 import uuid
 from datetime import datetime, timedelta
@@ -21,7 +21,7 @@ from app.schemas.auth import TokenOut
 from app.schemas.catalogue import Input
 from app.schemas.common import Schema
 from app.schemas.riders import ReviewIn, RiderDetailsIn, RiderOut, RiderRegisterIn, SubmitIn
-from app.services import auth, delivery, events, media, ratings, riders, tracking
+from app.services import audit, auth, delivery, events, media, ratings, riders, tracking
 from app.services.media import Storage
 
 public = APIRouter(tags=["riders"])
@@ -346,7 +346,7 @@ async def _job(session, order: Order, user_id) -> JobOut:
 
 @rider.post("/location", status_code=204)
 async def location(body: LocationIn, user: Rider, session: Session):
-    """The rider's phone, every ~30 s while online (D27)."""
+    """The rider's phone, every ~30 s while online."""
     await tracking.record(
         session, user.id, lat=body.lat, lng=body.lng, accuracy_m=body.accuracy_m, now=utcnow()
     )
@@ -470,6 +470,12 @@ class AssignIn(Input):
     rider_id: uuid.UUID
 
 
+class CloseIn(Input):
+    outcome: Literal["delivered", "failed"]
+    reason: str = Field(min_length=5, max_length=200)
+    rider_paid_cash: bool | None = None  # cash-fee deliveries marked delivered: did they pay?
+
+
 class DispatchOut(Schema):
     id: uuid.UUID
     code: str
@@ -487,7 +493,7 @@ class DispatchOut(Schema):
     assigned_at: datetime | None
     rider_seen: bool = False
     picked_up_at: datetime | None
-    # For the Dispatch map (D27): where the food is and where it's going.
+    # For the Dispatch map: where the food is and where it's going.
     hotel_lat: float | None = None
     hotel_lng: float | None = None
     lat: float | None = None
@@ -501,11 +507,11 @@ class RiderBrief(Schema):
     photo_url: str | None
     is_online: bool
     active_jobs: int
-    # The rider's last finished delivery today: tells dispatch they're free again (owner, D25).
+    # The rider's last finished delivery today: tells dispatch they're free again.
     last_code: str | None = None
     last_status: str | None = None
     last_at: datetime | None = None
-    # Live location (D27); `live` is false when the last fix is over 5 minutes old.
+    # Live location; `live` is false when the last fix is over 5 minutes old.
     lat: float | None = None
     lng: float | None = None
     accuracy_m: int | None = None
@@ -633,8 +639,34 @@ async def dispatch_board(_: SuperAdmin, session: Session, storage: StorageDep):
 
 @dispatch.get("/{order_id}/trail")
 async def order_trail(order_id: uuid.UUID, _: SuperAdmin, session: Session):
-    """Where the rider was during this job (D27)."""
+    """Where the rider was during this job."""
     return await tracking.trail(session, order_id)
+
+
+@dispatch.post("/{order_id}/close")
+async def close_delivery(
+    order_id: uuid.UUID, body: CloseIn, admin_user: SuperAdmin, session: Session
+):
+    """End a delivery that is stuck on the road. See delivery.admin_close."""
+    order = await delivery.admin_close(
+        session,
+        order_id,
+        body.outcome,
+        body.reason.strip(),
+        admin_user.id,
+        utcnow(),
+        rider_paid_cash=body.rider_paid_cash,
+    )
+    await audit.log(
+        session,
+        actor_id=admin_user.id,
+        action=f"delivery.close_{body.outcome}",
+        target_type="order",
+        target_id=order.id,
+        details={"reason": body.reason.strip(), "rider_paid_cash": body.rider_paid_cash},
+    )
+    await session.commit()
+    return {"id": str(order.id), "status": order.status}
 
 
 @dispatch.post("/{order_id}/assign")

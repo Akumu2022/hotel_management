@@ -163,7 +163,7 @@ class HotelOut(Schema):
     lat: float | None = None
     lng: float | None = None
     created_at: datetime
-    rating: float | None = None  # D28
+    rating: float | None = None
     rating_count: int = 0
 
     @model_validator(mode="before")
@@ -183,7 +183,7 @@ _COLOR = r"^#[0-9a-fA-F]{6}$"
 
 
 class HotelLoginIn(Schema):
-    """The hotel admin's login, made with the hotel (D28)."""
+    """The hotel admin's login, made with the hotel."""
 
     name: str = Field(min_length=2, max_length=120)
     phone: Phone
