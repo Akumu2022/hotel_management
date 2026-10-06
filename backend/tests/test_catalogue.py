@@ -422,9 +422,19 @@ def test_paused_and_not_accepting():
 
 async def test_hotel_sets_its_location(client, hotel_a):
     hotel, headers = hotel_a
-    r = await client.put(f"{API}/settings", headers=headers, json={"lat": -1.28, "lng": 36.82})
-    assert r.status_code == 200 and (r.json()["lat"], r.json()["lng"]) == (-1.28, 36.82)
-    bad = await client.put(f"{API}/settings", headers=headers, json={"lat": -1.28})
+    r = await client.put(f"{API}/settings", headers=headers, json={"lat": 0.57, "lng": 34.57})
+    assert r.status_code == 200 and (r.json()["lat"], r.json()["lng"]) == (0.57, 34.57)
+    bad = await client.put(f"{API}/settings", headers=headers, json={"lat": 0.57})
     assert bad.status_code == 422
     menu = (await client.get(f"/api/v1/hotels/{hotel.slug}/menu")).json()
-    assert menu["hotel"]["lat"] == -1.28
+    assert menu["hotel"]["lat"] == 0.57
+
+
+async def test_hotel_location_must_be_within_20km_of_bungoma(client, hotel_a):
+    _, headers = hotel_a
+    far = await client.put(f"{API}/settings", headers=headers, json={"lat": -1.28, "lng": 36.82})  # Nairobi
+    assert far.status_code == 422
+    edge = await client.put(f"{API}/settings", headers=headers, json={"lat": 0.5636 + 0.19, "lng": 34.5606})  # ~21 km
+    assert edge.status_code == 422
+    near = await client.put(f"{API}/settings", headers=headers, json={"lat": 0.5636 + 0.15, "lng": 34.5606})  # ~16.6 km
+    assert near.status_code == 200
