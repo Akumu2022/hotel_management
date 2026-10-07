@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../api.dart';
 import '../store.dart';
 import '../util.dart';
+import 'shell.dart';
 import 'track.dart';
 
 class CheckoutScreen extends StatefulWidget {
@@ -19,9 +20,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   late final _phone = TextEditingController(text: s.phone);
   late final _landmark = TextEditingController(text: s.landmark);
   final _promo = TextEditingController();
-  final _idem = '${DateTime.now().microsecondsSinceEpoch}-${Random().nextInt(1 << 32)}';
+  final _idem = '${DateTime.now().microsecondsSinceEpoch}-${Random().nextInt(0x7fffffff)}';
 
-  String type = 'delivery'; // delivery | pickup | eat_in
+  late String type = s.mode; // delivery | pickup | eat_in
   String feeMode = 'included'; // included | cash (delivery only)
   String payment = 'mpesa';
   int arriveIn = 30;
@@ -79,7 +80,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       if (perm == LocationPermission.denied || perm == LocationPermission.deniedForever) {
         throw 'Allow location access to drop your delivery pin';
       }
-      final p = await Geolocator.getCurrentPosition(locationSettings: const LocationSettings(accuracy: LocationAccuracy.high));
+      final p = await Geolocator.getCurrentPosition(locationSettings: const LocationSettings(accuracy: LocationAccuracy.high))
+          .timeout(const Duration(seconds: 15), onTimeout: () => throw 'Could not get your location. Turn on GPS and try again');
       lat = p.latitude;
       lng = p.longitude;
       await _requote();
@@ -122,7 +124,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       s.remember(placed['tracking_token'], placed['code'], s.hotelName ?? '');
       s.clear();
       if (!mounted) return;
-      Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => TrackScreen(token: placed['tracking_token'])));
+      tabIndex.value = 0; // back from the order page lands on Home, like the web
+      Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (_) => TrackScreen(token: placed['tracking_token'])), (r) => r.isFirst);
     } on ApiError catch (e) {
       if (e.code == 'price_changed' && e.extra['quote'] is Map) {
         final nq = Map<String, dynamic>.from(e.extra['quote'] as Map);
@@ -152,11 +155,41 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   Widget build(BuildContext context) {
     final cart = context.watch<AppState>();
     if (cart.lines.isEmpty) {
-      return Scaffold(appBar: AppBar(title: const Text('Cart')), body: const Center(child: Text('Your cart is empty')));
+      return Scaffold(
+        appBar: AppBar(title: const Text('Cart', style: TextStyle(fontWeight: FontWeight.w800)), actions: [if (Navigator.canPop(context)) IconButton(icon: const Icon(Icons.home_outlined), onPressed: () => goHome(context))]),
+        body: Center(
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            const Text('🧺', style: TextStyle(fontSize: 56)),
+            const SizedBox(height: 8),
+            const Text('Your cart is empty', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 64, vertical: 16),
+              child: OutlinedButton(onPressed: () => goHome(context), child: const Text('Browse hotels')),
+            ),
+          ]),
+        ),
+      );
     }
     final q = quote;
     return Scaffold(
-      appBar: AppBar(title: Text('Cart · ${cart.hotelName ?? ''}')),
+      appBar: AppBar(
+        title: Text('Cart · ${cart.hotelName ?? ''}', style: const TextStyle(fontWeight: FontWeight.w800)),
+        actions: [if (Navigator.canPop(context)) IconButton(icon: const Icon(Icons.home_outlined), tooltip: 'Home', onPressed: () => goHome(context))],
+        bottom: quoting || locating ? const PreferredSize(preferredSize: Size.fromHeight(3), child: LinearProgressIndicator(minHeight: 3)) : null,
+      ),
+      // Always visible, never hidden behind the phone's gesture bar or the bottom nav.
+      bottomNavigationBar: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+          child: FilledButton(
+            style: fullWidthFilled,
+            onPressed: placing || quoting || q == null || q['too_far'] == true ? null : () => _place(),
+            child: placing
+                ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                : Text(q == null ? 'Place order' : (payment == 'cash' ? 'Place order · pay at pickup' : 'Place order · pay ${kes(q['till_amount'])}')),
+          ),
+        ),
+      ),
       body: ListView(padding: const EdgeInsets.all(16), children: [
         for (final l in cart.lines)
           ListTile(
@@ -201,11 +234,49 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             icon: const Icon(Icons.my_location),
             label: Text(lat == null ? 'Use my current location' : 'Location set · tap to refresh'),
           ),
+          if (s.places.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Wrap(spacing: 8, children: [
+              for (final p in s.places)
+                InputChip(
+                  avatar: Icon(p['label'] == 'Home' ? Icons.home_outlined : p['label'] == 'Work' ? Icons.work_outline : Icons.place_outlined, size: 18),
+                  label: Text('${p['label']}'),
+                  onPressed: () {
+                    setState(() {
+                      lat = (p['lat'] as num).toDouble();
+                      lng = (p['lng'] as num).toDouble();
+                      _landmark.text = '${p['landmark']}';
+                    });
+                    _requote();
+                  },
+                  onDeleted: () => setState(() => s.removePlace('${p['label']}')),
+                ),
+            ]),
+          ],
           const SizedBox(height: 12),
           TextField(
             controller: _landmark,
             decoration: const InputDecoration(labelText: 'Describe the spot (gate colour, building)', border: OutlineInputBorder()),
           ),
+          if (lat != null && _landmark.text.trim().length >= 3) ...[
+            const SizedBox(height: 8),
+            Row(children: [
+              const Text('Save this spot as', style: TextStyle(color: kMuted, fontSize: 13)),
+              const SizedBox(width: 8),
+              for (final l in const ['Home', 'Work', 'Other'])
+                Padding(
+                  padding: const EdgeInsets.only(right: 6),
+                  child: ActionChip(
+                    label: Text(l),
+                    visualDensity: VisualDensity.compact,
+                    onPressed: () {
+                      setState(() => s.savePlace(l, lat!, lng!, _landmark.text.trim()));
+                      toast(context, 'Saved as $l');
+                    },
+                  ),
+                ),
+            ]),
+          ],
           const SizedBox(height: 12),
           const Text('Rider fee', style: TextStyle(fontWeight: FontWeight.w600)),
           RadioListTile<String>(
@@ -256,17 +327,11 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         if (q?['too_far'] == true)
           Padding(
             padding: const EdgeInsets.only(top: 8),
-            child: Text('Too far for delivery (max ${q!['max_delivery_km']} km)', style: const TextStyle(color: Colors.red)),
+            child: Text('Too far for delivery: ${q!['distance_km']} km away (max ${q['max_delivery_km']} km). Choose Pickup or a closer spot.', style: const TextStyle(color: Colors.red)),
           ),
         if (q?['promo_error'] != null) Text('${q!['promo_error']}', style: const TextStyle(color: Colors.red)),
         if (error != null) Padding(padding: const EdgeInsets.only(top: 8), child: Text(error!, style: const TextStyle(color: Colors.red))),
-        const SizedBox(height: 16),
-        FilledButton(
-          onPressed: placing || quoting || q == null || q['too_far'] == true ? null : () => _place(),
-          child: placing
-              ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
-              : Text(q == null ? 'Place order' : (payment == 'cash' ? 'Place order · pay at pickup' : 'Place order · pay ${kes(q['till_amount'])}')),
-        ),
+        HelpButton('Hello Chakula, I need help ordering from ${cart.hotelName ?? "a hotel"}.'),
         const SizedBox(height: 24),
       ]),
     );

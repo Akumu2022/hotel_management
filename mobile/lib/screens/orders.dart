@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../api.dart';
 import '../store.dart';
 import '../util.dart';
+import 'shell.dart';
 import 'track.dart';
 
 class OrdersScreen extends StatefulWidget {
@@ -12,7 +13,7 @@ class OrdersScreen extends StatefulWidget {
 }
 
 class _OrdersScreenState extends State<OrdersScreen> {
-  late final Future<List> _rows = _load();
+  late Future<List> _rows = _load();
 
   Future<List> _load() async {
     final tokens = [for (final r in context.read<AppState>().recent) r['token']];
@@ -20,31 +21,94 @@ class _OrdersScreenState extends State<OrdersScreen> {
     return (await apiPost('/track/history', {'tokens': tokens})) as List;
   }
 
+  Future<void> _again(Json r) async {
+    try {
+      final t = await apiGet('/track/${r['token']}') as Json;
+      if (!mounted) return;
+      context.read<AppState>().orderAgain(t);
+      tabIndex.value = 2;
+      toast(context, 'Your order is back in the basket');
+    } on ApiError catch (e) {
+      if (mounted) toast(context, e.message);
+    }
+  }
+
+  static const _done = ['delivered', 'collected'];
+  static const _bad = ['expired', 'rejected', 'cancelled', 'failed_delivery'];
+
   @override
   Widget build(BuildContext context) => Scaffold(
-        appBar: AppBar(title: const Text('My orders')),
-        body: FutureBuilder<List>(
-          future: _rows,
-          builder: (context, snap) {
-            if (snap.connectionState != ConnectionState.done) return const Center(child: CircularProgressIndicator());
-            if (snap.hasError) return Center(child: Text('${snap.error}'));
-            final rows = snap.data!.cast<Json>();
-            if (rows.isEmpty) return const Center(child: Text('No orders yet'));
-            return ListView.separated(
-              itemCount: rows.length,
-              separatorBuilder: (_, __) => const Divider(height: 1),
-              itemBuilder: (_, i) {
-                final r = rows[i];
-                return ListTile(
-                  title: Text('${r['hotel_name']} · ${r['code']}'),
-                  subtitle: Text('${(r['items'] as List).join(', ')}\n${r['status']}'.replaceAll('_', ' ')),
-                  isThreeLine: true,
-                  trailing: Text(kes(r['till_amount'])),
-                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => TrackScreen(token: r['token']))),
-                );
-              },
-            );
+        appBar: AppBar(title: const Text('My orders', style: TextStyle(fontWeight: FontWeight.w800))),
+        body: RefreshIndicator(
+          color: brand,
+          onRefresh: () async {
+            setState(() => _rows = _load());
+            await _rows;
           },
+          child: FutureBuilder<List>(
+            future: _rows,
+            builder: (context, snap) {
+              if (snap.connectionState != ConnectionState.done) {
+                return ListView(padding: const EdgeInsets.all(16), children: [
+                  for (var i = 0; i < 4; i++) ...const [Skel(92), SizedBox(height: 12)],
+                ]);
+              }
+              if (snap.hasError) return ListView(children: [const SizedBox(height: 120), Center(child: Text('${snap.error}'))]);
+              final rows = snap.data!.cast<Json>();
+              if (rows.isEmpty) {
+                return ListView(children: [
+                  const SizedBox(height: 120),
+                  const Center(child: Text('🧾', style: TextStyle(fontSize: 56))),
+                  const SizedBox(height: 8),
+                  const Center(child: Text('No orders yet', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800))),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 48, vertical: 16),
+                    child: OutlinedButton(onPressed: () => tabIndex.value = 0, child: const Text('Find something tasty')),
+                  ),
+                ]);
+              }
+              return ListView.separated(
+                padding: const EdgeInsets.all(16),
+                itemCount: rows.length,
+                separatorBuilder: (_, __) => const SizedBox(height: 12),
+                itemBuilder: (_, i) {
+                  final r = rows[i];
+                  final status = '${r['status']}';
+                  final ok = _done.contains(status), bad = _bad.contains(status);
+                  return Card(
+                    clipBehavior: Clip.antiAlias,
+                    child: InkWell(
+                      onTap: () async {
+                        await Navigator.push(context, MaterialPageRoute(builder: (_) => TrackScreen(token: r['token'])));
+                        if (mounted) setState(() => _rows = _load());
+                      },
+                      child: Padding(
+                        padding: const EdgeInsets.all(14),
+                        child: Row(children: [
+                          Expanded(
+                            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                              Text('${r['hotel_name']} · ${r['code']}', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
+                              const SizedBox(height: 2),
+                              Text((r['items'] as List).join(', '), maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: kMuted, fontSize: 13)),
+                              const SizedBox(height: 8),
+                              Pill(status.replaceAll('_', ' '),
+                                  bg: ok ? const Color(0xFFDCFCE7) : bad ? const Color(0xFFFEE2E2) : const Color(0xFFFFE4D6),
+                                  fg: ok ? const Color(0xFF15803D) : bad ? const Color(0xFFB91C1C) : brand),
+                            ]),
+                          ),
+                          const SizedBox(width: 8),
+                          Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+                            Text(kes(r['till_amount']), style: const TextStyle(fontWeight: FontWeight.w800)),
+                            if (ok || bad) TextButton.icon(onPressed: () => _again(r), icon: const Icon(Icons.replay, size: 16), label: const Text('Again')),
+                          ]),
+                        ]),
+                      ),
+                    ),
+                  );
+                },
+              );
+            },
+          ),
         ),
       );
 }

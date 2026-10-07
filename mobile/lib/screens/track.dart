@@ -1,7 +1,11 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../api.dart';
+import '../store.dart';
 import '../util.dart';
+import 'rider_map.dart';
+import 'shell.dart';
 
 const _labels = {
   'awaiting_payment': 'Waiting for payment',
@@ -109,29 +113,43 @@ class _TrackScreenState extends State<TrackScreen> {
     final o = t;
     if (o == null) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Your order')),
-        body: Center(child: error != null ? Text(error!) : const CircularProgressIndicator()),
+        appBar: AppBar(title: const Text('Your order'), actions: [_homeButton(context)]),
+        body: error != null
+            ? Center(child: Text(error!))
+            : ListView(padding: const EdgeInsets.all(16), children: const [Skel(40), SizedBox(height: 14), Skel(90), SizedBox(height: 14), Skel(200)]),
       );
     }
     final status = o['status'] as String;
     final steps = o['type'] == 'delivery' ? _deliverySteps : _pickupSteps;
     final idx = steps.indexOf(status);
     return Scaffold(
-      appBar: AppBar(title: Text('Order ${o['code']}')),
+      appBar: AppBar(
+        title: Text('Order ${o['code']}'),
+        actions: [_homeButton(context)],
+        bottom: busy ? const PreferredSize(preferredSize: Size.fromHeight(3), child: LinearProgressIndicator(minHeight: 3)) : null,
+      ),
       body: RefreshIndicator(
         onRefresh: _load,
         child: ListView(padding: const EdgeInsets.all(16), children: [
           Text(o['hotel_name'], style: Theme.of(context).textTheme.titleLarge),
           const SizedBox(height: 4),
-          Chip(
-            label: Text(_labels[status] ?? status),
-            backgroundColor: _ended.contains(status) ? Colors.red.shade100 : Colors.orange.shade100,
-          ),
+          const SizedBox(height: 4),
+          Wrap(children: [
+            Pill(_labels[status] ?? status,
+                bg: _ended.contains(status) ? const Color(0xFFFEE2E2) : const Color(0xFFFFE4D6),
+                fg: _ended.contains(status) ? const Color(0xFFB91C1C) : brand),
+          ]),
+          if (!_ended.contains(status) && idx >= 0) _progress(steps, idx),
           if (o['reason'] != null) Text('${o['reason']}'),
           const SizedBox(height: 12),
           if (status == 'awaiting_payment') _payCard(o),
           if (status == 'checking_payment')
-            const Card(child: ListTile(leading: Icon(Icons.hourglass_top), title: Text('We are checking your payment'))),
+            const Card(
+              child: ListTile(
+                leading: SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2.5)),
+                title: Text('We are checking your payment'),
+              ),
+            ),
           if (o['delivery_code'] != null && (status == 'on_the_way' || status == 'picked_up'))
             Card(
               child: ListTile(
@@ -139,6 +157,8 @@ class _TrackScreenState extends State<TrackScreen> {
                 title: Text('Give the rider this code: ${o['delivery_code']}'),
               ),
             ),
+          if (o['live'] != null && o['rider_name'] != null && (status == 'on_the_way' || status == 'picked_up'))
+            Padding(padding: const EdgeInsets.only(bottom: 12), child: RiderMap(token: widget.token, live: o['live'] as Json, riderName: '${o['rider_name']}')),
           if (o['rider_name'] != null)
             Card(
               child: ListTile(
@@ -185,11 +205,43 @@ class _TrackScreenState extends State<TrackScreen> {
               onPressed: busy ? null : () => _act(() => apiPost('/track/${widget.token}/cancel'), ok: 'Order cancelled'),
               child: const Text('Cancel order'),
             ),
-          if (o['can_rate'] == true && o['rated'] != true) FilledButton(onPressed: _rate, child: const Text('Rate this order')),
+          if (o['can_rate'] == true && o['rated'] != true) FilledButton(style: fullWidthFilled, onPressed: _rate, child: const Text('Rate this order')),
+          if ((o['items'] as List).isNotEmpty && o['hotel_slug'] != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: OutlinedButton.icon(
+                icon: const Icon(Icons.replay),
+                label: const Text('Order again'),
+                onPressed: () {
+                  context.read<AppState>().orderAgain(o);
+                  tabIndex.value = 2; // Cart tab
+                  Navigator.of(context).popUntil((r) => r.isFirst);
+                  toast(context, 'Your order is back in the basket');
+                },
+              ),
+            ),
+          HelpButton('Hello Chakula, I need help with order #${o['code']} from ${o['hotel_name']}.'),
+          const SizedBox(height: 24),
         ]),
       ),
     );
   }
+
+  Widget _homeButton(BuildContext context) => IconButton(icon: const Icon(Icons.home_outlined), tooltip: 'Home', onPressed: () => goHome(context));
+
+  /// "Step 3 of 7" with a bar that fills as the order moves along.
+  Widget _progress(List<String> steps, int idx) => Padding(
+        padding: const EdgeInsets.only(top: 12),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text('Step ${idx + 1} of ${steps.length}', style: const TextStyle(color: kMuted, fontSize: 13, fontWeight: FontWeight.w600)),
+          const SizedBox(height: 6),
+          TweenAnimationBuilder<double>(
+            tween: Tween(end: (idx + 1) / steps.length),
+            duration: const Duration(milliseconds: 600),
+            builder: (_, v, __) => ClipRRect(borderRadius: BorderRadius.circular(99), child: LinearProgressIndicator(value: v, minHeight: 8, backgroundColor: const Color(0xFFFFE4D6))),
+          ),
+        ]),
+      );
 
   Widget _payCard(Json o) => Card(
         color: Colors.orange.shade50,
@@ -210,8 +262,9 @@ class _TrackScreenState extends State<TrackScreen> {
             ),
             const SizedBox(height: 8),
             FilledButton(
+              style: fullWidthFilled,
               onPressed: busy ? null : () => _act(() => apiPost('/track/${widget.token}/payment-code', {'code': _code.text.trim().toUpperCase()})),
-              child: const Text('Submit code'),
+              child: busy ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Text('Submit code'),
             ),
           ]),
         ),

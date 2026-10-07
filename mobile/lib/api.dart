@@ -1,5 +1,7 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart' show ValueNotifier;
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 
 /// Set with --dart-define=API_BASE=https://your.domain/api/v1 for real builds.
 /// 10.0.2.2 is the host machine as seen from the Android emulator.
@@ -40,6 +42,30 @@ Future<dynamic> _send(String method, String path, {Object? body, Map<String, Str
   }
 }
 
-Future<dynamic> apiGet(String path) => _send('GET', path);
+/// True while the screen is showing saved data because the phone is offline.
+final offline = ValueNotifier<bool>(false);
+
+// Hotels, menus, offers and config are saved after every good load and used when the phone is
+// offline. Orders, payments and tracking are never cached.
+bool _cacheable(String p) => p.startsWith('/hotels') || p == '/offers' || p == '/config';
+
+Future<dynamic> apiGet(String path) async {
+  if (!_cacheable(path)) return _send('GET', path);
+  final prefs = await SharedPreferences.getInstance();
+  try {
+    final data = await _send('GET', path);
+    offline.value = false;
+    prefs.setString('c:$path', jsonEncode(data));
+    return data;
+  } on ApiError catch (e) {
+    final raw = prefs.getString('c:$path');
+    if (e.status == 0 && raw != null) {
+      offline.value = true;
+      return jsonDecode(raw);
+    }
+    rethrow;
+  }
+}
+
 Future<dynamic> apiPost(String path, [Object? body, Map<String, String>? headers]) =>
     _send('POST', path, body: body ?? {}, headers: headers);

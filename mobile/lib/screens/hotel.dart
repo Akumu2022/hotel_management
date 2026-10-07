@@ -3,8 +3,8 @@ import 'package:provider/provider.dart';
 import '../api.dart';
 import '../store.dart';
 import '../util.dart';
+import 'shell.dart';
 import 'checkout.dart';
-import 'home.dart' show absUrl;
 
 class HotelScreen extends StatefulWidget {
   final String slug;
@@ -98,13 +98,14 @@ class _HotelScreenState extends State<HotelScreen> {
   Widget build(BuildContext context) {
     final cart = context.watch<AppState>();
     return Scaffold(
-      appBar: AppBar(title: const Text('Menu')),
+      appBar: AppBar(title: const Text('Menu', style: TextStyle(fontWeight: FontWeight.w800)), actions: [IconButton(icon: const Icon(Icons.home_outlined), tooltip: 'Home', onPressed: () => goHome(context))]),
       bottomNavigationBar: cart.count == 0
           ? null
           : SafeArea(
               child: Padding(
                 padding: const EdgeInsets.all(12),
                 child: FilledButton(
+                  style: fullWidthFilled,
                   onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CheckoutScreen())),
                   child: Text('View cart · ${cart.count} items · ~${kes(cart.estimate)}'),
                 ),
@@ -113,48 +114,122 @@ class _HotelScreenState extends State<HotelScreen> {
       body: FutureBuilder<Json>(
         future: _menu,
         builder: (context, snap) {
-          if (snap.connectionState != ConnectionState.done) return const Center(child: CircularProgressIndicator());
+          if (snap.connectionState != ConnectionState.done) {
+            return ListView(padding: const EdgeInsets.all(16), children: [
+              const Skel(130),
+              for (var i = 0; i < 5; i++) ...const [SizedBox(height: 12), Skel(96)],
+            ]);
+          }
           if (snap.hasError) return Center(child: Text('${snap.error}'));
           final hotel = snap.data!['hotel'] as Json;
           final open = hotel['state'] == 'open' || hotel['state'] == 'closing_soon';
-          return ListView(children: [
-            ListTile(
-              title: Text(hotel['name'], style: Theme.of(context).textTheme.headlineSmall),
-              subtitle: Text(open ? 'Open · ~${hotel['prep_minutes']} min prep' : 'Not taking orders right now'),
-            ),
-            for (final c in (snap.data!['categories'] as List).cast<Json>()) ...[
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
-                child: Text(c['name'], style: Theme.of(context).textTheme.titleMedium),
+          final accent = accentOf(hotel['accent_color']);
+          final cats = (snap.data!['categories'] as List).cast<Json>();
+          return CustomScrollView(slivers: [
+            SliverToBoxAdapter(
+              child: Container(
+                margin: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+                height: 130,
+                clipBehavior: Clip.antiAlias,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(24),
+                  gradient: LinearGradient(colors: [accent, Color.lerp(accent, Colors.black, .55)!]),
+                ),
+                child: Stack(fit: StackFit.expand, children: [
+                  if (hotel['cover_url'] != null) NetImage(hotel['cover_url']),
+                  const DecoratedBox(
+                    decoration: BoxDecoration(gradient: LinearGradient(colors: [Colors.transparent, kMuted], begin: Alignment.center, end: Alignment.bottomCenter)),
+                  ),
+                  Positioned(
+                    left: 16,
+                    bottom: 12,
+                    right: 16,
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Text(hotel['name'], style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w800)),
+                      Text(open ? 'Open · ~${hotel['prep_minutes']} min prep' : 'Not taking orders right now', style: const TextStyle(color: Colors.white70)),
+                    ]),
+                  ),
+                ]),
               ),
-              for (final p in (c['products'] as List).cast<Json>())
-                Builder(builder: (_) {
-                  final sold = p['is_sold_out'] == true;
-                  final img = (p['thumb_url'] ?? p['image_url']) as String?;
-                  return ListTile(
-                    enabled: open && !sold,
-                    leading: img == null
-                        ? const SizedBox(width: 56, child: Icon(Icons.fastfood))
-                        : ClipRRect(
-                            borderRadius: BorderRadius.circular(8),
-                            child: Image.network(absUrl(img), width: 56, height: 56, fit: BoxFit.cover,
-                                errorBuilder: (_, __, ___) => const SizedBox(width: 56, child: Icon(Icons.fastfood))),
-                          ),
-                    title: Text(p['name']),
-                    subtitle: Text(sold ? 'Sold out' : (p['description'] as String), maxLines: 2, overflow: TextOverflow.ellipsis),
-                    trailing: p['discount_price'] != null
-                        ? Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.end, children: [
-                            Text(kes(p['discount_price']), style: const TextStyle(fontWeight: FontWeight.bold)),
-                            Text(kes(p['price']), style: const TextStyle(decoration: TextDecoration.lineThrough, fontSize: 12)),
-                          ])
-                        : Text(kes(p['price']), style: const TextStyle(fontWeight: FontWeight.bold)),
-                    onTap: () => _pick(hotel, p),
-                  );
-                }),
+            ),
+            for (final c in cats) ...[
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 20, 16, 8),
+                  child: Text(c['name'], style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+                ),
+              ),
+              SliverPadding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                sliver: SliverList.separated(
+                  itemCount: (c['products'] as List).length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 10),
+                  itemBuilder: (_, i) {
+                    final p = (c['products'] as List)[i] as Json;
+                    return _ProductTile(p, enabled: open && p['is_sold_out'] != true, onTap: () => _pick(hotel, p));
+                  },
+                ),
+              ),
             ],
-            const SizedBox(height: 24),
+            const SliverToBoxAdapter(child: SizedBox(height: 32)),
           ]);
         },
+      ),
+    );
+  }
+}
+
+class _ProductTile extends StatelessWidget {
+  final Json p;
+  final bool enabled;
+  final VoidCallback onTap;
+  const _ProductTile(this.p, {required this.enabled, required this.onTap});
+  @override
+  Widget build(BuildContext context) {
+    final sold = p['is_sold_out'] == true;
+    final img = (p['thumb_url'] ?? p['image_url']) as String?;
+    final deal = p['discount_price'] != null;
+    return Opacity(
+      opacity: enabled ? 1 : .5,
+      child: Card(
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: enabled ? onTap : null,
+          child: Padding(
+            padding: const EdgeInsets.all(10),
+            child: Row(children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(14),
+                child: NetImage(img, width: 76, height: 76, fallback: Container(color: const Color(0xFFFFEDE3), child: const Icon(Icons.restaurant, color: brand))),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(p['name'], maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+                  if ((p['description'] as String).isNotEmpty)
+                    Text(p['description'], maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: kMuted, fontSize: 13)),
+                  const SizedBox(height: 6),
+                  sold
+                      ? const Text('Sold out', style: TextStyle(color: kMuted, fontWeight: FontWeight.w700))
+                      : Row(children: [
+                          Text(kes(deal ? p['discount_price'] : p['price']), style: const TextStyle(fontWeight: FontWeight.w800, color: brand)),
+                          if (deal) ...[
+                            const SizedBox(width: 6),
+                            Text(kes(p['price']), style: const TextStyle(decoration: TextDecoration.lineThrough, fontSize: 12, color: kMuted)),
+                          ],
+                        ]),
+                ]),
+              ),
+              if (enabled)
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(color: brand, borderRadius: BorderRadius.circular(12)),
+                  child: const Icon(Icons.add, color: Colors.white),
+                ),
+            ]),
+          ),
+        ),
       ),
     );
   }
