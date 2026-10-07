@@ -25,7 +25,7 @@ Future<dynamic> _send(String method, String path, {Object? body, Map<String, Str
   try {
     final req = http.Request(method, uri)..headers.addAll(h);
     if (body != null) req.body = jsonEncode(body);
-    final res = await http.Response.fromStream(await req.send().timeout(const Duration(seconds: 20)));
+    final res = await http.Response.fromStream(await req.send().timeout(Duration(seconds: path == '/orders' ? 60 : 20)));
     final text = utf8.decode(res.bodyBytes);
     final data = text.isEmpty ? null : jsonDecode(text);
     if (res.statusCode >= 400) {

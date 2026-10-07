@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
@@ -20,7 +21,6 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   late final _phone = TextEditingController(text: s.phone);
   late final _landmark = TextEditingController(text: s.landmark);
   final _promo = TextEditingController();
-  final _idem = '${DateTime.now().microsecondsSinceEpoch}-${Random().nextInt(0x7fffffff)}';
 
   late String type = s.mode; // delivery | pickup | eat_in
   String feeMode = 'included'; // included | cash (delivery only)
@@ -105,21 +105,28 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       error = null;
     });
     try {
-      final placed = await apiPost(
-        '/orders',
-        {
-          ..._base,
-          'name': _name.text.trim(),
-          'phone': _phone.text.trim(),
-          'payment_method': payment,
-          'landmark': type == 'delivery' ? _landmark.text.trim() : null,
-          'arrive_at': type == 'eat_in'
-              ? DateTime.now().add(Duration(minutes: arriveIn)).toUtc().toIso8601String()
-              : null,
-          'expected_total': expected ?? q['till_amount'],
-        },
-        {'Idempotency-Key': _idem},
-      ) as Json;
+      // The same checkout (same cart, details and total) keeps the same key, even after leaving the
+      // screen or a timeout, so a retry returns the first order instead of creating a second one.
+      final base = {
+        ..._base,
+        'name': _name.text.trim(),
+        'phone': _phone.text.trim(),
+        'payment_method': payment,
+        'landmark': type == 'delivery' ? _landmark.text.trim() : null,
+        'expected_total': expected ?? q['till_amount'],
+      };
+      final sig = jsonEncode(base);
+      var pend = s.pending;
+      if (pend == null || pend['sig'] != sig) {
+        pend = {
+          'sig': sig,
+          'key': '${DateTime.now().microsecondsSinceEpoch}-${Random().nextInt(0x7fffffff)}',
+          'arrive': type == 'eat_in' ? DateTime.now().add(Duration(minutes: arriveIn)).toUtc().toIso8601String() : null,
+        };
+        s.setPending(pend);
+      }
+      final placed = await apiPost('/orders', {...base, 'arrive_at': pend['arrive']}, {'Idempotency-Key': '${pend['key']}'}) as Json;
+      s.setPending(null);
       s.saveProfile(_name.text.trim(), _phone.text.trim(), _landmark.text.trim(), lat, lng);
       s.remember(placed['tracking_token'], placed['code'], s.hotelName ?? '');
       s.clear();
@@ -194,8 +201,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         for (final l in cart.lines)
           ListTile(
             contentPadding: EdgeInsets.zero,
-            title: Text(l.name),
-            subtitle: l.optionsLabel.isEmpty ? null : Text(l.optionsLabel),
+            title: Text(l.name, style: kItem),
+            subtitle: l.optionsLabel.isEmpty ? null : Text(l.optionsLabel, style: kLabel),
             trailing: Row(mainAxisSize: MainAxisSize.min, children: [
               IconButton(icon: const Icon(Icons.remove_circle_outline), onPressed: () { cart.setQty(l, l.quantity - 1); _requote(); }),
               Text('${l.quantity}'),
@@ -278,7 +285,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             ]),
           ],
           const SizedBox(height: 12),
-          const Text('Rider fee', style: TextStyle(fontWeight: FontWeight.w600)),
+          const Text('Rider fee', style: kSection),
           RadioListTile<String>(
             contentPadding: EdgeInsets.zero,
             value: 'included',
@@ -346,9 +353,9 @@ class _Totals extends StatelessWidget {
   Widget row(String l, num v, {bool bold = false, bool minus = false}) => Padding(
         padding: const EdgeInsets.symmetric(vertical: 2),
         child: Row(children: [
-          Text(l, style: TextStyle(fontWeight: bold ? FontWeight.bold : null)),
+          Text(l, style: bold ? kSection : kBody),
           const Spacer(),
-          Text('${minus ? '-' : ''}${kes(v)}', style: TextStyle(fontWeight: bold ? FontWeight.bold : null)),
+          Text('${minus ? '-' : ''}${kes(v)}', style: bold ? kTitle.copyWith(color: brand) : kBody.copyWith(fontWeight: FontWeight.w600)),
         ]),
       );
 

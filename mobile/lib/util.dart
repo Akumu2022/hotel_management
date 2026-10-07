@@ -7,6 +7,13 @@ const brandDark = Color(0xFF7A1D00);
 const ink = Color(0xFF18181B);
 const kMuted = Color(0xFF8A8A8F); // secondary text that reads on both light and dark
 
+// One set of text styles so every screen reads the same.
+const kTitle = TextStyle(fontSize: 20, fontWeight: FontWeight.w800);
+const kSection = TextStyle(fontSize: 16, fontWeight: FontWeight.w800);
+const kItem = TextStyle(fontSize: 15, fontWeight: FontWeight.w700);
+const kBody = TextStyle(fontSize: 14);
+const kLabel = TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: kMuted);
+
 String kes(num n) => 'KES ${n.round().toString().replaceAllMapped(RegExp(r'\B(?=(\d{3})+(?!\d))'), (_) => ',')}';
 
 void toast(BuildContext c, String m) =>

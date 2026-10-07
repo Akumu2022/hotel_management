@@ -27,6 +27,7 @@ class AppState extends ChangeNotifier {
   List<Map<String, dynamic>> recent = []; // {token, code, hotel_name, at}
   List<Map<String, dynamic>> places = []; // {label, lat, lng, landmark}: Home / Work / Other
   String mode = 'delivery'; // order type the checkout opens with
+  Map<String, dynamic>? pending; // {sig, key, arrive}: checkout in flight, so a retry can't create a 2nd order
   ThemeMode themeMode = ThemeMode.system;
 
   Future<void> load() async {
@@ -45,6 +46,8 @@ class AppState extends ChangeNotifier {
       recent = [for (final r in (jsonDecode(_p.getString('recent') ?? '[]') as List)) Map<String, dynamic>.from(r)];
       places = [for (final r in (jsonDecode(_p.getString('places') ?? '[]') as List)) Map<String, dynamic>.from(r)];
       mode = _p.getString('mode') ?? 'delivery';
+      final pd = _p.getString('pending');
+      pending = pd == null ? null : Map<String, dynamic>.from(jsonDecode(pd) as Map);
       themeMode = ThemeMode.values.firstWhere((m) => m.name == _p.getString('theme'), orElse: () => ThemeMode.system);
     } catch (_) {}
   }
@@ -55,6 +58,7 @@ class AppState extends ChangeNotifier {
     _p.setString('recent', jsonEncode(recent));
     _p.setString('places', jsonEncode(places));
     _p.setString('mode', mode);
+    pending == null ? _p.remove('pending') : _p.setString('pending', jsonEncode(pending));
     _p.setString('theme', themeMode.name);
     notifyListeners();
   }
@@ -103,6 +107,11 @@ class AppState extends ChangeNotifier {
       {'token': token, 'code': code, 'hotel_name': hotel, 'at': DateTime.now().toIso8601String()},
       ...recent.where((r) => r['token'] != token),
     ].take(200).toList();
+    _save();
+  }
+
+  void setPending(Map<String, dynamic>? p) {
+    pending = p;
     _save();
   }
 
