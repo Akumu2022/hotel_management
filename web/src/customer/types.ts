@@ -173,3 +173,14 @@ export type PublicConfig = {
   max_delivery_km: number;
   delivery_mode: "area" | "distance";
 };
+
+export type SearchHit = {
+  hotel_slug: string;
+  hotel_name: string;
+  product_id: string;
+  name: string;
+  category: string;
+  price: number;
+  is_sold_out: boolean;
+  thumb_url: string | null;
+};

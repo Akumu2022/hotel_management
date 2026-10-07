@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import clsx from "clsx";
 import { ArrowLeft, Bike, ChevronDown, Clock, Minus, Phone, Plus, Search, Store, Timer, X } from "lucide-react";
 import { useMemo, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 
 import { ErrorNote, Skeleton } from "../components/ui";
 import { api } from "../lib/api";
@@ -223,7 +223,8 @@ export function HotelPage() {
   const { slug = "" } = useParams();
   const menu = useQuery({ queryKey: ["menu", slug], queryFn: () => api.get<Menu>(`/hotels/${slug}/menu`) });
   const [category, setCategory] = useState("all");
-  const [search, setSearch] = useState("");
+  const [params] = useSearchParams();
+  const [search, setSearch] = useState(params.get("q") ?? "");
   const [sort, setSort] = useState<Sort>("popular");
   const [optionsFor, setOptionsFor] = useState<MenuProduct | null>(null);
   const [conflict, setConflict] = useState<null | (() => void)>(null);

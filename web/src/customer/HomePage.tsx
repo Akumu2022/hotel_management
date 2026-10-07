@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import clsx from "clsx";
-import { ArrowRight, Bike, Clock, Flame, Star, Store, Timer, UtensilsCrossed } from "lucide-react";
+import { ArrowRight, Bike, Clock, Flame, Search, Star, Store, Timer, UtensilsCrossed, X } from "lucide-react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
 import { ErrorNote, Skeleton } from "../components/ui";
@@ -12,7 +13,8 @@ import { useOrderMode } from "./store";
 import { InstallBanner } from "./InstallBanner";
 import { StatusChip } from "./HotelPage";
 import { useRecentOrders } from "./store";
-import type { PublicHotel, PublicOffer } from "./types";
+import { money } from "../lib/format";
+import type { PublicHotel, PublicOffer, SearchHit } from "./types";
 
 function HotelCard({ hotel }: { hotel: PublicHotel }) {
   const t = useT();
@@ -96,11 +98,56 @@ function OfferBanner({ offer: o, cta }: { offer: PublicOffer; cta: string }) {
   );
 }
 
+function DishSearch({ q }: { q: string }) {
+  const t = useT();
+  const [term, setTerm] = useState(q);
+  useEffect(() => {
+    const id = setTimeout(() => setTerm(q.trim()), 250);
+    return () => clearTimeout(id);
+  }, [q]);
+  const hits = useQuery({
+    queryKey: ["search", term],
+    queryFn: () => api.get<SearchHit[]>(`/search?q=${encodeURIComponent(term)}`),
+    enabled: term.length > 0,
+    placeholderData: (prev) => prev,
+  });
+  if (!term) return null;
+  if (hits.isLoading) return <Skeleton className="h-24 rounded-2xl" />;
+  if (hits.error) return <ErrorNote error={hits.error} />;
+  if (!hits.data?.length)
+    return <p className="rounded-2xl border border-dashed border-line bg-surface px-4 py-8 text-center text-sm text-muted">{t("No dish matches “{q}”", { q: term })}</p>;
+  return (
+    <ul className="divide-y divide-line overflow-hidden rounded-2xl bg-surface ring-1 ring-line">
+      {hits.data.map((h) => (
+        <li key={h.product_id}>
+          <Link to={`/h/${h.hotel_slug}?q=${encodeURIComponent(term)}`} className="flex items-center gap-3 p-3 hover:bg-subtle">
+            {h.thumb_url ? (
+              <img src={h.thumb_url} alt="" className="size-14 shrink-0 rounded-xl object-cover" />
+            ) : (
+              <span className="flex size-14 shrink-0 items-center justify-center rounded-xl bg-subtle text-2xl">🍽️</span>
+            )}
+            <span className="min-w-0 flex-1">
+              <span className="block truncate font-semibold">{h.name}</span>
+              <span className="block truncate text-xs text-muted">{h.hotel_name} · {h.category}</span>
+            </span>
+            <span className="shrink-0 text-right text-sm font-bold">
+              {h.is_sold_out ? <span className="text-xs font-semibold text-muted">{t("Sold out")}</span> : money(h.price)}
+            </span>
+          </Link>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 export function HomePage() {
   const t = useT();
   const hotels = useQuery({ queryKey: ["hotels"], queryFn: () => api.get<PublicHotel[]>("/hotels"), refetchInterval: 60_000 });
   const offers = useQuery({ queryKey: ["offers"], queryFn: () => api.get<PublicOffer[]>("/offers") });
   const recent = useRecentOrders();
+  const [searching, setSearching] = useState(false);
+  const [q, setQ] = useState("");
+  const showSearch = searching || q.length > 0;
 
   return (
     <>
@@ -143,8 +190,35 @@ export function HomePage() {
         ) : null}
 
         <section className="mt-6">
-          <h2 className="mb-3 text-lg font-semibold">{t("Hotels near you")}</h2>
-          {hotels.isLoading ? (
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <h2 className="text-lg font-semibold">{t("Hotels near you")}</h2>
+            <button
+              type="button"
+              onClick={() => { setSearching((v) => !v); setQ(""); }}
+              aria-label={t("Search")}
+              className="flex h-10 items-center gap-2 rounded-full bg-brand pr-5 pl-4 text-sm font-bold text-white shadow-md shadow-brand/25 transition-transform hover:scale-105"
+            >
+              {showSearch ? <X className="size-5" /> : <Search className="size-5" />}
+              {showSearch ? t("Close") : t("Search")}
+            </button>
+          </div>
+          {showSearch ? (
+            <div className="mb-4 space-y-3">
+              <div className="relative">
+                <Search className="pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-muted" />
+                <input
+                  autoFocus
+                  value={q}
+                  onChange={(e) => setQ(e.target.value)}
+                  placeholder={t("Search food, e.g. pizza")}
+                  aria-label={t("Search")}
+                  className="h-11 w-full rounded-full border border-line bg-surface pr-4 pl-10 text-sm outline-none focus:border-brand"
+                />
+              </div>
+              <DishSearch q={q} />
+            </div>
+          ) : null}
+          {showSearch && q.trim() ? null : hotels.isLoading ? (
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
               {[0, 1, 2].map((i) => (
                 <Skeleton key={i} className="aspect-[16/12] rounded-2xl" />

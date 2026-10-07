@@ -3,14 +3,14 @@
 import hashlib
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Header, Response
+from fastapi import APIRouter, Depends, Header, Query, Response
 from sqlalchemy import or_, select
 
 from app.api.deps import Session
 from app.core.errors import not_found
 from app.core.time import utcnow
-from app.models import Hotel, Offer
-from app.schemas.catalogue import Menu, PublicHotel, PublicOffer
+from app.models import Category, Hotel, Offer, Product
+from app.schemas.catalogue import Menu, PublicHotel, PublicOffer, SearchHit
 from app.services import catalogue, media, ratings, settings
 from app.services.media import Storage
 
@@ -66,6 +66,39 @@ async def get_menu(
     if if_none_match == etag:
         return Response(status_code=304, headers={"ETag": etag, "Cache-Control": "no-cache"})
     return menu
+
+
+@router.get("/search", response_model=list[SearchHit])
+async def search_dishes(session: Session, storage: StorageDep, q: Annotated[str, Query(max_length=60)] = ""):
+    """Keyword search across every active hotel's live menu (dish, description or category)."""
+    words = [w for w in q.lower().split() if w][:5]
+    if not words:
+        return []
+    stmt = (
+        select(Product, Category, Hotel)
+        .join(Category, Category.id == Product.category_id)
+        .join(Hotel, Hotel.id == Product.hotel_id)
+        .where(Hotel.status == "active", Product.is_archived.is_(False))
+    )
+    for w in words:
+        like = f"%{w.replace('%', '').replace('_', '')}%"
+        stmt = stmt.where(
+            or_(Product.name.ilike(like), Product.description.ilike(like), Category.name.ilike(like))
+        )
+    rows = (await session.execute(stmt.order_by(Product.is_sold_out, Product.name).limit(60))).all()
+    return [
+        SearchHit(
+            hotel_slug=h.slug,
+            hotel_name=h.name,
+            product_id=p.id,
+            name=p.name,
+            category=c.name,
+            price=p.price,
+            is_sold_out=p.is_sold_out,
+            thumb_url=storage.url(p.thumb_key) if p.thumb_key else None,
+        )
+        for p, c, h in rows
+    ]
 
 
 @router.get("/offers", response_model=list[PublicOffer])

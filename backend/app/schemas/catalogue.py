@@ -367,6 +367,17 @@ class Menu(Schema):
     categories: list[MenuCategory]
 
 
+class SearchHit(Schema):
+    hotel_slug: str
+    hotel_name: str
+    product_id: uuid.UUID
+    name: str
+    category: str
+    price: int
+    is_sold_out: bool
+    thumb_url: str | None
+
+
 class PublicOffer(Schema):
     id: uuid.UUID
     hotel_slug: str
