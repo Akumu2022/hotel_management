@@ -4,6 +4,7 @@ from datetime import datetime, time
 from sqlalchemy import (
     Boolean,
     CheckConstraint,
+    DateTime,
     Float,
     ForeignKey,
     Integer,
@@ -35,6 +36,11 @@ class Hotel(Base):
     slug: Mapped[str] = mapped_column(String(80), unique=True)
     phone: Mapped[str] = mapped_column(String(12))
     till_number: Mapped[str] = mapped_column(String(20), unique=True)
+    # The business name M-Pesa shows for this Till, and when the Chakula team checked the hotel
+    # (who owns it, that the Till is theirs). Only the super admin sets either. Changing the Till
+    # number clears both, so a hijacked hotel login can't quietly point customers at another Till.
+    till_name: Mapped[str | None] = mapped_column(String(80))
+    verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     commission_bp: Mapped[int | None] = mapped_column(Integer)
     service_fee: Mapped[int | None] = mapped_column(Integer)
     cash_pickup_enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")

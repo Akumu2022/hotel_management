@@ -8,6 +8,7 @@ from sqlalchemy.exc import IntegrityError
 from app.api.deps import Session, SuperAdmin
 from app.api.pagination import paginate
 from app.core.errors import AppError, not_found
+from app.core.time import utcnow
 from app.core.security import hash_password
 from app.models import Hotel, User
 from app.schemas.admin import (
@@ -101,7 +102,9 @@ async def list_hotels(_: SuperAdmin, session: Session, cursor: str | None = None
 async def create_hotel(body: HotelCreate, admin: SuperAdmin, session: Session):
     """Only the owner creates hotels, optionally with the hotel admin's login, who must
     choose their own password at first login."""
-    hotel = Hotel(**hotel_values(body))
+    values = hotel_values(body)
+    verified = values.pop("verified", False)
+    hotel = Hotel(**values, verified_at=utcnow() if verified else None)
     session.add(hotel)
     try:
         await session.flush()
@@ -137,12 +140,24 @@ async def patch_hotel(hotel_id: uuid.UUID, body: HotelPatch, admin: SuperAdmin, 
     hotel = await session.get(Hotel, hotel_id, with_for_update=True)
     if hotel is None:
         raise not_found("Hotel not found")
+    values = hotel_values(body)
+    verified = values.pop("verified", None)
     changes = {}
-    for key, value in hotel_values(body).items():
+    for key, value in values.items():
         old = getattr(hotel, key)
         if old != value:
             changes[key] = {"old": old, "new": value}
             setattr(hotel, key, value)
+    # A changed Till (number or name) is no longer what was checked: it needs checking again.
+    if verified is None and ("till_number" in changes or "till_name" in changes) and hotel.verified_at:
+        changes["verified"] = {"old": True, "new": False}
+        hotel.verified_at = None
+    elif verified is True and hotel.verified_at is None:
+        changes["verified"] = {"old": False, "new": True}
+        hotel.verified_at = utcnow()
+    elif verified is False and hotel.verified_at is not None:
+        changes["verified"] = {"old": True, "new": False}
+        hotel.verified_at = None
     try:
         await session.flush()
     except IntegrityError as e:

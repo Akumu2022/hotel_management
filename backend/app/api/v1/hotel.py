@@ -428,6 +428,8 @@ async def _settings_out(session, hotel: Hotel, storage: Storage) -> HotelSetting
         name=hotel.name,
         phone=hotel.phone,
         till_number=hotel.till_number,
+        till_name=hotel.till_name,
+        verified=hotel.verified_at is not None,
         cash_pickup_enabled=hotel.cash_pickup_enabled,
         accepting_orders=hotel.accepting_orders,
         status=hotel.status,
@@ -487,6 +489,10 @@ async def put_settings(
             )
     for key, value in data.items():
         setattr(hotel, key, value)
+    if "till_number" in identity:
+        # The new Till hasn't been checked by Chakula, and the old Till's name no longer applies.
+        hotel.till_name = None
+        hotel.verified_at = None
     if identity:
         try:
             await session.flush()

@@ -21,6 +21,8 @@ DETAILS = {
     "next_of_kin": "Nafula Barasa",
     "next_of_kin_phone": "0733999888",
     "residence_area": "Kanduyi, near the stage",
+    "bike_plate": "KMFB 123C",
+    "bike_description": "Red Boxer 150 with a black delivery box",
     "consent": "true",
 }
 
@@ -75,7 +77,7 @@ async def test_one_submission_creates_a_pending_application(client, db, stores):
         "254733111222",
         "pending",
     )
-    assert me["photos"] == {"id_front": True, "id_back": True, "selfie": True}
+    assert me["photos"] == {"id_front": True, "id_back": True, "selfie": True, "logbook": False}
     assert "/riders/" in me["photo_url"]
     # ID photos never reach the public store; only the small selfie photo does.
     assert all("id_" not in k for k in public.files) and len(private.files) == 3
@@ -93,6 +95,9 @@ async def test_one_submission_creates_a_pending_application(client, db, stores):
         ({"national_id": "12AB"}, "national_id"),
         ({"phone": "12345"}, "phone"),
         ({"password": "short"}, "password"),
+        ({"bike_plate": "12"}, "bike_plate"),  # no letters
+        ({"bike_plate": "KMFB"}, "bike_plate"),  # no digits
+        ({"bike_description": "ab"}, "bike_description"),
     ],
 )
 async def test_field_errors_name_the_field_and_create_nothing(client, db, stores, change, field):

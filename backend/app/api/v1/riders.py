@@ -44,7 +44,9 @@ async def _out(session, p: RiderProfile, storage: Storage) -> RiderOut:
         next_of_kin=p.next_of_kin,
         next_of_kin_phone=p.next_of_kin_phone,
         residence_area=p.residence_area,
-        photos={k: getattr(p, f"{k}_key") is not None for k in riders.KINDS},
+        bike_plate=p.bike_plate,
+        bike_description=p.bike_description,
+        photos={k: getattr(p, f"{k}_key") is not None for k in riders.ALL_KINDS},
         photo_url=storage.url(p.photo_key) if p.photo_key else None,
         kyc_status=p.kyc_status,
         kyc_note=p.kyc_note,
@@ -77,10 +79,13 @@ async def apply(
     next_of_kin: Annotated[str, Form()],
     next_of_kin_phone: Annotated[str, Form()],
     residence_area: Annotated[str, Form()],
+    bike_plate: Annotated[str, Form()],
+    bike_description: Annotated[str, Form()],
     consent: Annotated[bool, Form()],
     id_front: Annotated[UploadFile, File()],
     id_back: Annotated[UploadFile, File()],
     selfie: Annotated[UploadFile, File()],
+    logbook: Annotated[UploadFile | None, File()] = None,
 ):
     """The whole rider application in one go: details, ID front and back, selfie, consent.
     Creates the account as "pending" (waiting for the Chakula team) and logs the rider in."""
@@ -93,6 +98,8 @@ async def apply(
             next_of_kin=next_of_kin,
             next_of_kin_phone=next_of_kin_phone,
             residence_area=residence_area,
+            bike_plate=bike_plate,
+            bike_description=bike_description,
         )
     except ValidationError as e:
         raise RequestValidationError(
@@ -102,8 +109,16 @@ async def apply(
         kind: await f.read(media.MAX_UPLOAD_BYTES + 1)
         for kind, f in (("id_front", id_front), ("id_back", id_back), ("selfie", selfie))
     }
+    logbook_bytes = await logbook.read(media.MAX_UPLOAD_BYTES + 1) if logbook else None
     await riders.apply(
-        session, private, storage, photos=photos, consent=consent, now=utcnow(), **body.model_dump()
+        session,
+        private,
+        storage,
+        photos=photos,
+        logbook=logbook_bytes,
+        consent=consent,
+        now=utcnow(),
+        **body.model_dump(),
     )
     pair = await auth.login(session, body.phone, body.password)
     await session.commit()
@@ -128,7 +143,7 @@ async def edit_me(body: RiderDetailsIn, user: Rider, session: Session, storage: 
 
 @rider.post("/kyc/{kind}", response_model=RiderOut)
 async def upload_kyc(
-    kind: Literal["id_front", "id_back", "selfie"],
+    kind: Literal["id_front", "id_back", "selfie", "logbook"],
     user: Rider,
     session: Session,
     storage: StorageDep,
@@ -177,7 +192,7 @@ async def get_rider(rider_id: uuid.UUID, _: SuperAdmin, session: Session, storag
 @admin.get("/{rider_id}/kyc/{kind}")
 async def kyc_photo(
     rider_id: uuid.UUID,
-    kind: Literal["id_front", "id_back", "selfie"],
+    kind: Literal["id_front", "id_back", "selfie", "logbook"],
     _: SuperAdmin,
     session: Session,
     private: PrivateDep,

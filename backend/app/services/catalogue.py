@@ -95,7 +95,9 @@ def public_hotel(
         state=status.state,
         closes_at=status.closes_at,
         opens_at=status.opens_at,
-        cash_pickup_enabled=hotel.cash_pickup_enabled,
+        cash_pickup_enabled=False,  # D34: cash on pickup is no longer offered
+        verified=hotel.verified_at is not None,
+        till_name=hotel.till_name,
         lat=hotel.lat,
         lng=hotel.lng,
         prep_minutes=prep_minutes,

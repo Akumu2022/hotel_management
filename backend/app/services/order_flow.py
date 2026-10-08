@@ -21,6 +21,8 @@ from app.core.errors import AppError
 from app.models import Customer, Hotel, Order, OrderEvent
 from app.services import events, ledger, payments, settings
 
+MAX_PIN_ATTEMPTS = 5
+
 REJECT_REASONS = {
     "sold_out": "An item is sold out",
     "too_busy": "The kitchen is too busy right now",
@@ -125,7 +127,7 @@ async def ready(session, order_id, *, user_id, hotel_id, now) -> Order:
     )
 
 
-async def collected(session, order_id, *, user_id, hotel_id, now) -> Order:
+async def collected(session, order_id, *, user_id, hotel_id, now, code: str | None = None) -> Order:
     order = await _lock(session, order_id, hotel_id)
     if order.status == "collected":
         return order
@@ -133,6 +135,27 @@ async def collected(session, order_id, *, user_id, hotel_id, now) -> Order:
         raise AppError(409, "not_pickup", "Delivery orders are handed to a rider, not collected")
     if order.status != "ready":
         raise _wrong_state(order, "hand over")
+    # The customer's PIN proves the person at the counter is the one who ordered. (Orders placed
+    # before PINs existed have none and are handed over as before.)
+    if order.delivery_code:
+        if order.delivery_code_attempts >= MAX_PIN_ATTEMPTS:
+            raise AppError(
+                423, "code_locked", "Too many wrong PINs. Call the customer to confirm who they are."
+            )
+        if not code:
+            raise AppError(
+                422, "code_required", "Ask the customer for their 4-digit pickup PIN", extra={"field": "code"}
+            )
+        if code != order.delivery_code:
+            order.delivery_code_attempts += 1
+            left = MAX_PIN_ATTEMPTS - order.delivery_code_attempts
+            await session.flush()
+            raise AppError(
+                422,
+                "wrong_code",
+                f"Wrong PIN. {left} tries left." if left else "Wrong PIN. Locked: call the customer.",
+                extra={"field": "code"},
+            )
     if order.payment_method == "cash" and order.paid_at is None:
         await payments.cash_received(session, order.id, user_id, now)  # cash recorded at collection
     await _count_completed(session, order, now)

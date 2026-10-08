@@ -29,7 +29,9 @@ from app.models import Order, RiderProfile, User
 from app.services import audit, events
 from app.services.media import Storage, process_image
 
-KINDS = ("id_front", "id_back", "selfie")
+KINDS = ("id_front", "id_back", "selfie")  # required to apply
+OPTIONAL_KINDS = ("logbook",)  # the bike's logbook: helps the team verify, never required
+ALL_KINDS = KINDS + OPTIONAL_KINDS
 EDITABLE = ("draft", "rejected")
 PHOTO_SIZE = 240  # public rider photo shown to customers and hotels
 
@@ -71,6 +73,8 @@ async def register(
     next_of_kin: str,
     next_of_kin_phone: str,
     residence_area: str,
+    bike_plate: str,
+    bike_description: str,
 ) -> User:
     if next_of_kin_phone == phone:
         raise AppError(
@@ -92,6 +96,8 @@ async def register(
                     next_of_kin=next_of_kin,
                     next_of_kin_phone=next_of_kin_phone,
                     residence_area=residence_area,
+                    bike_plate=bike_plate,
+                    bike_description=bike_description,
                 )
             )
             await session.flush()
@@ -107,7 +113,7 @@ async def register(
     return user
 
 
-PHOTO_LABELS = {"id_front": "ID front", "id_back": "ID back", "selfie": "selfie"}
+PHOTO_LABELS = {"id_front": "ID front", "id_back": "ID back", "selfie": "selfie", "logbook": "logbook"}
 
 
 async def apply(
@@ -116,6 +122,7 @@ async def apply(
     public: Storage,
     *,
     photos: dict[str, bytes],
+    logbook: bytes | None = None,
     consent: bool,
     now: datetime,
     **details,
@@ -146,6 +153,17 @@ async def apply(
                 extra={"field": kind},
             ) from None
         checked[kind] = data
+    if logbook:  # optional: but if it is sent it must be a readable picture
+        try:
+            process_image(logbook)
+        except AppError:
+            raise AppError(
+                422,
+                "bad_photo",
+                "The logbook photo couldn't be read. Take it again or skip it.",
+                extra={"field": "logbook"},
+            ) from None
+        checked["logbook"] = logbook
     user = await register(session, **details)
     p = await profile(session, user.id, lock=True)
     for kind, data in checked.items():
@@ -191,7 +209,7 @@ async def update_details(session: AsyncSession, user: User, changes: dict) -> Ri
 def save_photo(
     private: PrivateStorage, public: Storage, p: RiderProfile, kind: str, data: bytes
 ) -> None:
-    if kind not in KINDS:
+    if kind not in ALL_KINDS:
         raise AppError(404, "not_found", "Unknown photo")
     _require_editable(p)
     full, _ = process_image(data)  # validates, fixes rotation, strips EXIF/GPS
@@ -218,6 +236,8 @@ async def submit(session: AsyncSession, user_id: uuid.UUID, *, consent: bool, no
         raise AppError(422, "photos_missing", f"Add your {', '.join(missing)} photo first")
     if not p.next_of_kin_phone or not p.residence_area:
         raise AppError(422, "details_missing", "Fill in your next of kin and where you live")
+    if not p.bike_plate or not p.bike_description:
+        raise AppError(422, "bike_missing", "Add your bike's number plate and a short description")
     if not consent:
         raise AppError(422, "consent_required", "Tick the box to agree to the ID check")
     p.consent_at = now

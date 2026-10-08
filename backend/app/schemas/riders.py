@@ -9,6 +9,17 @@ from app.schemas.common import Phone, Schema
 
 NationalId = Annotated[str, Field(pattern=r"^\d{6,9}$")]  # Kenyan ID / Maisha numbers
 FullName = Annotated[str, Field(min_length=5, max_length=120)]
+BikeDescription = Annotated[str, Field(min_length=3, max_length=200)]
+
+
+def _plate(v: str | None) -> str | None:
+    """"kmfb 123c" -> "KMFB123C": letters and digits only, 5-10 of them."""
+    if v is None:
+        return v
+    v = "".join(ch for ch in v.upper() if ch.isalnum())
+    if not (5 <= len(v) <= 10) or not any(c.isdigit() for c in v) or not any(c.isalpha() for c in v):
+        raise ValueError("Enter the number plate as on the bike, e.g. KMFB 123C")
+    return v
 
 
 def _two_names(v: str | None) -> str | None:
@@ -28,8 +39,11 @@ class RiderRegisterIn(Input):
     next_of_kin: FullName
     next_of_kin_phone: Phone
     residence_area: str = Field(min_length=3, max_length=200)
+    bike_plate: str
+    bike_description: BikeDescription
 
     _names = field_validator("name", "next_of_kin")(_two_names)
+    _plate = field_validator("bike_plate")(_plate)
 
 
 class RiderDetailsIn(Input):
@@ -40,8 +54,11 @@ class RiderDetailsIn(Input):
     next_of_kin: FullName | None = None
     next_of_kin_phone: Phone | None = None
     residence_area: str | None = Field(None, min_length=3, max_length=200)
+    bike_plate: str | None = None
+    bike_description: BikeDescription | None = None
 
     _names = field_validator("name", "next_of_kin")(_two_names)
+    _plate = field_validator("bike_plate")(_plate)
 
     @model_validator(mode="after")
     def _no_nulls(self):
@@ -67,6 +84,8 @@ class RiderOut(Schema):
     next_of_kin: str
     next_of_kin_phone: str | None
     residence_area: str | None
+    bike_plate: str | None = None
+    bike_description: str | None = None
     photos: dict[str, bool]  # which KYC photos are uploaded
     photo_url: str | None  # public small photo from the selfie
     kyc_status: str

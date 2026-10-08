@@ -13,7 +13,7 @@ from app.api.v1.payments import _orders_out
 from app.core.errors import AppError, not_found
 from app.core.time import utcnow
 from app.models import Hotel, Order
-from app.schemas.payments import AcceptIn, CancelIn, HotelOrderOut, RejectIn
+from app.schemas.payments import AcceptIn, CancelIn, CollectIn, HotelOrderOut, RejectIn
 from app.services import delivery, events, order_flow
 
 hotel = APIRouter(prefix="/hotel", tags=["hotel orders"])
@@ -157,10 +157,22 @@ async def handed_to_rider(order_id: uuid.UUID, user: HotelStaff, session: Sessio
 
 
 @hotel.post("/orders/{order_id}/collected", response_model=HotelOrderOut)
-async def collected(order_id: uuid.UUID, user: HotelStaff, session: Session):
-    order = await order_flow.collected(
-        session, order_id, user_id=user.id, hotel_id=user.hotel_id, now=utcnow()
-    )
+async def collected(
+    order_id: uuid.UUID, user: HotelStaff, session: Session, body: CollectIn | None = None
+):
+    try:
+        order = await order_flow.collected(
+            session,
+            order_id,
+            user_id=user.id,
+            hotel_id=user.hotel_id,
+            now=utcnow(),
+            code=body.code if body else None,
+        )
+    except AppError as e:
+        if e.code == "wrong_code":
+            await session.commit()  # keep the wrong-try count even though this is an error
+        raise
     await session.commit()
     return await _one(session, order)
 

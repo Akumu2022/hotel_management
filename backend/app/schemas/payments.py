@@ -130,6 +130,12 @@ class AcceptIn(Input):
     prep_minutes: int = Field(ge=1, le=180, strict=True)
 
 
+class CollectIn(Input):
+    """The customer's 4-digit PIN, asked for at the counter (pickup and eat in)."""
+
+    code: str | None = Field(None, pattern=r"^\d{4}$")
+
+
 class CancelIn(Input):
     reason: Literal["ran_out", "kitchen_problem", "customer_asked", "other"]
     note: str | None = Field(None, max_length=200)

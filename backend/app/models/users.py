@@ -80,6 +80,11 @@ class RiderProfile(Base):
     next_of_kin: Mapped[str] = mapped_column(String(200))  # next of kin's full name
     next_of_kin_phone: Mapped[str | None] = mapped_column(String(12))
     residence_area: Mapped[str | None] = mapped_column(String(200))
+    # The bike: number plate and a short description (colour, make) are required to apply; the
+    # logbook photo is optional. Customers and hotels can match the bike to the rider.
+    bike_plate: Mapped[str | None] = mapped_column(String(12))
+    bike_description: Mapped[str | None] = mapped_column(String(200))
+    logbook_key: Mapped[str | None] = mapped_column(String(200))  # private file, optional
     # Private storage keys (not under the public media folder).
     id_front_key: Mapped[str | None] = mapped_column(String(200))
     id_back_key: Mapped[str | None] = mapped_column(String(200))

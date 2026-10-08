@@ -153,6 +153,8 @@ class HotelOut(Schema):
     slug: str
     phone: str
     till_number: str
+    till_name: str | None = None
+    verified: bool = False
     commission_percent: float | None
     service_fee: int | None
     cash_pickup_enabled: bool
@@ -173,6 +175,7 @@ class HotelOut(Schema):
             data = {k: getattr(obj, k) for k in cls.model_fields if hasattr(obj, k)}
             bp = obj.commission_bp
             data["commission_percent"] = None if bp is None else bp_to_percent(bp)
+            data["verified"] = obj.verified_at is not None
             return data
         return obj
 
@@ -195,6 +198,8 @@ class HotelCreate(Schema):
     slug: str = Field(min_length=2, max_length=80, pattern=_SLUG)
     phone: Phone
     till_number: str = Field(pattern=_TILL)
+    till_name: str | None = Field(None, min_length=2, max_length=80)  # as M-Pesa shows it
+    verified: bool = False  # tick once you have checked the hotel and its Till
     commission_percent: Percent | None = None  # blank = global default
     service_fee: int | None = Field(None, ge=0, strict=True)
     cash_pickup_enabled: bool = True
@@ -214,6 +219,8 @@ class HotelPatch(Schema):
     name: str | None = Field(None, min_length=2, max_length=120)
     phone: Phone | None = None
     till_number: str | None = Field(None, pattern=_TILL)
+    till_name: str | None = Field(None, min_length=2, max_length=80)
+    verified: bool | None = None
     commission_percent: Percent | None = None  # explicit null clears the override
     service_fee: int | None = Field(None, ge=0, strict=True)
     cash_pickup_enabled: bool | None = None

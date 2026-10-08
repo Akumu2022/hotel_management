@@ -237,8 +237,9 @@ async def test_pickup_paid_by_sms_full_journey(client, db, w):
 
     await hotel_step(client, w, o["code"], "accept", {"prep_minutes": 15})
     assert (await hotel_alarms(client, w))["new_orders"] == 0  # accepted: stops
+    pin = (await track(client, o["tracking_token"]))["delivery_code"]  # what the customer shows
     for step in ("preparing", "ready", "collected"):
-        await hotel_step(client, w, o["code"], step)
+        await hotel_step(client, w, o["code"], step, {"code": pin} if step == "collected" else None)
     t = await track(client, o["tracking_token"])
     assert (t["status"], t["prep_minutes"]) == ("collected", 15)
     hist = (
@@ -513,25 +514,16 @@ async def test_unpaid_order_expires_and_late_payment_is_reinstated(client, db, w
     assert await hotel_alarms(client, w) == {"new_orders": 1, "payments": 0}
 
 
-async def test_cash_pickup_first_time_cap_and_collection(client, db, w):
+async def test_cash_on_pickup_is_refused_and_nothing_rings(client, db, w):
+    """D34: every order is paid first. A cash pickup is refused and the hotel is never bothered."""
     r = await client.post(
         f"{API}/orders",
         headers={"Idempotency-Key": uuid.uuid4().hex},
-        json={**order_body(w, kind="pickup", pay="cash", qty=2), "expected_total": 1320},
+        json={**order_body(w, kind="pickup", pay="cash"), "expected_total": 670},
     )
-    assert r.json()["error"]["code"] == "cash_cap"  # first-time number, over KES 1,000
-    o = await place(client, w, kind="pickup", pay="cash")
-    assert (await hotel_alarms(client, w))["new_orders"] == 1  # cash orders ring straight away
-    await hotel_step(client, w, o["code"], "accept", {"prep_minutes": 10})
-    for step in ("preparing", "ready", "collected"):
-        await hotel_step(client, w, o["code"], step)
-    oid = await order_id(db, o["code"])
-    cash = await db.scalar(
-        select(LedgerEntry.amount).where(
-            LedgerEntry.order_id == oid, LedgerEntry.entry_type == "cash_received"
-        )
-    )
-    assert cash == o["till_amount"]
+    assert r.status_code == 422
+    assert r.json()["error"]["code"] == "cash_not_accepted"
+    assert await hotel_alarms(client, w) == {"new_orders": 0, "payments": 0}
 
 
 async def test_failed_deliveries_strike_suspend_and_release_jobs(client, db, w):

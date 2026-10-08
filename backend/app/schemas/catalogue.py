@@ -277,6 +277,8 @@ class HotelSettingsOut(Schema):
     name: str
     phone: str
     till_number: str
+    till_name: str | None = None
+    verified: bool = False
     cash_pickup_enabled: bool
     accepting_orders: bool
     status: str
@@ -327,6 +329,8 @@ class PublicHotel(Schema):
     closes_at: datetime | None
     opens_at: datetime | None
     cash_pickup_enabled: bool
+    verified: bool = False  # checked by the Chakula team
+    till_name: str | None = None  # the name M-Pesa shows for the Till
     lat: float | None = None
     lng: float | None = None
     prep_minutes: int = 15  # typical (median) prep time of its dishes, for time estimates

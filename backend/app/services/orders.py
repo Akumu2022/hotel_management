@@ -266,8 +266,8 @@ def quote_out(p: Priced) -> QuoteOut:
         promo_applied=q.promo_discount_id is not None,
         promo_error=q.promo_error,
         option_b_allowed=option_b_allowed(p.customer),
-        cash_allowed=p.hotel.cash_pickup_enabled,
-        cash_cap=cash_cap(p),
+        cash_allowed=False,  # D34: every order is paid first, by M-Pesa
+        cash_cap=None,
         distance_km=p.distance_km,
         rider_fee_estimated=p.rider_fee_estimated,
         too_far=p.too_far,
@@ -312,18 +312,14 @@ async def _check_can_order(session: AsyncSession, body: OrderIn, p: Priced, now:
         raise AppError(
             409, "option_b_unavailable", "Please include the rider fee in your M-Pesa payment"
         )
-    if body.payment_method == "cash":
-        if body.type != "pickup":  # eat in is paid first
-            raise AppError(422, "cash_pickup_only", "Cash is for pickup orders only")
-        if not p.hotel.cash_pickup_enabled:
-            raise AppError(409, "cash_disabled", "This hotel only accepts M-Pesa")
-        cap = cash_cap(p)
-        if cap is not None and p.quote.till_amount > cap:
-            raise AppError(
-                409,
-                "cash_cap",
-                f"First cash orders are limited to KES {cap:,}. Pay by M-Pesa or order less.",
-            )
+    if body.payment_method != "mpesa":
+        # D34: nothing is prepared until it is paid, so nobody can order and not turn up.
+        raise AppError(
+            422,
+            "cash_not_accepted",
+            "Every order is paid first with M-Pesa, straight to the hotel's Till.",
+            extra={"field": "payment_method"},
+        )
     if body.type == "eat_in":
         soonest, latest = now + EAT_IN_MIN_NOTICE, now + EAT_IN_MAX_AHEAD
         if not soonest <= body.arrive_at <= latest:
@@ -430,7 +426,7 @@ async def place(
             eat_in_fee=q.eat_in_fee,
             arrive_at=body.arrive_at if body.type == "eat_in" else None,
             discount_id=discount_id,
-            delivery_code=f"{secrets.randbelow(10_000):04d}" if body.type == "delivery" else None,
+            delivery_code=f"{secrets.randbelow(10_000):04d}",  # handover PIN, all order types
             # Snapshot: the distance the fee was priced on; customer, hotel and rider all see it.
             distance_km=p.distance_km if body.type == "delivery" else None,
             # Cash pickup is paid at collection, so it never expires.

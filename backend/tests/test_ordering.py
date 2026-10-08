@@ -194,7 +194,6 @@ async def test_price_changed_returns_new_quote(client, db, shop):
     [
         ({"status": "paused"}, "hotel_closed"),
         ({"accepting_orders": False}, "hotel_closed"),
-        ({"cash_pickup_enabled": False}, "cash_disabled"),
     ],
 )
 async def test_hotel_state_rules(client, db, shop, change, code):
@@ -202,17 +201,7 @@ async def test_hotel_state_rules(client, db, shop, change, code):
     for k, v in change.items():
         setattr(hotel, k, v)
     await db.flush()
-    data = body(hotel, product)
-    if code == "cash_disabled":
-        data = body(
-            hotel,
-            product,
-            type="pickup",
-            rider_fee_mode="none",
-            payment_method="cash",
-            expected_total=670,
-        )
-    r = await client.post("/api/v1/orders", headers=key(), json=data)
+    r = await client.post("/api/v1/orders", headers=key(), json=body(hotel, product))
     assert r.status_code == 409
     assert r.json()["error"]["code"] == code
 
@@ -279,25 +268,48 @@ async def test_validation(client, shop, kw):
     assert r.status_code == 422, r.text
 
 
-async def test_first_time_cash_cap(client, db, shop):
+# --- Everything is paid first (D34) -------------------------------------------------------------
+
+
+@pytest.mark.parametrize("loyal", [False, True])
+@pytest.mark.parametrize("hotel_allows_cash", [True, False])
+async def test_cash_on_pickup_is_refused_for_everyone(client, db, shop, loyal, hotel_allows_cash):
+    """Nobody can order and not turn up: no order is made without M-Pesa, whatever the hotel's old
+    setting says or however many orders the customer has finished."""
     hotel, product = shop
-    pickup = {"type": "pickup", "rider_fee_mode": "none", "payment_method": "cash"}
-    big = [{"product_id": str(product.id), "quantity": 2}]  # 1,320 > 1,000 cap
-    r = await client.post(
-        "/api/v1/orders",
-        headers=key(),
-        json=body(hotel, product, lines=big, expected_total=1320, **pickup),
-    )
-    assert r.json()["error"]["code"] == "cash_cap"
-    db.add(Customer(phone="254712000111", name="Achieng", completed_orders=3))
+    hotel.cash_pickup_enabled = hotel_allows_cash
+    if loyal:
+        db.add(Customer(phone="254712000111", name="Achieng", completed_orders=3))
     await db.flush()
+    pickup = {"type": "pickup", "rider_fee_mode": "none", "payment_method": "cash"}
     r = await client.post(
-        "/api/v1/orders",
-        headers=key(),
-        json=body(hotel, product, lines=big, expected_total=1320, **pickup),
+        "/api/v1/orders", headers=key(), json=body(hotel, product, expected_total=670, **pickup)
+    )
+    assert r.status_code == 422
+    assert r.json()["error"]["code"] == "cash_not_accepted"
+    assert r.json()["error"]["field"] == "payment_method"
+    count = await db.scalar(select(func.count()).select_from(Order))
+    assert count == 0  # nothing was created
+
+
+async def test_pickup_by_mpesa_still_works_and_waits_for_payment(client, db, shop):
+    hotel, product = shop
+    pickup = {"type": "pickup", "rider_fee_mode": "none", "payment_method": "mpesa"}
+    r = await client.post(
+        "/api/v1/orders", headers=key(), json=body(hotel, product, expected_total=670, **pickup)
     )
     assert r.status_code == 201, r.text
-    assert r.json()["expires_at"] is None  # cash pickup never expires
+    assert r.json()["status"] == "awaiting_payment" and r.json()["expires_at"] is not None
+
+
+async def test_the_quote_and_the_public_hotel_say_cash_is_off(client, db, shop):
+    hotel, product = shop
+    q = await client.post(
+        "/api/v1/quotes", json={k: v for k, v in body(hotel, product).items() if k in ("hotel_slug", "lines", "type", "rider_fee_mode", "lat", "lng")}
+    )
+    assert q.status_code == 200 and q.json()["cash_allowed"] is False
+    hotels = (await client.get("/api/v1/hotels")).json()
+    assert all(h["cash_pickup_enabled"] is False for h in hotels)
 
 
 async def test_blocklist_and_option_b(client, db, shop):

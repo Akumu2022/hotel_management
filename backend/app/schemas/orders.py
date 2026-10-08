@@ -150,6 +150,8 @@ class TrackOut(Schema):
     hotel_slug: str
     hotel_phone: str
     till_number: str
+    till_name: str | None = None  # M-Pesa shows this name before the customer enters their PIN
+    hotel_verified: bool = False
     items: list[TrackItem]
     items_total: int
     order_discount: int
