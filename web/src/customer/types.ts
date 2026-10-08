@@ -11,6 +11,8 @@ export type PublicHotel = {
   closes_at: string | null;
   opens_at: string | null;
   cash_pickup_enabled: boolean;
+  verified: boolean; // checked by the Chakula team
+  till_name: string | null; // the name M-Pesa shows for the Till
   lat: number | null;
   lng: number | null;
   prep_minutes: number;
@@ -146,6 +148,8 @@ export type Track = {
   platform_bonus: number;
   bonus_kind: "stamp" | "free_delivery" | null;
   delivery_code: string | null;
+  till_name: string | null;
+  hotel_verified: boolean;
   customer_trans_code: string | null;
   distance_km: number | null;
   landmark: string | null;

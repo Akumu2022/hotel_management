@@ -229,6 +229,8 @@ export function OrdersPage() {
   const [cancelling, setCancelling] = useState<BoardOrder | null>(null);
   const [accepting, setAccepting] = useState<BoardOrder | null>(null);
   const [rejecting, setRejecting] = useState<BoardOrder | null>(null);
+  const [handing, setHanding] = useState<BoardOrder | null>(null); // pickup / eat in: waiting for the customer's PIN
+  const [pin, setPin] = useState("");
   const [note, setNote] = useState("");
 
   const refresh = useCallback(() => {
@@ -245,8 +247,21 @@ export function OrdersPage() {
     mutationFn: ({ o, action, body }: { o: BoardOrder; action: string; body?: unknown }) => api.post(`/hotel/orders/${o.id}/${action}`, body),
     onSuccess: refresh,
   });
+  // The customer reads out the 4-digit PIN shown in their app: only then is the food handed over.
+  const collect = useMutation({
+    mutationFn: ({ o, code }: { o: BoardOrder; code: string }) => api.post(`/hotel/orders/${o.id}/collected`, { code }),
+    onSuccess: () => {
+      setHanding(null);
+      setPin("");
+      refresh();
+    },
+  });
   const onAction = (o: BoardOrder, a: string) => {
-    if (a === "accept") setAccepting(o);
+    if (a === "collected") {
+      setPin("");
+      collect.reset();
+      setHanding(o);
+    } else if (a === "accept") setAccepting(o);
     else if (a === "reject") {
       setNote("");
       setRejecting(o);
@@ -295,6 +310,50 @@ export function OrdersPage() {
             ))}
           </ul>
         </section>
+      ) : null}
+
+      {/* Handover: the customer gives their 4-digit PIN (pickup and eat in) */}
+      {handing ? (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-4 sm:items-center" onClick={() => setHanding(null)}>
+          <form
+            role="dialog"
+            aria-modal="true"
+            aria-label="Customer PIN"
+            onClick={(e) => e.stopPropagation()}
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (/^\d{4}$/.test(pin)) collect.mutate({ o: handing, code: pin });
+            }}
+            className="w-full max-w-sm rounded-3xl bg-surface p-6"
+          >
+            <div className="flex items-center justify-between">
+              <h2 className="text-xl font-bold">Hand over #{handing.code}</h2>
+              <button type="button" onClick={() => setHanding(null)} aria-label="Close" className="rounded-full p-1 text-muted"><X className="size-5" /></button>
+            </div>
+            <p className="mt-1 text-sm text-muted">
+              Ask {handing.customer_name} for the 4-digit PIN shown in their app. Only hand over the food once it matches.
+            </p>
+            <input
+              autoFocus
+              inputMode="numeric"
+              autoComplete="off"
+              maxLength={4}
+              value={pin}
+              onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 4))}
+              placeholder="0000"
+              aria-label="Customer's 4-digit PIN"
+              className="money mt-4 h-16 w-full rounded-2xl border-2 border-line bg-surface text-center text-4xl font-extrabold tracking-[0.5em] outline-none focus:border-brand"
+            />
+            <ErrorNote error={collect.error} />
+            <button
+              type="submit"
+              disabled={pin.length !== 4 || collect.isPending}
+              className="mt-4 flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-ok font-semibold text-white disabled:opacity-50"
+            >
+              <PackageCheck className="size-4" /> {collect.isPending ? "Checking…" : handing.payment_method === "cash" && !handing.paid_at ? "Cash received & hand over" : handing.type === "eat_in" ? "Serve to customer" : "Hand over"}
+            </button>
+          </form>
+        </div>
       ) : null}
 
       {/* Accept: pick prep time */}

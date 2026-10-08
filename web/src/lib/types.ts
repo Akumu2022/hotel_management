@@ -69,6 +69,8 @@ export type HotelSettings = {
   name: string;
   phone: string;
   till_number: string;
+  till_name: string | null;
+  verified: boolean;
   cash_pickup_enabled: boolean;
   accepting_orders: boolean;
   status: "active" | "paused";

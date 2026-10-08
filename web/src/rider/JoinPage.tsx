@@ -12,17 +12,24 @@ import { ThemeToggle } from "../customer/CustomerLayout";
 import { ApiError, type Session, auth, request } from "../lib/api";
 import { compressImage } from "../lib/format";
 
-type Details = { name: string; national_id: string; phone: string; residence_area: string; next_of_kin: string; next_of_kin_phone: string; password: string };
-type Kind = "id_front" | "id_back" | "selfie";
+type Details = { name: string; national_id: string; phone: string; residence_area: string; next_of_kin: string; next_of_kin_phone: string; bike_plate: string; bike_description: string; password: string };
+type Kind = "id_front" | "id_back" | "selfie" | "logbook";
 type Errors = Partial<Record<keyof Details | Kind | "consent" | "form", string>>;
 
 const DRAFT = "rider-application-v1";
-const STEP_OF: Record<string, 1 | 2 | 3> = { name: 1, national_id: 1, phone: 1, residence_area: 1, next_of_kin: 1, next_of_kin_phone: 1, password: 1, id_front: 2, id_back: 2, selfie: 2, consent: 3 };
+const STEP_OF: Record<string, 1 | 2 | 3> = { name: 1, national_id: 1, phone: 1, residence_area: 1, next_of_kin: 1, next_of_kin_phone: 1, bike_plate: 1, bike_description: 1, password: 1, id_front: 2, id_back: 2, selfie: 2, logbook: 2, consent: 3 };
 const PHOTOS: { kind: Kind; title: string; hint: string; icon: ReactNode; capture: "environment" | "user" }[] = [
   { kind: "id_front", title: "ID front", hint: "Side with your photo. Whole card in view, no glare.", icon: <IdCard className="size-6" />, capture: "environment" },
   { kind: "id_back", title: "ID back", hint: "The back of the same ID card.", icon: <IdCard className="size-6" />, capture: "environment" },
   { kind: "selfie", title: "Selfie", hint: "Your face, clear and well lit.", icon: <UserRound className="size-6" />, capture: "user" },
 ];
+
+const LOGBOOK = { kind: "logbook" as Kind, title: "Bike logbook (optional)", hint: "A clear photo of the bike's logbook. You can skip this, but it helps us approve you faster.", icon: <IdCard className="size-6" />, capture: "environment" as const };
+
+/** "kmfb 123c" -> "KMFB123C": letters and digits only, 5 to 10 of them, with both. */
+function tidyPlate(raw: string): string {
+  return raw.toUpperCase().replace(/[^A-Z0-9]/g, "");
+}
 
 /** 0712 345 678 / +254 712 345 678 / 254712345678 -> 254712345678, or null. */
 function kenyanPhone(raw: string): string | null {
@@ -41,6 +48,9 @@ function checkDetails(f: Details): Errors {
   const mine = kenyanPhone(f.phone);
   if (!mine) e.phone = "Enter a phone number like 0712 345 678.";
   if (f.residence_area.trim().length < 3) e.residence_area = "Write your estate or area, e.g. Kanduyi.";
+  const plate = tidyPlate(f.bike_plate);
+  if (plate.length < 5 || plate.length > 10 || !/\d/.test(plate) || !/[A-Z]/.test(plate)) e.bike_plate = "Enter the number plate as on the bike, e.g. KMFB 123C.";
+  if (f.bike_description.trim().length < 3) e.bike_description = "Describe the bike, e.g. Red Boxer 150 with a black box.";
   if (!twoNames(f.next_of_kin)) e.next_of_kin = "Write their full name: at least two names.";
   const kin = kenyanPhone(f.next_of_kin_phone);
   if (!kin) e.next_of_kin_phone = "Enter a phone number like 0712 345 678.";
@@ -140,14 +150,14 @@ export function JoinPage() {
   const navigate = useNavigate();
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [f, setF] = useState<Details>(() => {
-    const empty = { name: "", national_id: "", phone: "", residence_area: "", next_of_kin: "", next_of_kin_phone: "", password: "" };
+    const empty = { name: "", national_id: "", phone: "", residence_area: "", next_of_kin: "", next_of_kin_phone: "", bike_plate: "", bike_description: "", password: "" };
     try {
       return { ...empty, ...JSON.parse(sessionStorage.getItem(DRAFT) ?? "{}"), password: "" };
     } catch {
       return empty;
     }
   });
-  const [photos, setPhotos] = useState<Record<Kind, Blob | null>>({ id_front: null, id_back: null, selfie: null });
+  const [photos, setPhotos] = useState<Record<Kind, Blob | null>>({ id_front: null, id_back: null, selfie: null, logbook: null });
   const [consent, setConsent] = useState(false);
   const [errors, setErrors] = useState<Errors>({});
   const [busy, setBusy] = useState(false);
@@ -207,8 +217,10 @@ export function JoinPage() {
     setErrors({});
     const form = new FormData();
     for (const [k, v] of Object.entries(f)) form.append(k, k.endsWith("phone") ? (kenyanPhone(v) ?? v) : v.trim());
+    form.set("bike_plate", tidyPlate(f.bike_plate));
     form.append("consent", "true");
     for (const p of PHOTOS) form.append(p.kind, photos[p.kind]!, `${p.kind}.jpg`);
+    if (photos.logbook) form.append("logbook", photos.logbook, "logbook.jpg");
     try {
       auth.adopt(await request<Session>("POST", "/riders/apply", undefined, { form, auth: false }));
       sessionStorage.removeItem(DRAFT);
@@ -256,6 +268,11 @@ export function JoinPage() {
           <Field label="Your phone (M-Pesa)" error={errors.phone}>{(id) => <Input id={id} name="phone" type="tel" value={f.phone} onChange={set("phone")} inputMode="tel" autoComplete="tel" placeholder="0712 345 678" aria-invalid={!!errors.phone} />}</Field>
           <Field label="Where you live" hint="Estate or area, e.g. Kanduyi near the stage" error={errors.residence_area}>{(id) => <Input id={id} name="residence_area" value={f.residence_area} onChange={set("residence_area")} aria-invalid={!!errors.residence_area} />}</Field>
           <fieldset className="flex flex-col gap-4 rounded-2xl border border-line p-4">
+            <legend className="px-1 text-sm font-bold">Your bike</legend>
+            <Field label="Number plate" hint="As written on the bike, e.g. KMFB 123C" error={errors.bike_plate}>{(id) => <Input id={id} name="bike_plate" value={f.bike_plate} onChange={set("bike_plate")} autoCapitalize="characters" maxLength={12} placeholder="KMFB 123C" aria-invalid={!!errors.bike_plate} />}</Field>
+            <Field label="Describe the bike" hint="Make, colour, anything that helps the hotel and customer spot you" error={errors.bike_description}>{(id) => <Input id={id} name="bike_description" value={f.bike_description} onChange={set("bike_description")} maxLength={200} placeholder="Red Boxer 150 with a black box" aria-invalid={!!errors.bike_description} />}</Field>
+          </fieldset>
+          <fieldset className="flex flex-col gap-4 rounded-2xl border border-line p-4">
             <legend className="px-1 text-sm font-bold">Next of kin</legend>
             <Field label="Their full name" error={errors.next_of_kin}>{(id) => <Input id={id} name="next_of_kin" value={f.next_of_kin} onChange={set("next_of_kin")} aria-invalid={!!errors.next_of_kin} />}</Field>
             <Field label="Their phone" error={errors.next_of_kin_phone}>{(id) => <Input id={id} name="next_of_kin_phone" type="tel" value={f.next_of_kin_phone} onChange={set("next_of_kin_phone")} inputMode="tel" placeholder="0712 345 678" aria-invalid={!!errors.next_of_kin_phone} />}</Field>
@@ -266,6 +283,7 @@ export function JoinPage() {
       ) : step === 2 ? (
         <div className="flex flex-col gap-3">
           {PHOTOS.map((p) => <PhotoPicker key={p.kind} p={p} file={photos[p.kind]} error={errors[p.kind]} onPick={(file) => void pick(p.kind, file)} />)}
+          <PhotoPicker p={LOGBOOK} file={photos.logbook} error={errors.logbook} onPick={(file) => void pick("logbook", file)} />
           <div className="mt-2 grid grid-cols-[auto_1fr] gap-2">
             <Button variant="secondary" size="lg" onClick={() => setStep(1)}><ArrowLeft className="size-5" /> Back</Button>
             <Button size="lg" onClick={next}>Next: check <ArrowRight className="size-5" /></Button>
@@ -279,6 +297,7 @@ export function JoinPage() {
               <Row label="ID number" value={f.national_id} onEdit={() => setStep(1)} />
               <Row label="Phone (M-Pesa)" value={f.phone} onEdit={() => setStep(1)} />
               <Row label="Lives in" value={f.residence_area.trim()} onEdit={() => setStep(1)} />
+              <Row label="Bike" value={`${tidyPlate(f.bike_plate)} · ${f.bike_description.trim()}`} onEdit={() => setStep(1)} />
               <Row label="Next of kin" value={`${f.next_of_kin.trim()} · ${f.next_of_kin_phone}`} onEdit={() => setStep(1)} />
             </div>
           </section>

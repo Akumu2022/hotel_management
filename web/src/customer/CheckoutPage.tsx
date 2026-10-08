@@ -496,16 +496,8 @@ export function CheckoutPage() {
                 </>
               ) : (
                 <>
-                  <PayOption active={payment === "mpesa"} onClick={() => setPayment("mpesa")} emoji="📱" title={t("M-Pesa now")} body={t("Pay to the hotel's Till before you collect")} />
-                  <PayOption
-                    active={payment === "cash"}
-                    disabled={q?.cash_allowed === false}
-                    onClick={() => setPayment("cash")}
-                    emoji="💵"
-                    title={t("Cash when I collect")}
-                    body={q?.cash_allowed === false ? "This hotel takes M-Pesa only" : q?.cash_cap != null ? `For first orders up to ${money(q.cash_cap)}` : "Pay at the counter"}
-                  />
-                  {cashCapExceeded ? <p className="text-sm text-bad">Your first cash order can be up to {money(q!.cash_cap!)}. Pay by M-Pesa or order a little less.</p> : null}
+                  {/* Every order is paid first (D34): nothing is cooked for someone who may not come. */}
+                  <PayOption active emoji="📱" title={t("Pay with M-Pesa first")} body={t("Straight to the hotel's Till. The hotel starts cooking once your payment arrives.")} onClick={() => setPayment("mpesa")} />
                 </>
               )}
             </Step>

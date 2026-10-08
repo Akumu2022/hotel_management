@@ -1,7 +1,7 @@
 /** Owner's hotel list: only the owner creates hotels, with the hotel admin's login, and can
  * reset any staff password. Each hotel admin pins their own location on the map. */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Building2, Plus, Users } from "lucide-react";
+import { Building2, Plus, ShieldCheck, Users } from "lucide-react";
 import { type FormEvent, useState } from "react";
 
 import { Badge, Button, ErrorNote, Field, Input, PasswordInput, Sheet, Skeleton } from "../components/ui";
@@ -14,6 +14,8 @@ type Hotel = {
   slug: string;
   phone: string;
   till_number: string;
+  till_name: string | null;
+  verified: boolean;
   status: string;
   lat: number | null;
   lng: number | null;
@@ -43,9 +45,38 @@ function StaffList({ hotel }: { hotel: Hotel }) {
   );
 }
 
+/** Record the name M-Pesa shows for the Till, and tick "checked" once you've met the hotel. Changing the Till clears the tick. */
+function VerifyPanel({ hotel }: { hotel: Hotel }) {
+  const qc = useQueryClient();
+  const [name, setName] = useState(hotel.till_name ?? "");
+  const [checked, setChecked] = useState(hotel.verified);
+  const save = useMutation({
+    mutationFn: () => api.patch(`/admin/hotels/${hotel.id}`, { till_name: name.trim() || null, verified: checked }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "hotels"] }),
+  });
+  return (
+    <div className="rounded-2xl border border-line p-4">
+      <p className="flex items-center gap-2 text-sm font-bold"><ShieldCheck className="size-4 text-ok" /> Customer trust</p>
+      <p className="mt-1 text-xs text-muted">
+        Type the business name exactly as M-Pesa shows it when you enter Till {hotel.till_number}. Customers are told to check it before paying. Tick "checked" only after you have met the owner and seen the Till's name yourself.
+      </p>
+      <div className="mt-3 flex flex-col gap-3">
+        <Field label="Name M-Pesa shows for this Till">{(id) => <Input id={id} value={name} onChange={(e) => setName(e.target.value)} maxLength={80} placeholder="e.g. NOOR CAFE LTD" />}</Field>
+        <label className="flex items-start gap-2 text-sm">
+          <input type="checkbox" checked={checked} onChange={(e) => setChecked(e.target.checked)} className="mt-1 size-4 accent-[var(--color-brand)]" />
+          <span>I have checked this hotel and its Till. Show "Checked by Chakula" to customers.</span>
+        </label>
+        <ErrorNote error={save.error} />
+        <Button onClick={() => save.mutate()} busy={save.isPending}>Save</Button>
+      </div>
+    </div>
+  );
+}
+
 function NewHotel({ onDone }: { onDone: () => void }) {
   const qc = useQueryClient();
-  const [f, setF] = useState({ name: "", slug: "", phone: "", till_number: "", admin_name: "", admin_phone: "", admin_password: "" });
+  const [f, setF] = useState({ name: "", slug: "", phone: "", till_number: "", till_name: "", admin_name: "", admin_phone: "", admin_password: "" });
+  const [verified, setVerified] = useState(false);
   const set = (k: keyof typeof f) => (e: { target: { value: string } }) =>
     setF((v) => ({ ...v, [k]: e.target.value, ...(k === "name" && (!v.slug || v.slug === slugify(v.name)) ? { slug: slugify(e.target.value) } : {}) }));
   const create = useMutation({
@@ -55,6 +86,8 @@ function NewHotel({ onDone }: { onDone: () => void }) {
         slug: f.slug,
         phone: f.phone,
         till_number: f.till_number,
+        till_name: f.till_name.trim() || null,
+        verified,
         admin: { name: f.admin_name, phone: f.admin_phone, password: f.admin_password },
       }),
     onSuccess: () => {
@@ -74,6 +107,11 @@ function NewHotel({ onDone }: { onDone: () => void }) {
         <Field label="Hotel phone">{(id) => <Input id={id} type="tel" value={f.phone} onChange={set("phone")} required />}</Field>
         <Field label="Till number">{(id) => <Input id={id} inputMode="numeric" value={f.till_number} onChange={set("till_number")} required />}</Field>
       </div>
+      <Field label="Name M-Pesa shows for the Till" hint="Exactly as it appears when you type the Till number">{(id) => <Input id={id} value={f.till_name} onChange={set("till_name")} maxLength={80} placeholder="e.g. NOOR CAFE LTD" />}</Field>
+      <label className="flex items-start gap-2 text-sm">
+        <input type="checkbox" checked={verified} onChange={(e) => setVerified(e.target.checked)} className="mt-1 size-4 accent-[var(--color-brand)]" />
+        <span>I have checked this hotel and its Till (shows "Checked by Chakula" to customers)</span>
+      </label>
       <p className="mt-2 text-sm font-bold">Hotel admin login</p>
       <Field label="Their name">{(id) => <Input id={id} value={f.admin_name} onChange={set("admin_name")} required minLength={2} />}</Field>
       <div className="grid grid-cols-2 gap-3">
@@ -107,21 +145,22 @@ export function HotelsPage() {
           <li key={h.id} className="rounded-3xl border border-line bg-surface p-4">
             <div className="flex flex-wrap items-start justify-between gap-2">
               <div>
-                <p className="font-bold">{h.name} {h.status === "paused" ? <Badge tone="warn">Paused</Badge> : null}</p>
+                <p className="font-bold">{h.name} {h.status === "paused" ? <Badge tone="warn">Paused</Badge> : null} {h.verified ? <Badge tone="ok">Checked</Badge> : <Badge tone="warn">Not checked</Badge>}</p>
                 <p className="text-sm text-muted">
-                  Till <span className="money">{h.till_number}</span> · <span className="money">{h.phone}</span> ·{" "}
+                  Till <span className="money">{h.till_number}</span>{h.till_name ? <> ({h.till_name})</> : <span className="text-warn"> (name not recorded)</span>} · <span className="money">{h.phone}</span> ·{" "}
                   {h.lat != null ? <span className="text-ok">location pinned</span> : <span className="text-warn">location not pinned yet</span>}
                 </p>
               </div>
               <div className="flex items-center gap-3">
                 <Stars rating={h.rating} count={h.rating_count} />
                 <button onClick={() => setOpen(open === h.id ? null : h.id)} className="inline-flex items-center gap-1 rounded-lg border border-line px-2.5 py-1.5 text-sm font-semibold hover:bg-subtle">
-                  <Users className="size-4" /> Logins
+                  <Users className="size-4" /> Manage
                 </button>
               </div>
             </div>
             {open === h.id ? (
               <div className="mt-3 flex flex-col gap-3">
+                <VerifyPanel key={`${h.till_number}-${h.till_name}-${h.verified}`} hotel={h} />
                 <StaffList hotel={h} />
               </div>
             ) : null}

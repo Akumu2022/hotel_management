@@ -1,12 +1,22 @@
 /** Small shared customer pieces: toast, confirm dialog, delivery/pickup picker, category icons. */
 import clsx from "clsx";
-import { CheckCircle2, Gift, Truck } from "lucide-react";
+import { CheckCircle2, Gift, ShieldCheck, Truck } from "lucide-react";
 import { type ReactNode, useEffect, useState, useSyncExternalStore } from "react";
 
 import { money } from "../lib/format";
 import { useT } from "../lib/i18n";
 import { orderMode, useOrderMode } from "./store";
 import type { Quote } from "./types";
+
+/** "Checked by Chakula": the team has met the hotel and confirmed the Till is theirs. */
+export function VerifiedBadge({ className }: { className?: string }) {
+  const t = useT();
+  return (
+    <span title={t("The Chakula team has checked this hotel and its M-Pesa Till.")} className={clsx("inline-flex items-center gap-1 rounded-full bg-ok-soft px-2.5 py-1 text-xs font-semibold whitespace-nowrap text-ok", className)}>
+      <ShieldCheck className="size-3.5" /> {t("Checked by Chakula")}
+    </span>
+  );
+}
 
 // --- Toast --------------------------------------------------------------------------------------
 

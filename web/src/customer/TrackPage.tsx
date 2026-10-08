@@ -5,7 +5,7 @@
  */
 import { useMutation, useQuery } from "@tanstack/react-query";
 import clsx from "clsx";
-import { ArrowLeft, Check, ChefHat, Copy, Phone, ReceiptText, RotateCcw, Smartphone, Star, Store, Timer, XCircle } from "lucide-react";
+import { ArrowLeft, Check, ChefHat, Copy, Phone, ReceiptText, RotateCcw, ShieldCheck, Smartphone, Star, Store, Timer, XCircle } from "lucide-react";
 import { type ReactNode, Suspense, lazy, useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 
@@ -169,10 +169,23 @@ function PayCard({ t, token, onCode }: { t: Track; token: string; onCode: () => 
           <div>
             <p className="text-xs font-medium tracking-wide text-muted uppercase">{tt("Buy Goods Till number")}</p>
             <p className="money mt-0.5 text-3xl font-extrabold tracking-wider">{t.till_number}</p>
-            <p className="text-xs text-muted">{t.hotel_name}</p>
+            {t.till_name ? (
+              <p className="mt-1 text-sm">{tt("M-Pesa will show")}: <strong>{t.till_name}</strong></p>
+            ) : (
+              <p className="text-xs text-muted">{t.hotel_name}</p>
+            )}
           </div>
           <CopyButton text={t.till_number} />
         </div>
+        {t.till_name ? (
+          <p className="mt-3 flex items-start gap-2 rounded-xl bg-ok-soft px-4 py-3 text-sm text-ok">
+            <ShieldCheck className="mt-0.5 size-4 shrink-0" />
+            <span>
+              {tt("Before you enter your PIN, check that M-Pesa shows this name. If it shows a different name, don't pay: call the hotel on")}{" "}
+              <a href={`tel:+${t.hotel_phone}`} className="font-bold underline">0{t.hotel_phone.slice(3)}</a>.
+            </span>
+          </p>
+        ) : null}
         <ol className="mt-4 flex flex-col gap-2.5 text-sm">
           {[
             <>Open M-Pesa → Lipa na M-Pesa → <strong>Buy Goods and Services</strong></>,
@@ -388,6 +401,20 @@ export function TrackPage() {
             <Suspense fallback={<div className="h-56 animate-pulse rounded-2xl bg-subtle" />}>
               <RiderMap token={token} live={t.live} ping={ping} riderName={t.rider_name} />
             </Suspense>
+          ) : null}
+
+          {t.type !== "delivery" && t.delivery_code && !awaiting && !ended && !done ? (
+            <Card className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="font-semibold">{t.type === "eat_in" ? tt("Eat-in PIN") : tt("Pickup PIN")}</p>
+                <p className="text-sm text-muted">{tt("Tell the hotel this PIN when you get there. They only hand over your food once you give it.")}</p>
+              </div>
+              <div className="flex gap-1.5">
+                {t.delivery_code.split("").map((d, i) => (
+                  <span key={i} className="money flex h-14 w-11 items-center justify-center rounded-xl bg-brand-soft text-3xl font-extrabold text-brand">{d}</span>
+                ))}
+              </div>
+            </Card>
           ) : null}
 
           {t.type === "delivery" && t.delivery_code && !ended && !done ? (

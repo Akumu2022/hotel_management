@@ -98,7 +98,7 @@ function IdentitySheet({ name, phone, till, onClose }: { name: string; phone: st
         </label>
         {t !== till ? (
           <p className="rounded-xl bg-warn-soft px-3 py-2.5 text-sm text-warn">
-            <strong>Check this twice.</strong> Customers will pay this Till from now on. The SMS forwarder must run on the phone that receives this Till's messages.
+            <strong>Check this twice.</strong> Customers will pay this Till from now on. The SMS forwarder must run on the phone that receives this Till's messages. The "Checked by Chakula" badge is removed until the team checks the new Till.
           </p>
         ) : null}
         <label className="flex flex-col gap-1.5">
@@ -371,6 +371,15 @@ export function SettingsPage() {
           </div>
           <div className="flex flex-col gap-3 p-4">
             <TillTile till={data.till_number} />
+            {data.verified ? (
+              <p className="rounded-xl bg-ok-soft px-4 py-3 text-sm text-ok">
+                <strong>Checked by Chakula.</strong> Customers see a green "Checked by Chakula" badge{data.till_name ? <> and the Till name <strong>{data.till_name}</strong></> : null}.
+              </p>
+            ) : (
+              <p className="rounded-xl bg-warn-soft px-4 py-3 text-sm text-warn">
+                <strong>Not checked yet.</strong> The Chakula team will confirm your Till and its name. Once they do, customers see a "Checked by Chakula" badge, which builds trust.
+              </p>
+            )}
             <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 rounded-[1.25rem] border border-line px-5 py-4">
               <span>
                 <span className="flex items-center gap-2 text-sm font-semibold text-muted">
@@ -391,17 +400,13 @@ export function SettingsPage() {
         {/* Options */}
         <Panel icon={<Banknote className="size-5" />} title="Ordering options">
           <div className="grid gap-3 sm:grid-cols-2">
-            <label className={clsx("flex cursor-pointer flex-col gap-3 rounded-2xl border-2 p-4 transition-colors", data.cash_pickup_enabled ? "border-ok bg-ok-soft/60" : "border-line")}>
-              <span className="flex items-center justify-between">
-                <span className="text-3xl">💵</span>
-                <Switch label="Cash pickup" checked={data.cash_pickup_enabled} onChange={(v) => save.mutate({ cash_pickup_enabled: v })} disabled={!isAdmin || save.isPending} />
-              </span>
+            <div className="flex flex-col gap-3 rounded-2xl border-2 border-ok bg-ok-soft/60 p-4">
+              <span className="text-3xl">📱</span>
               <span>
-                <span className="block text-[0.9375rem] font-bold">Cash at the counter</span>
-                <span className="block text-sm text-muted">Pickup customers pay cash when they collect.</span>
+                <span className="block text-[0.9375rem] font-bold">Everything is paid first</span>
+                <span className="block text-sm text-muted">Every order, pickup, eat in and delivery, is paid by M-Pesa to your Till before you start cooking. Customers give you a 4-digit PIN when they collect.</span>
               </span>
-              <span className={clsx("text-sm font-bold", data.cash_pickup_enabled ? "text-ok" : "text-muted")}>{data.cash_pickup_enabled ? "On" : "Off"}</span>
-            </label>
+            </div>
             <div className="flex flex-col gap-3 rounded-2xl border-2 border-line p-4">
               <span className="flex items-center justify-between">
                 <Palette className="size-7" style={{ color: accent }} />

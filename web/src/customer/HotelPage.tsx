@@ -8,7 +8,7 @@ import { ErrorNote, Skeleton } from "../components/ui";
 import { api } from "../lib/api";
 import { hhmm, money } from "../lib/format";
 import { tr, useT } from "../lib/i18n";
-import { ConfirmDialog, HotelCover, JourneySteps, categoryEmoji, etaText, toast } from "./bits";
+import { ConfirmDialog, HotelCover, JourneySteps, VerifiedBadge, categoryEmoji, etaText, toast } from "./bits";
 import { TopBar } from "./CustomerLayout";
 import { FoodImage } from "./FoodImage";
 import { cart, useCart, useOrderMode } from "./store";
@@ -275,6 +275,7 @@ export function HotelPage() {
           <HotelCover src={hotel.cover_url} name={hotel.name} accent={hotel.accent_color} size="lg" className="h-48 rounded-3xl sm:h-60">
             <div className="mt-3 flex flex-wrap items-center gap-2">
               <StatusChip hotel={hotel} />
+              {hotel.verified ? <VerifiedBadge /> : null}
               <span className="flex items-center gap-1.5 rounded-full bg-surface px-2.5 py-1 text-xs font-semibold text-ink">
                 <Timer className="size-3.5" /> {t("{min} min", { min: etaText(hotel.prep_minutes, mode) })}
               </span>

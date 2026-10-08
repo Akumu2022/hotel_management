@@ -8,7 +8,7 @@ import { ErrorNote, Skeleton } from "../components/ui";
 import { api } from "../lib/api";
 import { useT } from "../lib/i18n";
 import { TopBar } from "./CustomerLayout";
-import { HotelCover, etaText } from "./bits";
+import { HotelCover, VerifiedBadge, etaText } from "./bits";
 import { useOrderMode } from "./store";
 import { InstallBanner } from "./InstallBanner";
 import { StatusChip } from "./HotelPage";
@@ -37,6 +37,7 @@ function HotelCard({ hotel }: { hotel: PublicHotel }) {
       <div className="flex items-center justify-between gap-2 px-4 py-3">
         <span className="flex min-w-0 flex-wrap items-center gap-1.5 whitespace-nowrap">
           <StatusChip hotel={hotel} />
+          {hotel.verified ? <VerifiedBadge /> : null}
           {hotel.rating_count ? (
             <span className="flex items-center gap-1 rounded-full bg-subtle px-2.5 py-1 text-xs font-semibold text-ink" title={t("{n} ratings", { n: hotel.rating_count })}>
               <Star className="size-3.5 fill-warn text-warn" /> {hotel.rating?.toFixed(1)}

@@ -17,7 +17,9 @@ type Rider = {
   next_of_kin: string;
   next_of_kin_phone: string | null;
   residence_area: string | null;
-  photos: Record<"id_front" | "id_back" | "selfie", boolean>;
+  bike_plate: string | null;
+  bike_description: string | null;
+  photos: Record<"id_front" | "id_back" | "selfie" | "logbook", boolean>;
   photo_url: string | null;
   kyc_status: "draft" | "pending" | "approved" | "rejected" | "suspended";
   kyc_note: string | null;
@@ -104,12 +106,16 @@ function Detail({ r }: { r: Rider }) {
         {r.photos.id_front ? <PrivatePhoto riderId={r.id} kind="id_front" label="ID front" /> : null}
         {r.photos.id_back ? <PrivatePhoto riderId={r.id} kind="id_back" label="ID back" /> : null}
         {r.photos.selfie ? <PrivatePhoto riderId={r.id} kind="selfie" label="Selfie" /> : null}
+        {r.photos.logbook ? <PrivatePhoto riderId={r.id} kind="logbook" label="Bike logbook" /> : null}
       </div>
 
       <dl className="mt-5 grid gap-3 text-sm sm:grid-cols-2">
         {[
           ["ID number", <span key="id" className="money text-lg font-bold tracking-wider">{r.national_id}</span>],
           ["Lives in", r.residence_area],
+          ["Bike number plate", <span key="plate" className="money text-lg font-bold tracking-wider">{r.bike_plate ?? "Not given (older application)"}</span>],
+          ["Bike description", r.bike_description ?? "Not given"],
+          ["Logbook", r.photos.logbook ? "Photo attached above" : "Not provided (optional)"],
           ["Rider phone", <a key="p" href={`tel:+${r.phone}`} className="flex items-center gap-1.5 font-bold text-brand"><Phone className="size-4" /> {local(r.phone)}</a>],
           [`Next of kin: ${r.next_of_kin}`, <a key="k" href={`tel:+${r.next_of_kin_phone}`} className="flex items-center gap-1.5 font-bold text-brand"><Phone className="size-4" /> {local(r.next_of_kin_phone)}</a>],
         ].map(([k, v], i) => (
