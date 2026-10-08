@@ -310,7 +310,10 @@ async def _check_can_order(session: AsyncSession, body: OrderIn, p: Priced, now:
         raise AppError(403, "blocked", "This number cannot place orders. Contact support.")
     if body.rider_fee_mode == "cash" and not option_b_allowed(customer):
         raise AppError(
-            409, "option_b_unavailable", "Please include the rider fee in your M-Pesa payment"
+            409,
+            "option_b_unavailable",
+            "Delivery is not available on this number right now. You can order for pickup, "
+            "or contact support.",
         )
     if body.payment_method != "mpesa":
         # D34: nothing is prepared until it is paid, so nobody can order and not turn up.

@@ -56,7 +56,7 @@ def body(hotel, product, **kw) -> dict:
         "phone": "0712000111",
         "payment_method": "mpesa",
         "landmark": "Blue gate opposite the chemist",
-        "expected_total": 770,
+        "expected_total": 670,
         **INSIDE,
     }
     data.update(kw)
@@ -79,7 +79,7 @@ async def shop(db):
 
 @pytest.mark.parametrize(
     ("order_type", "mode", "till", "cash"),
-    [("delivery", "included", 770, 0), ("delivery", "cash", 670, 100), ("pickup", "none", 670, 0)],
+    [("delivery", "included", 670, 100), ("delivery", "cash", 670, 100), ("pickup", "none", 670, 0)],
 )
 async def test_quote_worked_example(client, shop, order_type, mode, till, cash):
     hotel, product = shop
@@ -122,7 +122,7 @@ async def test_quote_ignores_client_prices(client, shop):
 @pytest.mark.parametrize(
     ("kw", "till"),
     [
-        ({}, 770),
+        ({}, 670),
         ({"rider_fee_mode": "cash", "expected_total": 670}, 670),
         ({"type": "pickup", "rider_fee_mode": "none", "expected_total": 670}, 670),
     ],
@@ -180,11 +180,11 @@ async def test_price_changed_returns_new_quote(client, db, shop):
     assert r.status_code == 409
     err = r.json()["error"]
     assert err["code"] == "price_changed"
-    assert err["quote"]["till_amount"] == 820
+    assert err["quote"]["till_amount"] == 720
     # The customer confirms the new total; the same key with the new body now works because the
     # failed attempt left nothing behind.
     r = await client.post(
-        "/api/v1/orders", headers=h, json=body(hotel, product, expected_total=820)
+        "/api/v1/orders", headers=h, json=body(hotel, product, expected_total=720)
     )
     assert r.status_code == 201
 
@@ -353,12 +353,12 @@ async def test_promo_one_use_per_phone(client, db, shop):
         )
     )
     await db.flush()
-    data = body(hotel, product, promo_code="karibu", expected_total=720)
+    data = body(hotel, product, promo_code="karibu", expected_total=620)
     r = await client.post("/api/v1/orders", headers=key(), json=data)
     assert r.status_code == 201, r.text
     r = await client.post("/api/v1/orders", headers=key(), json=data)
     assert r.json()["error"]["code"] == "promo_already_used"
-    other = body(hotel, product, promo_code="KARIBU", expected_total=720, phone="0712000222")
+    other = body(hotel, product, promo_code="KARIBU", expected_total=620, phone="0712000222")
     assert (await client.post("/api/v1/orders", headers=key(), json=other)).status_code == 201
 
 
@@ -475,16 +475,16 @@ async def test_rider_fee_from_distance(client, db, shop):
     ).json()
     assert q["rider_fee"] == 150 and q["rider_fee_estimated"] is False
     assert 2.5 < q["distance_km"] < 3.5
-    assert q["till_amount"] == 650 + 20 + 150
+    assert q["till_amount"] == 650 + 20  # D35: the rider fee never goes through the hotel Till
     # Placing the order charges the same distance fee.
     r = await client.post(
         "/api/v1/orders",
         headers=key(),
-        json=body(hotel, product, lat=-1.2648, lng=36.8025, expected_total=820),
+        json=body(hotel, product, lat=-1.2648, lng=36.8025, expected_total=670),
     )
     assert r.status_code == 201, r.text
     order = (await db.execute(select(Order).where(Order.code == r.json()["code"]))).scalar_one()
-    assert (order.rider_fee, order.rider_fee_in_till) == (150, 150)
+    assert (order.rider_fee, order.rider_fee_in_till) == (150, 0)
 
 
 async def test_too_far_is_refused(client, db, shop):
@@ -533,7 +533,7 @@ async def test_per_km_pricing_and_order_snapshot(client, db, shop):
     q = (await client.post("/api/v1/quotes", json=quote_body(hotel, product, **pin))).json()
     assert q["rider_fee"] == 110 and q["max_delivery_km"] == 10
     r = await client.post(
-        "/api/v1/orders", headers=key(), json=body(hotel, product, expected_total=780, **pin)
+        "/api/v1/orders", headers=key(), json=body(hotel, product, expected_total=670, **pin)
     )
     assert r.status_code == 201, r.text
     # The same distance and fee are stored on the order and shown when tracking.
@@ -576,7 +576,7 @@ async def test_order_history_by_tokens(client, db, shop):
     rows = (await client.post("/api/v1/track/history", json={"tokens": [token, "x" * 20]})).json()
     assert len(rows) == 1  # unknown tokens are ignored, nothing else is revealed
     h = rows[0]
-    assert (h["code"], h["till_amount"], h["paid"], h["refunded"]) == (r.json()["code"], 770, 0, 0)
+    assert (h["code"], h["till_amount"], h["paid"], h["refunded"]) == (r.json()["code"], 670, 0, 0)
     assert h["items"] == ["1× Pilau"] and h["hotel_slug"] == hotel.slug
     r = await client.post("/api/v1/track/history", json={"tokens": ["y" * 20] * 201})
     assert r.status_code == 422
@@ -618,3 +618,16 @@ async def test_hotel_admin_edits_identity_with_audit(client, db):
     cashier = auth_header(await make_user(db, "cashier", hotel))
     r = await client.put("/api/v1/hotel/settings", headers=cashier, json={"name": "Hacked"})
     assert r.status_code == 403
+
+
+async def test_the_hotel_never_handles_the_rider_fee(client, db, shop):
+    """D35: even an old app asking for 'fee with the order' gets 'customer pays the rider'."""
+    hotel, product = shop
+    r = await client.post(
+        "/api/v1/orders", headers=key(), json=body(hotel, product, rider_fee_mode="included")
+    )
+    assert r.status_code == 201, r.text
+    order = (await db.execute(select(Order).where(Order.code == r.json()["code"]))).scalar_one()
+    assert order.rider_fee_mode == "cash"
+    assert order.rider_fee_in_till == 0 and order.rider_fee > 0
+    assert order.till_amount == order.till_amount - order.rider_fee_in_till

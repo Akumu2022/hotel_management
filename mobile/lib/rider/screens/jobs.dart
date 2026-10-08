@@ -34,7 +34,11 @@ class _JobsTabState extends State<JobsTab> {
     super.initState();
     _load();
     _poll = Timer.periodic(const Duration(seconds: 8), (_) => _load());
-    if (_online) _gps.start();
+    if (_online) {
+      _gps.start().then((problem) {
+        if (problem != null && mounted) toast(context, tr(problem));
+      });
+    }
   }
 
   @override

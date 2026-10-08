@@ -115,7 +115,7 @@ class _HotelScreenState extends State<HotelScreen> {
                 child: FilledButton(
                   style: fullWidthFilled,
                   onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CheckoutScreen())),
-                  child: Text(tr('View cart · {n} items · ~{amount}', {'n': cart.count, 'amount': kes(cart.estimate)})),
+                  child: Text(tr(cart.count == 1 ? 'View cart · {n} item · ~{amount}' : 'View cart · {n} items · ~{amount}', {'n': cart.count, 'amount': kes(cart.estimate)})),
                 ),
               ),
             ),

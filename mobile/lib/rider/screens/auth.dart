@@ -5,6 +5,7 @@ import '../../i18n.dart';
 import '../../store.dart';
 import '../../util.dart';
 import '../session.dart';
+import '../../screens/server.dart';
 import 'apply.dart';
 
 /// First screen for a rider who isn't signed in.
@@ -47,6 +48,7 @@ class WelcomeScreen extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             Text(tr('Applications are checked by the Chakula team before you can take jobs.'), textAlign: TextAlign.center, style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13)),
+            TextButton(onPressed: () => showServerDialog(context), child: Text(tr('Server address'))),
           ]),
         ),
       ),
@@ -98,6 +100,7 @@ class _SignInScreenState extends State<SignInScreen> {
             decoration: InputDecoration(labelText: tr('Password'), suffixIcon: IconButton(icon: Icon(_hide ? Icons.visibility_off_outlined : Icons.visibility_outlined), onPressed: () => setState(() => _hide = !_hide))),
           ),
           if (_error != null) Padding(padding: const EdgeInsets.only(top: 12), child: Text(_error!, style: const TextStyle(color: Colors.red, fontWeight: FontWeight.w600))),
+          if (_error != null && _error!.toLowerCase().contains('reach')) TextButton(onPressed: () => showServerDialog(context), child: Text(tr('Server address'))),
           const SizedBox(height: 20),
           FilledButton(
             style: fullWidthFilled,

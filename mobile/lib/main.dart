@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'api.dart';
 import 'i18n.dart';
 import 'screens/shell.dart';
 import 'store.dart';
@@ -7,6 +8,7 @@ import 'theme.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await loadServerSetting();
   final state = AppState();
   await state.load();
   runApp(ChangeNotifierProvider.value(value: state, child: const HotelApp()));

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../api.dart';
 import '../i18n.dart';
 import '../store.dart';
 import '../theme.dart';
@@ -13,6 +14,7 @@ import 'session.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final state = AppState();
+  await loadServerSetting();
   await state.load(); // language and dark mode
   final session = RiderSession();
   await session.init();

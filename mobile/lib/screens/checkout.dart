@@ -26,7 +26,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   final _promo = TextEditingController();
 
   late String type = s.mode; // delivery | pickup | eat_in
-  String feeMode = 'included'; // included | cash (delivery only)
+  String feeMode = 'cash'; // always cash: the customer pays the rider directly (hotels never handle rider money)
   String payment = 'mpesa';
   int arriveIn = 30;
   double? lat, lng;
@@ -65,7 +65,6 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       if (seq != _quoteSeq || !mounted) return;
       setState(() {
         quote = q;
-        if (type == 'delivery' && feeMode == 'cash' && q['option_b_allowed'] == false) feeMode = 'included';
         if (q['cash_allowed'] != true && payment == 'cash') payment = 'mpesa';
       });
     } on ApiError catch (e) {
@@ -323,19 +322,15 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           ],
           const SizedBox(height: 12),
           Text(tr('Rider fee'), style: kSection),
-          RadioListTile<String>(
-            contentPadding: EdgeInsets.zero,
-            value: 'included',
-            groupValue: feeMode,
-            title: Text(tr('Pay it now with the order')),
-            onChanged: (v) { setState(() => feeMode = v!); _requote(); },
-          ),
-          RadioListTile<String>(
-            contentPadding: EdgeInsets.zero,
-            value: 'cash',
-            groupValue: feeMode,
-            title: Text(tr('Pay the rider cash at the door')),
-            onChanged: q != null && q['option_b_allowed'] == false ? null : (v) { setState(() => feeMode = v!); _requote(); },
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(color: q != null && q['option_b_allowed'] == false ? const Color(0xFFFEF2F2) : const Color(0xFFDCFCE7), borderRadius: BorderRadius.circular(12)),
+            child: Text(
+              q != null && q['option_b_allowed'] == false
+                  ? tr('Delivery is not available for this number. Choose pickup or contact support.')
+                  : tr('You pay the rider the delivery fee yourself when the food arrives. The hotel never handles it.'),
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
           ),
         ],
         if (type == 'eat_in') ...[
@@ -405,8 +400,7 @@ class _Totals extends StatelessWidget {
         if ((q['order_discount'] as int) > 0) row('Discount', q['order_discount'], minus: true),
         if ((q['platform_bonus'] as int) > 0) row('Bonus', q['platform_bonus'], minus: true),
         row('Service fee', q['service_fee']),
-        if (type == 'delivery') row(q['rider_fee_estimated'] == true ? 'Rider fee (from)' : 'Rider fee', q['rider_fee']),
-        if ((q['rider_fee_cash'] as int) > 0) row('  of which cash to rider', q['rider_fee_cash']),
+        if (type == 'delivery') row(q['rider_fee_estimated'] == true ? 'Rider fee, you pay the rider (from)' : 'Rider fee, you pay the rider', q['rider_fee']),
         const Divider(),
         row('Pay now', q['till_amount'], bold: true),
       ]);

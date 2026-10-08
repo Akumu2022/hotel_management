@@ -41,9 +41,20 @@ class LocationReporter {
       _pos = p;
       _maybeSend();
     }, onError: (_) {});
+    // The stream can take a while to give its first fix (or never does indoors/on an emulator), so
+    // ask for one straight away. Without it customers would see no rider on their map.
+    unawaited(_seed());
     // Standing still gives no movement events; resend the last spot so dispatch doesn't think we left.
     _tick = Timer.periodic(const Duration(seconds: 10), (_) => _maybeSend());
     return null;
+  }
+
+  Future<void> _seed() async {
+    try {
+      _pos ??= await Geolocator.getLastKnownPosition();
+      _pos ??= await Geolocator.getCurrentPosition(locationSettings: const LocationSettings(accuracy: LocationAccuracy.high, timeLimit: Duration(seconds: 20)));
+    } catch (_) {}
+    _maybeSend();
   }
 
   void _maybeSend() {

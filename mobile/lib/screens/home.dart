@@ -6,6 +6,7 @@ import '../i18n.dart';
 import '../util.dart';
 import 'hotel.dart';
 import 'safety.dart';
+import 'server.dart';
 import 'search.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -40,7 +41,11 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(tr('Order food'), style: TextStyle(fontWeight: FontWeight.w800)),
+        // Press and hold the title to open the server address (for whoever sets the app up).
+        title: GestureDetector(
+          onLongPress: () async { if (await showServerDialog(context)) _refresh(); },
+          child: Text(tr('Order food'), style: const TextStyle(fontWeight: FontWeight.w800)),
+        ),
         actions: [
           const _LangToggle(),
           IconButton(
@@ -142,6 +147,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       Text('${snap.error}', textAlign: TextAlign.center),
                       const SizedBox(height: 12),
                       OutlinedButton(onPressed: _refresh, child: Text(tr('Try again'))),
+                      TextButton(onPressed: () async { if (await showServerDialog(context)) _refresh(); }, child: Text(tr('Server address'))),
                     ]),
                   ),
                 );
@@ -196,7 +202,12 @@ class _LangToggle extends StatelessWidget {
 class _Hero extends StatelessWidget {
   const _Hero();
   @override
-  Widget build(BuildContext context) => Container(
+  Widget build(BuildContext context) {
+    // A const widget would keep the old language when the toggle flips, so listen to it here.
+    return ValueListenableBuilder<String>(valueListenable: lang, builder: (_, __, ___) => _body());
+  }
+
+  Widget _body() => Container(
         margin: const EdgeInsets.fromLTRB(16, 4, 16, 0),
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(color: brand, borderRadius: BorderRadius.circular(24)),

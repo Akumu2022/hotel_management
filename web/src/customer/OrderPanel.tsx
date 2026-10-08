@@ -28,7 +28,7 @@ export function useCartQuote() {
     hotel_slug: c.hotel_slug,
     lines: c.lines.map((l) => ({ product_id: l.product_id, quantity: l.quantity, option_ids: l.option_ids })),
     type: mode,
-    rider_fee_mode: mode === "delivery" ? "included" : "none",
+    rider_fee_mode: mode === "delivery" ? "cash" : "none",
   };
   return useQuery({
     queryKey: ["quote", body],

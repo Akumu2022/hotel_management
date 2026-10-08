@@ -174,6 +174,15 @@ class _TrackScreenState extends State<TrackScreen> {
             _pinCard(o),
           if (o['live'] != null && o['rider_name'] != null && (status == 'on_the_way' || status == 'picked_up'))
             Padding(padding: const EdgeInsets.only(bottom: 12), child: RiderMap(token: widget.token, live: o['live'] as Json, riderName: '${o['rider_name']}')),
+          if (o['live'] == null && o['type'] == 'delivery' && o['rider_name'] != null && (status == 'on_the_way' || status == 'picked_up'))
+            Card(
+              margin: const EdgeInsets.only(bottom: 12),
+              child: ListTile(
+                leading: const Icon(Icons.two_wheeler, color: brand),
+                title: Text(tr('{name} is on the way', {'name': '${o['rider_name']}'}), style: const TextStyle(fontWeight: FontWeight.w800)),
+                subtitle: Text(tr("The map appears as soon as the rider's phone shares its location. You can call the rider below.")),
+              ),
+            ),
           if (o['rider_name'] != null)
             Card(
               child: Padding(

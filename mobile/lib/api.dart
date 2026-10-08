@@ -3,9 +3,50 @@ import 'package:flutter/foundation.dart' show ValueNotifier;
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// Set with --dart-define=API_BASE=https://your.domain/api/v1 for real builds.
-/// 10.0.2.2 is the host machine as seen from the Android emulator.
-const apiBase = String.fromEnvironment('API_BASE', defaultValue: 'http://10.0.2.2:8000/api/v1');
+/// The address built into the app: --dart-define=API_BASE=https://your.domain/api/v1.
+/// 10.0.2.2 is the PC as seen from the Android emulator.
+const defaultApiBase = String.fromEnvironment('API_BASE', defaultValue: 'http://10.0.2.2:8000/api/v1');
+
+/// The server this app talks to. It starts as the built-in address and can be changed on the phone
+/// (Server address), so a new Wi-Fi address or a move to the real domain never needs a rebuild.
+String apiBase = defaultApiBase;
+
+/// "10.10.35.108:8000" / "http://pc:8000" / "https://chakula.co.ke" -> "http://10.10.35.108:8000/api/v1",
+/// or null if it can't be an address.
+String? normaliseServer(String input) {
+  var s = input.trim();
+  if (s.isEmpty || s.contains(RegExp(r'\s'))) return null;
+  if (s.contains('://') && !s.startsWith('http://') && !s.startsWith('https://')) return null; // ftp:// etc.
+  if (!s.startsWith('http://') && !s.startsWith('https://')) s = 'http://$s';
+  while (s.endsWith('/')) {
+    s = s.substring(0, s.length - 1);
+  }
+  if (!s.endsWith('/api/v1')) s = '$s/api/v1';
+  final u = Uri.tryParse(s);
+  if (u == null || u.host.isEmpty || !(u.scheme == 'http' || u.scheme == 'https')) return null;
+  return s;
+}
+
+/// Use the address saved on this phone, if any. Call once at start-up.
+Future<void> loadServerSetting() async {
+  final saved = (await SharedPreferences.getInstance()).getString('server_base');
+  if (saved != null && saved.isNotEmpty) apiBase = saved;
+}
+
+/// Save a new address (null or empty goes back to the built-in one). False if it isn't a valid address.
+Future<bool> saveServerSetting(String? input) async {
+  final prefs = await SharedPreferences.getInstance();
+  if (input == null || input.trim().isEmpty) {
+    await prefs.remove('server_base');
+    apiBase = defaultApiBase;
+    return true;
+  }
+  final n = normaliseServer(input);
+  if (n == null) return false;
+  await prefs.setString('server_base', n);
+  apiBase = n;
+  return true;
+}
 
 class ApiError implements Exception {
   final int status;

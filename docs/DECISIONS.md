@@ -181,6 +181,13 @@ At 100 orders/day, manual payment confirmation means about 20 code entries per c
 - **Hotels are created only by the owner** (super admin), from an admin screen that also creates the hotel admin's login. There is no hotel self-sign-up.
 - **Coordinates:** hotel locations can also be typed/pasted as `lat, lng` (e.g. from Google Maps). Rider GPS fixes worse than 100 m accuracy are not used for the live position.
 
+## D35. The hotel never handles rider money (owner, 2026-10-08)
+
+- **The customer pays the rider directly**, in cash or M-Pesa when the food arrives. The hotel's Till only ever receives the food (and the service fee). No hotel holds, hands over or is owed rider money.
+- Enforced on the server: every delivery order is stored with `rider_fee_mode = "cash"`, whatever an older app or web page sends; quotes and orders agree, so an old client just sees a lower Till amount. The old "fee with the order" mode stays in the database only so past orders keep their records.
+- The web checkout, the customer app and the rider app no longer offer or ask about "fee with the food". A customer who has failed to pay a rider before can still order pickup, but not delivery.
+- **Live map:** the rider app asks for a position the moment it starts sharing (not only when the phone's GPS stream first reports) and reports why it cannot start; the customer sees a "map appears when the rider shares their location" card instead of nothing while no position has arrived.
+
 ## D34. Everything is paid first; protecting customers from copycats (owner, 2026-10-08)
 
 - **No more "cash when I collect".** Every order (delivery, pickup, eat in) is paid by M-Pesa to the hotel's Till **before the hotel starts**. This removes the "ordered and never came" loss. The server refuses any new cash order (`cash_not_accepted`, 422); the quote says `cash_allowed: false`; the checkout (web and app) and the hotel's settings no longer offer it. Cash orders already in the system finish as before. The delivery option where the rider fee is paid in cash to the rider (option B) is a separate thing and is unchanged.

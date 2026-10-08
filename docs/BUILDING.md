@@ -18,13 +18,13 @@ flutter run --flavor customer -d emulator-5554 --dart-define=API_BASE=http://10.
 flutter run --flavor rider -t lib/rider/main.dart -d emulator-5554 --dart-define=API_BASE=http://10.0.2.2:8000/api/v1
 ```
 
-`10.0.2.2` is the PC as seen from the Android emulator. For a real phone on the same Wi-Fi use the PC's address (for example `http://10.0.0.158:8000/api/v1`) and allow port 8000 through Windows Firewall.
+`10.0.2.2` is the PC as seen from the Android emulator. For a real phone on the same Wi-Fi use the PC's address (for example `http://10.10.47.75:8000/api/v1`) and allow port 8000 through Windows Firewall.
 
 ## APKs for a phone (release, one chip type)
 
 ```bash
 cd mobile
-API=http://10.0.0.158:8000/api/v1
+API=http://10.10.47.75:8000/api/v1
 flutter build apk --release --flavor customer --target-platform android-arm64 --dart-define=API_BASE=$API
 flutter build apk --release --flavor rider -t lib/rider/main.dart --target-platform android-arm64 --dart-define=API_BASE=$API
 # for the emulator use --target-platform android-x64
@@ -32,7 +32,7 @@ flutter build apk --release --flavor rider -t lib/rider/main.dart --target-platf
 
 Output: `mobile/build/app/outputs/flutter-apk/app-customer-release.apk` and `app-rider-release.apk`.
 
-SMS app: `cd forwarder; .\build-apk.ps1 -Server http://10.0.0.158:8000 -Out <where to put the apk>`.
+SMS app: `cd forwarder; .\build-apk.ps1 -Server http://10.10.47.75:8000 -Out <where to put the apk>`.
 
 ## Rules that keep builds fast
 
@@ -60,3 +60,16 @@ cd backend && .venv/Scripts/python -m pytest -q      # about 4 minutes, needs th
 cd mobile && flutter test                             # seconds
 cd web && npx tsc --noEmit -p .                       # type check
 ```
+
+
+## Server address on the phones
+
+The apps remember a server address you set inside them, so a changed Wi-Fi address never needs a new build:
+
+- **Customer app:** long-press the "Order food" title, or tap "Server address" on the can't-connect screen.
+- **Rider app:** "Server address" on the welcome or sign-in screen.
+- **Till SMS app:** the "Server address" field on the pairing screen.
+
+On the PC, `ipconfig` shows the current Wi-Fi address (it can change when the router restarts; reserving it in the router's DHCP settings stops that). The phone and the PC must be on the same Wi-Fi, and port 8000 must be open once, from an administrator PowerShell:
+`New-NetFirewallRule -DisplayName "API 8000" -Direction Inbound -Protocol TCP -LocalPort 8000 -Action Allow`.
+The emulator reaches the PC at `http://10.0.2.2:8000`.

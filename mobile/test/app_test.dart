@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:hotel_app/api.dart';
 import 'package:hotel_app/i18n.dart';
 import 'package:hotel_app/store.dart';
 import 'package:hotel_app/util.dart';
@@ -83,6 +84,35 @@ void main() {
       s.savePlace('Home', 0.6, 34.6, 'green gate');
       expect(s.places.length, 1);
       expect(s.places.single['landmark'], 'green gate');
+    });
+  });
+
+  group('server address setting', () {
+    test('is tidied into a full API address', () {
+      expect(normaliseServer('10.10.35.108:8000'), 'http://10.10.35.108:8000/api/v1');
+      expect(normaliseServer('  http://pc.local:8000/ '), 'http://pc.local:8000/api/v1');
+      expect(normaliseServer('https://chakula.co.ke'), 'https://chakula.co.ke/api/v1');
+      expect(normaliseServer('http://10.0.2.2:8000/api/v1'), 'http://10.0.2.2:8000/api/v1');
+    });
+
+    test('rejects things that cannot be an address', () {
+      expect(normaliseServer(''), isNull);
+      expect(normaliseServer('   '), isNull);
+      expect(normaliseServer('not an address'), isNull);
+      expect(normaliseServer('ftp://x'), isNull);
+    });
+
+    test('is remembered on the phone and can be reset', () async {
+      SharedPreferences.setMockInitialValues({});
+      expect(await saveServerSetting('10.10.35.108:8000'), isTrue);
+      expect(apiBase, 'http://10.10.35.108:8000/api/v1');
+      apiBase = defaultApiBase; // a restart
+      await loadServerSetting();
+      expect(apiBase, 'http://10.10.35.108:8000/api/v1');
+      expect(await saveServerSetting('???'), isFalse); // a bad address changes nothing
+      expect(apiBase, 'http://10.10.35.108:8000/api/v1');
+      expect(await saveServerSetting(''), isTrue);
+      expect(apiBase, defaultApiBase);
     });
   });
 

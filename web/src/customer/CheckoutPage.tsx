@@ -110,7 +110,7 @@ export function CheckoutPage() {
   });
   const hotelInfo = menu.data?.hotel;
 
-  const [feeMode, setFeeMode] = useState<"included" | "cash">("included");
+  const [feeMode, setFeeMode] = useState<"included" | "cash">("cash");
   const [payment, setPayment] = useState<"mpesa" | "cash">("mpesa");
   const [name, setName] = useState(saved.name);
   const [phone, setPhone] = useState(saved.phone);
@@ -476,22 +476,14 @@ export function CheckoutPage() {
                 <PayOption active onClick={() => setPayment("mpesa")} emoji="📱" title={t("M-Pesa now")} body={t("Eat-in orders are paid first, so the food is ready when you arrive")} />
               ) : type === "delivery" ? (
                 <>
+                  {/* D35: hotels never handle rider money. The customer pays the rider directly. */}
                   <PayOption
-                    active={feeMode === "included"}
-                    onClick={() => setFeeMode("included")}
-                    emoji="📱"
-                    title={t("Everything by M-Pesa now")}
-                    body={`${t("Food and delivery in one payment")}${q ? ` · ${money(q.food_net + q.service_fee + riderFee)}` : ""}`}
-                  />
-                  <PayOption
-                    active={feeMode === "cash"}
+                    active
                     disabled={q ? !q.option_b_allowed : false}
                     onClick={() => setFeeMode("cash")}
-                    emoji="💵"
-                    title={t("Food by M-Pesa, {fee} cash to the rider", {
-                      fee: money(riderFee),
-                    })}
-                    body={q && !q.option_b_allowed ? t("Not available for this number") : t("Pay the delivery fee at your door")}
+                    emoji="📱"
+                    title={t("Food by M-Pesa now. You pay the rider {fee} yourself", { fee: money(riderFee) })}
+                    body={q && !q.option_b_allowed ? t("Delivery is not available for this number. Choose pickup or contact support.") : t("The hotel never handles the delivery fee. Pay the rider directly when the food arrives.")}
                   />
                 </>
               ) : (

@@ -30,6 +30,10 @@ class QuoteIn(Input):
     def _mode(self):
         if (self.type != "delivery") != (self.rider_fee_mode == "none"):
             raise ValueError("Pickup and eat in have no rider fee; delivery needs option A or B")
+        # D35: a hotel never handles rider money. Whatever an older app or page sends, the customer
+        # pays the rider directly and the hotel's Till only ever receives the food.
+        if self.type == "delivery":
+            self.rider_fee_mode = "cash"
         return self
 
 

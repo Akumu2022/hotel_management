@@ -75,7 +75,7 @@ async def w(db, client):
 
 
 def order_body(
-    w: World, kind="delivery", mode="included", pay="mpesa", phone="0712000111", qty=1, **kw
+    w: World, kind="delivery", mode="cash", pay="mpesa", phone="0712000111", qty=1, **kw
 ):
     body = {
         "hotel_slug": w.hotel.slug,
@@ -269,7 +269,7 @@ async def test_delivery_two_riders_open_job_alarm_stops_for_everyone(client, db,
     await hotel_step(client, w, o["code"], "preparing")
     await hotel_step(client, w, o["code"], "ready")
     card = await hotel_step(client, w, o["code"], "handed-to-rider")
-    assert card["fee_handed"] is True and card["rider_name"]
+    assert card["fee_handed"] is False and card["rider_name"]  # D35: the hotel never hands over rider money
     await client.post(
         f"{API}/rider/jobs/{oid}/picked-up", headers=w.r2, json={"fee_received": True}
     )
@@ -285,7 +285,7 @@ async def test_delivery_two_riders_open_job_alarm_stops_for_everyone(client, db,
             LedgerEntry.order_id == oid, LedgerEntry.entry_type == "rider_fee_instant"
         )
     )
-    assert fee == o["till_amount"] - 670  # the rider fee in the Till
+    assert fee is None  # D35: no rider fee ever passes through the hotel
     assert (await db.get(Customer, "254712000111")).completed_orders == 1
 
 
