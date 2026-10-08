@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import '../api.dart';
+import '../i18n.dart';
 import '../util.dart';
 
 /// Live map once the food is on the road: the rider glides between position fixes and a dashed
@@ -133,8 +134,8 @@ class _RiderMapState extends State<RiderMap> with SingleTickerProviderStateMixin
             const SizedBox(width: 10),
             Expanded(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(live ? '${widget.riderName} is on the way' : 'Waiting for ${widget.riderName}\'s location…', style: const TextStyle(fontWeight: FontWeight.w800)),
-                Text(live ? '${km.toStringAsFixed(1)} km away · about $mins min' : 'Last position is a few minutes old', style: const TextStyle(color: kMuted, fontSize: 13)),
+                Text(live ? tr('{name} is on the way', {'name': widget.riderName}) : tr('Waiting for {name}\'s location…', {'name': widget.riderName}), style: const TextStyle(fontWeight: FontWeight.w800)),
+                Text(live ? tr('{km} km away · about {mins} min', {'km': km.toStringAsFixed(1), 'mins': mins}) : tr('Last position is a few minutes old'), style: TextStyle(color: mutedOf(context), fontSize: 13)),
               ]),
             ),
             if (live) const _LiveDot(),
@@ -179,6 +180,6 @@ class _LiveDotState extends State<_LiveDot> with SingleTickerProviderStateMixin 
   @override
   Widget build(BuildContext context) => FadeTransition(
         opacity: _c,
-        child: const Pill('LIVE', bg: Color(0xFFDCFCE7), fg: Color(0xFF15803D)),
+        child: Pill(tr('LIVE'), bg: Color(0xFFDCFCE7), fg: Color(0xFF15803D)),
       );
 }

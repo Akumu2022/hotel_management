@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 1.0.0+1
+version: 1.1.0+3000
 
 environment:
   sdk: ^3.10.7
@@ -41,6 +41,8 @@ dependencies:
   flutter_map: ^8.3.2
   latlong2: ^0.10.1
   url_launcher: ^6.3.2
+  cached_network_image: ^3.4.1
+  image_picker: ^1.2.3
 
 dev_dependencies:
   flutter_test:
@@ -94,3 +96,9 @@ flutter:
   #
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
+
+# path_provider_android 2.3.x pulls in `jni`, which compiles C code with the NDK for every phone chip
+# type (the slowest part of the build, and it adds to the app size). 2.2.23 is the last version
+# without it. Remove this pin only if a later release drops the jni dependency.
+dependency_overrides:
+  path_provider_android: 2.2.23

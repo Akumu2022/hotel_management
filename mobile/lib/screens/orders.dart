@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../api.dart';
 import '../store.dart';
+import '../i18n.dart';
 import '../util.dart';
 import 'shell.dart';
 import 'track.dart';
@@ -27,7 +28,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
       if (!mounted) return;
       context.read<AppState>().orderAgain(t);
       tabIndex.value = 2;
-      toast(context, 'Your order is back in the basket');
+      toast(context, tr('Your order is back in the basket'));
     } on ApiError catch (e) {
       if (mounted) toast(context, e.message);
     }
@@ -38,7 +39,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-        appBar: AppBar(title: const Text('My orders', style: TextStyle(fontWeight: FontWeight.w800))),
+        appBar: AppBar(title: Text(tr('My orders'), style: TextStyle(fontWeight: FontWeight.w800))),
         body: RefreshIndicator(
           color: brand,
           onRefresh: () async {
@@ -60,10 +61,10 @@ class _OrdersScreenState extends State<OrdersScreen> {
                   const SizedBox(height: 120),
                   const Center(child: Text('🧾', style: TextStyle(fontSize: 56))),
                   const SizedBox(height: 8),
-                  const Center(child: Text('No orders yet', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800))),
+                  Center(child: Text(tr('No orders yet'), style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800))),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 48, vertical: 16),
-                    child: OutlinedButton(onPressed: () => tabIndex.value = 0, child: const Text('Find something tasty')),
+                    child: OutlinedButton(onPressed: () => tabIndex.value = 0, child: Text(tr('Find something tasty'))),
                   ),
                 ]);
               }
@@ -89,9 +90,9 @@ class _OrdersScreenState extends State<OrdersScreen> {
                             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                               Text('${r['hotel_name']} · ${r['code']}', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
                               const SizedBox(height: 2),
-                              Text((r['items'] as List).join(', '), maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: kMuted, fontSize: 13)),
+                              Text((r['items'] as List).join(', '), maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(color: mutedOf(context), fontSize: 13)),
                               const SizedBox(height: 8),
-                              Pill(status.replaceAll('_', ' '),
+                              Pill(tr(status.replaceAll('_', ' ')),
                                   bg: ok ? const Color(0xFFDCFCE7) : bad ? const Color(0xFFFEE2E2) : const Color(0xFFFFE4D6),
                                   fg: ok ? const Color(0xFF15803D) : bad ? const Color(0xFFB91C1C) : brand),
                             ]),
@@ -99,7 +100,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
                           const SizedBox(width: 8),
                           Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
                             Text(kes(r['till_amount']), style: const TextStyle(fontWeight: FontWeight.w800)),
-                            if (ok || bad) TextButton.icon(onPressed: () => _again(r), icon: const Icon(Icons.replay, size: 16), label: const Text('Again')),
+                            if (ok || bad) TextButton.icon(onPressed: () => _again(r), icon: const Icon(Icons.replay, size: 16), label: Text(tr('Again'))),
                           ]),
                         ]),
                       ),

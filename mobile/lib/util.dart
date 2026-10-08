@@ -1,6 +1,8 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'api.dart';
+import 'i18n.dart';
 
 const brand = Color(0xFFDC4B12);
 const brandDark = Color(0xFF7A1D00);
@@ -12,7 +14,41 @@ const kTitle = TextStyle(fontSize: 20, fontWeight: FontWeight.w800);
 const kSection = TextStyle(fontSize: 16, fontWeight: FontWeight.w800);
 const kItem = TextStyle(fontSize: 15, fontWeight: FontWeight.w700);
 const kBody = TextStyle(fontSize: 14);
-const kLabel = TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: kMuted);
+const kLabel = TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: kMuted); // only where context is unavailable
+
+/// Secondary text colour with enough contrast on both the light and the dark theme.
+Color mutedOf(BuildContext c) => Theme.of(c).brightness == Brightness.dark ? const Color(0xFFA8A8B0) : const Color(0xFF62626A);
+TextStyle labelOf(BuildContext c) => TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: mutedOf(c));
+
+/// A fitting emoji for a dish with no photo.
+String foodEmoji(String name, [String category = '']) {
+  final t = '$name $category'.toLowerCase();
+  const map = {
+    'pizza': '🍕', 'burger': '🍔', 'chicken': '🍗', 'wrap': '🌯', 'fish': '🐟', 'tilapia': '🐟', 'chips': '🍟', 'fries': '🍟',
+    'rice': '🍚', 'pilau': '🍚', 'biryani': '🍚', 'ugali': '🍲', 'stew': '🍲', 'soup': '🍲', 'beef': '🥩', 'steak': '🥩', 'sausage': '🌭',
+    'egg': '🍳', 'omelette': '🍳', 'coffee': '☕', 'tea': '☕', 'cappuccino': '☕', 'capucino': '☕', 'espresso': '☕', 'soda': '🥤', 'juice': '🧃',
+    'shake': '🥤', 'water': '💧', 'salad': '🥗', 'cake': '🍰', 'mandazi': '🍩', 'donut': '🍩', 'chapati': '🫓', 'bread': '🍞', 'sandwich': '🥪',
+    'pasta': '🍝', 'noodle': '🍜', 'samosa': '🥟', 'ice cream': '🍨', 'fruit': '🍎', 'dessert': '🍰', 'drink': '🥤', 'breakfast': '🍳',
+  };
+  for (final e in map.entries) {
+    if (t.contains(e.key)) return e.value;
+  }
+  return '🍽️';
+}
+
+/// The picture area of a dish with no photo: a soft tint and a fitting emoji.
+Widget dishFallback(String name, String category, double size) => Container(
+      width: size,
+      height: size,
+      alignment: Alignment.center,
+      color: const Color(0xFFFFEDE3),
+      child: Text(foodEmoji(name, category), style: TextStyle(fontSize: size * .5)),
+    );
+
+Future<void> callPhone(BuildContext context, String number) async {
+  final ok = await launchUrl(Uri(scheme: 'tel', path: number));
+  if (!ok && context.mounted) toast(context, tr('Could not open the dialler'));
+}
 
 String kes(num n) => 'KES ${n.round().toString().replaceAllMapped(RegExp(r'\B(?=(\d{3})+(?!\d))'), (_) => ',')}';
 
@@ -42,16 +78,15 @@ class NetImage extends StatelessWidget {
     if (url == null) return SizedBox(width: width, height: height, child: empty);
     final dpr = MediaQuery.devicePixelRatioOf(context);
     final w = width ?? MediaQuery.sizeOf(context).width;
-    return Image.network(
-      absUrl(url!),
+    return CachedNetworkImage(
+      imageUrl: absUrl(url!),
       width: width,
       height: height,
       fit: fit,
-      cacheWidth: (w * dpr).round(),
-      gaplessPlayback: true,
-      frameBuilder: (_, child, frame, sync) =>
-          sync ? child : AnimatedOpacity(opacity: frame == null ? 0 : 1, duration: const Duration(milliseconds: 250), child: child),
-      errorBuilder: (_, __, ___) => SizedBox(width: width, height: height, child: empty),
+      memCacheWidth: (w * dpr).round(),
+      fadeInDuration: const Duration(milliseconds: 220),
+      placeholder: (_, __) => SizedBox(width: width, height: height, child: empty),
+      errorWidget: (_, __, ___) => SizedBox(width: width, height: height, child: empty),
     );
   }
 }
@@ -77,14 +112,32 @@ class Pill extends StatelessWidget {
 }
 
 /// Grey placeholder block shown while data loads.
-class Skel extends StatelessWidget {
+class Skel extends StatefulWidget {
   final double height;
   const Skel(this.height, {super.key});
   @override
-  Widget build(BuildContext context) => Container(
-        height: height,
-        decoration: BoxDecoration(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: .07), borderRadius: BorderRadius.circular(20)),
-      );
+  State<Skel> createState() => _SkelState();
+}
+
+class _SkelState extends State<Skel> with SingleTickerProviderStateMixin {
+  late final AnimationController _c = AnimationController(vsync: this, duration: const Duration(milliseconds: 1100))..repeat(reverse: true);
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final base = Theme.of(context).colorScheme.onSurface;
+    return AnimatedBuilder(
+      animation: _c,
+      builder: (_, __) => Container(
+        height: widget.height,
+        decoration: BoxDecoration(color: base.withValues(alpha: .05 + .06 * _c.value), borderRadius: BorderRadius.circular(20)),
+      ),
+    );
+  }
 }
 
 /// WhatsApp number for help, set by the admin (empty hides every help button). Cached for offline use.
@@ -96,12 +149,57 @@ Future<String> supportNumber() async {
   }
 }
 
+/// 0712 345 678 / +254 712 345 678 / 254712345678 -> 254712345678, or null if it isn't a Kenyan number.
+String? kenyanNumber(String? raw) {
+  if (raw == null) return null;
+  final d = raw.replaceAll(RegExp(r'[\s\-()+]'), '');
+  if (RegExp(r'^0[17]\d{8}$').hasMatch(d)) return '254${d.substring(1)}';
+  if (RegExp(r'^254[17]\d{8}$').hasMatch(d)) return d;
+  if (RegExp(r'^[17]\d{8}$').hasMatch(d)) return '254$d';
+  return null;
+}
+
+Future<void> whatsAppTo(BuildContext context, String number, String message) async {
+  final ok = await launchUrl(Uri.parse('https://wa.me/$number?text=${Uri.encodeComponent(message)}'), mode: LaunchMode.externalApplication);
+  if (!ok && context.mounted) toast(context, tr('Could not open WhatsApp'));
+}
+
+/// Chakula's own help line (the platform number set by the super admin).
 Future<void> openWhatsApp(BuildContext context, String message) async {
   final number = await supportNumber();
   if (!context.mounted) return;
-  if (number.isEmpty) return toast(context, 'Help chat is not set up yet');
-  final ok = await launchUrl(Uri.parse('https://wa.me/$number?text=${Uri.encodeComponent(message)}'), mode: LaunchMode.externalApplication);
-  if (!ok && context.mounted) toast(context, 'Could not open WhatsApp');
+  if (number.isEmpty) return toast(context, tr('Help chat is not set up yet'));
+  await whatsAppTo(context, number, message);
+}
+
+/// Call and WhatsApp buttons for a hotel or rider's own number (whatever the hotel admin or the
+/// rider entered). Hidden when there is no usable number, so nothing ever dials a blank.
+class ContactRow extends StatelessWidget {
+  final String? phone;
+  final String message;
+  const ContactRow(this.phone, {super.key, required this.message});
+  @override
+  Widget build(BuildContext context) {
+    final n = kenyanNumber(phone);
+    if (n == null) return const SizedBox.shrink();
+    return Row(children: [
+      Expanded(
+        child: OutlinedButton.icon(
+          onPressed: () => callPhone(context, '+$n'),
+          icon: const Icon(Icons.call, size: 18),
+          label: Text(tr('Call')),
+        ),
+      ),
+      const SizedBox(width: 10),
+      Expanded(
+        child: OutlinedButton.icon(
+          onPressed: () => whatsAppTo(context, n, message),
+          icon: const Icon(Icons.chat_bubble_outline, size: 18, color: Color(0xFF16A34A)),
+          label: const Text('WhatsApp'),
+        ),
+      ),
+    ]);
+  }
 }
 
 /// "Chat with us on WhatsApp"; hidden until the admin has set a number.
@@ -124,7 +222,7 @@ class _HelpButtonState extends State<HelpButton> {
                 child: OutlinedButton.icon(
                   onPressed: () => openWhatsApp(context, widget.message),
                   icon: const Icon(Icons.chat_bubble_outline, color: Color(0xFF16A34A)),
-                  label: const Text('Chat with us on WhatsApp'),
+                  label: Text(tr('Chat with us on WhatsApp')),
                 ),
               ),
       );

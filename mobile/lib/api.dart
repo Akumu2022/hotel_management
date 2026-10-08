@@ -26,15 +26,51 @@ Future<dynamic> _send(String method, String path, {Object? body, Map<String, Str
     final req = http.Request(method, uri)..headers.addAll(h);
     if (body != null) req.body = jsonEncode(body);
     final res = await http.Response.fromStream(await req.send().timeout(Duration(seconds: path == '/orders' ? 60 : 20)));
-    final text = utf8.decode(res.bodyBytes);
-    final data = text.isEmpty ? null : jsonDecode(text);
-    if (res.statusCode >= 400) {
-      final err = (data is Map ? data['error'] : null) as Map? ?? {};
-      final extra = Map<String, dynamic>.from(err)..removeWhere((k, _) => k == 'code' || k == 'message');
-      throw ApiError(res.statusCode, (err['code'] ?? 'error').toString(),
-          (err['message'] ?? 'Something went wrong').toString(), extra);
-    }
-    return data;
+    return decodeResponse(res);
+  } on ApiError {
+    rethrow;
+  } catch (_) {
+    throw ApiError(0, 'network', 'Cannot reach the server. Check your connection.');
+  }
+}
+
+/// The JSON body of a good response; an [ApiError] (with the server's code, message and field) otherwise.
+dynamic decodeResponse(http.Response res) {
+  final text = utf8.decode(res.bodyBytes);
+  dynamic data;
+  try {
+    data = text.isEmpty ? null : jsonDecode(text);
+  } catch (_) {
+    data = null;
+  }
+  if (res.statusCode >= 400) {
+    final err = (data is Map ? data['error'] : null) as Map? ?? {};
+    final extra = Map<String, dynamic>.from(err)..removeWhere((k, _) => k == 'code' || k == 'message');
+    throw ApiError(res.statusCode, (err['code'] ?? 'error').toString(), (err['message'] ?? 'Something went wrong').toString(), extra);
+  }
+  return data;
+}
+
+/// Any call with your own headers (the rider app adds its login token this way).
+Future<dynamic> apiSend(String method, String path, {Object? body, Map<String, String>? headers}) =>
+    _send(method, path, body: body, headers: headers);
+
+/// A form with photos (rider sign-up and ID photos).
+Future<dynamic> apiMultipart(
+  String path, {
+  Map<String, String> fields = const {},
+  Map<String, List<int>> files = const {},
+  Map<String, String>? headers,
+  http.Response? Function(http.Response)? onResponse,
+}) async {
+  try {
+    final req = http.MultipartRequest('POST', Uri.parse(apiBase + path))
+      ..headers.addAll(headers ?? {})
+      ..fields.addAll(fields);
+    files.forEach((k, bytes) => req.files.add(http.MultipartFile.fromBytes(k, bytes, filename: '$k.jpg')));
+    final res = await http.Response.fromStream(await req.send().timeout(const Duration(seconds: 90)));
+    onResponse?.call(res);
+    return decodeResponse(res);
   } on ApiError {
     rethrow;
   } catch (_) {

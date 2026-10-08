@@ -30,6 +30,22 @@ android {
         versionName = flutter.versionName
     }
 
+    // Two apps from one codebase: the customer app and the rider app (its own install, name and permissions).
+    //   flutter build apk --flavor customer                       (lib/main.dart)
+    //   flutter build apk --flavor rider -t lib/rider/main.dart   (lib/rider/main.dart)
+    flavorDimensions += "app"
+    productFlavors {
+        create("customer") {
+            dimension = "app"
+            resValue("string", "app_name", "Chakula")
+        }
+        create("rider") {
+            dimension = "app"
+            applicationIdSuffix = ".rider"
+            resValue("string", "app_name", "Chakula Rider")
+        }
+    }
+
     buildTypes {
         release {
             // TODO: Add your own signing config for the release build.

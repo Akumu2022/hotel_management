@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../store.dart';
+import '../i18n.dart';
 import '../util.dart';
 import 'checkout.dart';
 import 'home.dart';
@@ -39,12 +40,12 @@ class Shell extends StatelessWidget {
           height: 66,
           onDestinationSelected: (v) => tabIndex.value = v,
           destinations: [
-            const NavigationDestination(icon: Icon(Icons.home_outlined), selectedIcon: Icon(Icons.home_rounded, color: brand), label: 'Home'),
-            const NavigationDestination(icon: Icon(Icons.receipt_long_outlined), selectedIcon: Icon(Icons.receipt_long, color: brand), label: 'Orders'),
+            NavigationDestination(icon: Icon(Icons.home_outlined), selectedIcon: Icon(Icons.home_rounded, color: brand), label: tr('Home')),
+            NavigationDestination(icon: Icon(Icons.receipt_long_outlined), selectedIcon: Icon(Icons.receipt_long, color: brand), label: tr('Orders')),
             NavigationDestination(
               icon: Badge(isLabelVisible: cart.count > 0, label: Text('${cart.count}'), child: const Icon(Icons.shopping_basket_outlined)),
               selectedIcon: Badge(isLabelVisible: cart.count > 0, label: Text('${cart.count}'), child: const Icon(Icons.shopping_basket, color: brand)),
-              label: 'Cart',
+              label: tr('Cart'),
             ),
           ],
         ),

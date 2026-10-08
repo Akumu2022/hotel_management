@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../api.dart';
+import '../i18n.dart';
 import '../util.dart';
 import 'hotel.dart';
 
@@ -40,7 +41,7 @@ class _SearchScreenState extends State<SearchScreen> {
         title: TextField(
           autofocus: true,
           onChanged: _changed,
-          decoration: const InputDecoration(hintText: 'Search food, e.g. pizza', border: InputBorder.none),
+          decoration: InputDecoration(hintText: tr('Search food, e.g. pizza'), border: InputBorder.none),
         ),
       ),
       body: _hits == null
@@ -51,7 +52,7 @@ class _SearchScreenState extends State<SearchScreen> {
                 if (snap.connectionState != ConnectionState.done) return const Center(child: CircularProgressIndicator());
                 if (snap.hasError) return Center(child: Text('${snap.error}'));
                 final hits = snap.data!.cast<Json>();
-                if (hits.isEmpty) return Center(child: Text('No dish matches "$_term"'));
+                if (hits.isEmpty) return Center(child: Text(tr('No dish matches "{q}"', {'q': _term})));
                 return ListView.separated(
                   itemCount: hits.length,
                   separatorBuilder: (_, __) => const Divider(height: 1),
@@ -64,12 +65,12 @@ class _SearchScreenState extends State<SearchScreen> {
                         child: SizedBox(
                           width: 52,
                           height: 52,
-                          child: NetImage(thumb, width: 52, height: 52, fallback: Container(color: const Color(0xFFFFEDE3), child: const Icon(Icons.restaurant, color: brand))),
+                          child: NetImage(thumb, width: 52, height: 52, fallback: dishFallback('${h['name']}', '${h['category']}', 52)),
                         ),
                       ),
                       title: Text(h['name']),
                       subtitle: Text('${h['hotel_name']} · ${h['category']}'),
-                      trailing: Text(h['is_sold_out'] == true ? 'Sold out' : kes(h['price'])),
+                      trailing: Text(h['is_sold_out'] == true ? tr('Sold out') : kes(h['price'])),
                       onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => HotelScreen(slug: h['hotel_slug']))),
                     );
                   },

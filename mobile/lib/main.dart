@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'i18n.dart';
 import 'screens/shell.dart';
 import 'store.dart';
-import 'util.dart';
+import 'theme.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -11,65 +12,26 @@ Future<void> main() async {
   runApp(ChangeNotifierProvider.value(value: state, child: const HotelApp()));
 }
 
-OutlineInputBorder _border(Color c, [double w = 1]) =>
-    OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: c, width: w));
-
-ThemeData _theme(Brightness b) {
-  final dark = b == Brightness.dark;
-  final scheme = ColorScheme.fromSeed(seedColor: brand, brightness: b, primary: brand).copyWith(
-    surface: dark ? const Color(0xFF121214) : Colors.white,
-  );
-  final card = dark ? const Color(0xFF1D1D20) : Colors.white;
-  final line = (dark ? Colors.white : Colors.black).withValues(alpha: dark ? .14 : .12);
-  return ThemeData(
-    colorScheme: scheme,
-    useMaterial3: true,
-    scaffoldBackgroundColor: dark ? const Color(0xFF121214) : const Color(0xFFFAF8F7),
-    appBarTheme: AppBarTheme(backgroundColor: Colors.transparent, scrolledUnderElevation: 0, centerTitle: false, foregroundColor: scheme.onSurface),
-    cardTheme: CardThemeData(
-      color: card,
-      elevation: 0,
-      margin: EdgeInsets.zero,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: BorderSide(color: line.withValues(alpha: .08))),
-    ),
-    filledButtonTheme: FilledButtonThemeData(
-      style: FilledButton.styleFrom(
-        minimumSize: const Size(88, 52),
-        shape: const StadiumBorder(),
-        textStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
-      ),
-    ),
-    outlinedButtonTheme: OutlinedButtonThemeData(
-      style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(48), shape: const StadiumBorder()),
-    ),
-    inputDecorationTheme: InputDecorationTheme(
-      filled: true,
-      fillColor: card,
-      border: _border(line),
-      enabledBorder: _border(line),
-      focusedBorder: _border(brand, 1.5),
-    ),
-    navigationBarTheme: NavigationBarThemeData(
-      backgroundColor: card,
-      indicatorColor: dark ? const Color(0xFF4A2112) : const Color(0xFFFFE4D6),
-    ),
-    bottomSheetTheme: BottomSheetThemeData(
-      backgroundColor: card,
-      showDragHandle: true,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(28))),
-    ),
-  );
-}
-
 class HotelApp extends StatelessWidget {
   const HotelApp({super.key});
   @override
   Widget build(BuildContext context) => MaterialApp(
         title: 'Order Food',
         debugShowCheckedModeBanner: false,
-        theme: _theme(Brightness.light),
-        darkTheme: _theme(Brightness.dark),
+        theme: appTheme(Brightness.light),
+        darkTheme: appTheme(Brightness.dark),
         themeMode: context.select<AppState, ThemeMode>((s) => s.themeMode),
+        builder: (context, child) => ValueListenableBuilder<String>(
+          valueListenable: lang,
+          // A new key rebuilds every screen so all text switches language at once.
+          builder: (_, l, __) => KeyedSubtree(
+            key: ValueKey(l),
+            child: MediaQuery(
+              data: MediaQuery.of(context).copyWith(textScaler: MediaQuery.textScalerOf(context).clamp(maxScaleFactor: 1.25)),
+              child: child!,
+            ),
+          ),
+        ),
         home: const Shell(),
       );
 }

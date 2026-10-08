@@ -181,6 +181,34 @@ At 100 orders/day, manual payment confirmation means about 20 code entries per c
 - **Hotels are created only by the owner** (super admin), from an admin screen that also creates the hotel admin's login. There is no hotel self-sign-up.
 - **Coordinates:** hotel locations can also be typed/pasted as `lat, lng` (e.g. from Google Maps). Rider GPS fixes worse than 100 m accuracy are not used for the live position.
 
+## D34. Everything is paid first; protecting customers from copycats (owner, 2026-10-08)
+
+- **No more "cash when I collect".** Every order (delivery, pickup, eat in) is paid by M-Pesa to the hotel's Till **before the hotel starts**. This removes the "ordered and never came" loss. The server refuses any new cash order (`cash_not_accepted`, 422); the quote says `cash_allowed: false`; the checkout (web and app) and the hotel's settings no longer offer it. Cash orders already in the system finish as before. The delivery option where the rider fee is paid in cash to the rider (option B) is a separate thing and is unchanged.
+- **The platform never holds customers' money.** Customers pay the hotel's own Till directly (D1). A hotel is only told to start once its own Till's SMS (read by the Chakula Till app, D26) shows the payment, so nobody, including Chakula, can "disappear with" customer payments.
+- **Telling the real platform from a copycat** (a lookalike app or site showing its own Till):
+  - **Till name check.** The owner records the business name M-Pesa shows for each hotel's Till. The customer's payment card says "M-Pesa will show: ZZ TEST KITCHEN LTD" and "if it shows a different name, don't pay: call the hotel". A copycat's Till will not carry the real hotel's name.
+  - **"Checked by Chakula" badge** on a hotel only after the owner has met the hotel and ticked "I have checked this hotel and its Till" (a real check, not automatic). **Only the super admin can set it.** If a hotel changes its Till number (or the admin changes the number or name), the badge and the recorded name are removed until it is checked again, so a hijacked hotel login can't quietly send customers to another Till.
+  - **Safety card** on the home screen and the payment card ("How we keep your money safe") says: pay only the hotel's Till; check the name; only use the official app or website; never pay someone who messages you privately.
+  - The 4-digit PIN (D33) proves food was handed over, so a hotel cannot claim a handover that did not happen.
+- **Still to do outside the code:** one official, memorable web address with HTTPS; the app on the Play Store under your own developer account; hotel contracts; a way for customers to report a fake. These are what stop customers being fooled by a lookalike, and no feature inside the app can do that on its own.
+
+## D33. Pickup PIN, rider bike details and the rider app (owner, 2026-10-08)
+
+- **Pickup and eat-in PIN.** Every order gets a 4-digit PIN (the same `delivery_code` that delivery orders already had). For pickup and eat in, **the customer reads their PIN out to the hotel** and the hotel types it in before the order can be marked collected. The customer sees the PIN on their tracking page (web and app) once the order is paid. It proves the person at the counter is the one who ordered, so nobody else can collect the food.
+  - The hotel's screens and API **never show the PIN**; they only ask for it.
+  - Five wrong PINs lock the handover (423). The hotel is told to call the customer. A correct PIN is still refused after the lock.
+  - Cash pickup needs the PIN too (the cash is recorded at handover).
+  - Orders placed before this existed have no PIN and are handed over as before. Repeating a finished handover is harmless.
+- **Rider bike details.** To apply, a rider gives the **number plate** (saved as capital letters and digits, 5–10 characters with both) and a **short description** of the bike. A **logbook photo is optional**. The logbook is a private file like the ID photos; only the super admin can open it. The admin's review page shows the plate, description and logbook. Riders who joined earlier have no bike details; they can add them while their application is open, and a draft can't be submitted without them.
+- **Call and WhatsApp buttons** use the hotel's own phone (set by the hotel admin in Settings) and the rider's or customer's phone from the order. They are hidden when there is no usable Kenyan number. Chakula's own WhatsApp help line stays the admin's `support_whatsapp` setting.
+- **Rider app (Android).** Built with the customer app from one Flutter project, as a separate install ("Chakula Rider", `com.hotelapp.hotel_app.rider`, dark icon), so the customer app stays small and only the rider app asks for background-location permissions.
+  - Sign up (details and bike, photos, review), sign in, "pending / fix and resend / paused" screens, jobs (go online, take, picked up, on my way, delivered with the customer's code, cash fee, can't deliver, release), history and earnings, profile, change password, English / Kiswahili, dark mode.
+  - While online it shares its location every ~30 s (~10 s on the road) using an Android foreground service, so it keeps working when the screen is locked, which a web page cannot do. The web rider page still works.
+  - Build: `flutter build apk --flavor rider -t lib/rider/main.dart`. The customer app is `flutter build apk --flavor customer`.
+  - The login's refresh token is kept in the phone's app storage. Move it to the Android Keystore before launch.
+
+---
+
 ## D31. Launch hardening and stuck deliveries (owner request, 2026-10-06)
 
 - **Stuck deliveries have a way out.** Dispatch shows **Close delivery…** on any delivery whose food has left the hotel. The super admin picks *Customer got the food* or *It could not be delivered*, and writes what happened (shown to the customer, rider and hotel, and audit-logged).

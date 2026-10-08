@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../api.dart';
 import '../store.dart';
+import '../i18n.dart';
 import '../util.dart';
 import 'hotel.dart';
+import 'safety.dart';
 import 'search.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -38,16 +40,17 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Order food', style: TextStyle(fontWeight: FontWeight.w800)),
+        title: Text(tr('Order food'), style: TextStyle(fontWeight: FontWeight.w800)),
         actions: [
+          const _LangToggle(),
           IconButton(
             icon: const Icon(Icons.support_agent_outlined),
-            tooltip: 'Help on WhatsApp',
+            tooltip: tr('Help on WhatsApp'),
             onPressed: () => openWhatsApp(context, 'Hello Chakula, I need help with '),
           ),
           IconButton(
             icon: Icon(Theme.of(context).brightness == Brightness.dark ? Icons.light_mode_outlined : Icons.dark_mode_outlined),
-            tooltip: 'Dark mode',
+            tooltip: tr('Dark mode'),
             onPressed: () => context.read<AppState>().setTheme(Theme.of(context).brightness == Brightness.dark ? ThemeMode.light : ThemeMode.dark),
           ),
         ],
@@ -64,12 +67,12 @@ class _HomeScreenState extends State<HomeScreen> {
                       margin: const EdgeInsets.fromLTRB(16, 0, 16, 10),
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(color: const Color(0xFFFEF3C7), borderRadius: BorderRadius.circular(14)),
-                      child: const Row(children: [
+                      child: Row(children: [
                         Icon(Icons.wifi_off, size: 18, color: Color(0xFF92400E)),
                         SizedBox(width: 8),
                         Expanded(
                           child: Text(
-                            "You're offline. Showing saved hotels; pull down to retry.",
+                            tr("You're offline. Showing saved hotels; pull down to retry."),
                             style: TextStyle(color: Color(0xFF92400E), fontSize: 13, fontWeight: FontWeight.w600),
                           ),
                         ),
@@ -79,6 +82,25 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
           const SliverToBoxAdapter(child: _Hero()),
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(16),
+                onTap: () => showSafetySheet(context),
+                child: Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(color: const Color(0xFFDCFCE7), borderRadius: BorderRadius.circular(16)),
+                  child: Row(children: [
+                    const Icon(Icons.shield_outlined, color: Color(0xFF15803D)),
+                    const SizedBox(width: 10),
+                    Expanded(child: Text(tr("You pay the hotel's own M-Pesa Till directly. Tap to see how we keep you safe."), style: const TextStyle(color: Color(0xFF15803D), fontWeight: FontWeight.w700, fontSize: 13))),
+                    const Icon(Icons.chevron_right, color: Color(0xFF15803D)),
+                  ]),
+                ),
+              ),
+            ),
+          ),
           SliverToBoxAdapter(
             child: FutureBuilder<List>(
               future: _offers,
@@ -93,11 +115,11 @@ class _HomeScreenState extends State<HomeScreen> {
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 20, 16, 12),
               child: Row(children: [
-                const Expanded(child: Text('Hotels near you', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800))),
+                Expanded(child: Text(tr('Hotels near you'), style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800))),
                 FilledButton.icon(
                   style: FilledButton.styleFrom(minimumSize: const Size(0, 40), padding: const EdgeInsets.symmetric(horizontal: 16)),
                   icon: const Icon(Icons.search, size: 20),
-                  label: const Text('Search'),
+                  label: Text(tr('Search')),
                   onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SearchScreen())),
                 ),
               ]),
@@ -119,14 +141,14 @@ class _HomeScreenState extends State<HomeScreen> {
                     child: Column(children: [
                       Text('${snap.error}', textAlign: TextAlign.center),
                       const SizedBox(height: 12),
-                      OutlinedButton(onPressed: _refresh, child: const Text('Try again')),
+                      OutlinedButton(onPressed: _refresh, child: Text(tr('Try again'))),
                     ]),
                   ),
                 );
               }
               final hotels = snap.data!.cast<Json>();
               if (hotels.isEmpty) {
-                return const SliverToBoxAdapter(child: Padding(padding: EdgeInsets.all(48), child: Center(child: Text('No hotels are open right now'))));
+                return SliverToBoxAdapter(child: Padding(padding: EdgeInsets.all(48), child: Center(child: Text(tr('No hotels are open right now')))));
               }
               return SliverPadding(
                 padding: const EdgeInsets.fromLTRB(16, 0, 16, 32),
@@ -144,6 +166,33 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
+/// EN | SW switch with the active language filled in orange.
+class _LangToggle extends StatelessWidget {
+  const _LangToggle();
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    Widget chip(String code, String label) {
+      final on = lang.value == code;
+      return GestureDetector(
+        onTap: () => context.read<AppState>().setLang(code),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+          decoration: BoxDecoration(color: on ? brand : Colors.transparent, borderRadius: BorderRadius.circular(99)),
+          child: Text(label, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: on ? Colors.white : cs.onSurface)),
+        ),
+      );
+    }
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 4),
+      padding: const EdgeInsets.all(3),
+      decoration: BoxDecoration(color: cs.surfaceContainerHighest, borderRadius: BorderRadius.circular(99), border: Border.all(color: cs.outlineVariant)),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [chip('en', 'EN'), chip('sw', 'SW')]),
+    );
+  }
+}
+
 class _Hero extends StatelessWidget {
   const _Hero();
   @override
@@ -151,12 +200,12 @@ class _Hero extends StatelessWidget {
         margin: const EdgeInsets.fromLTRB(16, 4, 16, 0),
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(color: brand, borderRadius: BorderRadius.circular(24)),
-        child: const Row(children: [
+        child: Row(children: [
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('Karibu!', style: TextStyle(color: Colors.white70, fontWeight: FontWeight.w600)),
+              Text(tr('Karibu!'), style: TextStyle(color: Colors.white70, fontWeight: FontWeight.w600)),
               SizedBox(height: 4),
-              Text('Hot food from local hotels, delivered or ready for pickup.',
+              Text(tr('Hot food from local hotels, delivered or ready for pickup.'),
                   style: TextStyle(color: Colors.white, fontSize: 19, height: 1.2, fontWeight: FontWeight.w800)),
             ]),
           ),
@@ -171,12 +220,12 @@ class _Deals extends StatelessWidget {
   const _Deals(this.offers);
   @override
   Widget build(BuildContext context) => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const Padding(
+        Padding(
           padding: EdgeInsets.fromLTRB(16, 20, 16, 10),
           child: Row(children: [
             Icon(Icons.local_fire_department, color: brand),
             SizedBox(width: 6),
-            Text("Today's deals", style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+            Text(tr("Today's deals"), style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
           ]),
         ),
         SizedBox(
@@ -244,7 +293,7 @@ class _OfferBanner extends StatelessWidget {
                   ],
                 ]),
               ),
-              const Text('Order now  →', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 13)),
+              Text(tr('Order now  →'), style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 13)),
             ]),
           ),
         ]),
@@ -283,9 +332,10 @@ class _HotelCard extends StatelessWidget {
                   gradient: LinearGradient(colors: [accent, Color.lerp(accent, Colors.black, .55)!], begin: Alignment.topLeft, end: Alignment.bottomRight),
                 ),
               ),
+              if (h['cover_url'] == null) Center(child: Opacity(opacity: .25, child: Text(foodEmoji(h['name']), style: const TextStyle(fontSize: 84)))),
               if (h['cover_url'] != null) Opacity(opacity: open ? 1 : .5, child: NetImage(h['cover_url'])),
               const DecoratedBox(
-                decoration: BoxDecoration(gradient: LinearGradient(colors: [Colors.transparent, kMuted], begin: Alignment.center, end: Alignment.bottomCenter)),
+                decoration: BoxDecoration(gradient: LinearGradient(colors: [Colors.transparent, Colors.black54], begin: Alignment.center, end: Alignment.bottomCenter)),
               ),
               Positioned(
                 left: 14,
@@ -300,8 +350,9 @@ class _HotelCard extends StatelessWidget {
             child: Row(children: [
               Expanded(
                 child: Wrap(spacing: 6, runSpacing: 6, children: [
-                  Pill(_labels[h['state']] ?? '',
-                      bg: open ? const Color(0xFFDCFCE7) : const Color(0xFFF1F1F1), fg: open ? const Color(0xFF15803D) : kMuted),
+                  if (h['verified'] == true) verifiedPill(),
+                  Pill(tr(_labels[h['state']] ?? ''),
+                      bg: open ? const Color(0xFFDCFCE7) : const Color(0xFFF1F1F1), fg: open ? const Color(0xFF15803D) : mutedOf(context)),
                   if (rating != null) Pill('${(rating as num).toStringAsFixed(1)} (${h['rating_count']})', icon: Icons.star_rounded),
                   Pill('${h['prep_minutes']} min', icon: Icons.timer_outlined),
                 ]),

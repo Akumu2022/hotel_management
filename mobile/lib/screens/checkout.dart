@@ -5,7 +5,10 @@ import 'package:geolocator/geolocator.dart';
 import 'package:provider/provider.dart';
 import '../api.dart';
 import '../store.dart';
+import '../i18n.dart';
 import '../util.dart';
+import 'package:latlong2/latlong.dart';
+import 'pin_picker.dart';
 import 'shell.dart';
 import 'track.dart';
 
@@ -78,10 +81,10 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       var perm = await Geolocator.checkPermission();
       if (perm == LocationPermission.denied) perm = await Geolocator.requestPermission();
       if (perm == LocationPermission.denied || perm == LocationPermission.deniedForever) {
-        throw 'Allow location access to drop your delivery pin';
+        throw tr('Allow location access to drop your delivery pin');
       }
       final p = await Geolocator.getCurrentPosition(locationSettings: const LocationSettings(accuracy: LocationAccuracy.high))
-          .timeout(const Duration(seconds: 15), onTimeout: () => throw 'Could not get your location. Turn on GPS and try again');
+          .timeout(const Duration(seconds: 15), onTimeout: () => throw tr('Could not get your location. Turn on GPS and try again'));
       lat = p.latitude;
       lng = p.longitude;
       await _requote();
@@ -92,13 +95,26 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     }
   }
 
+  Future<void> _pickOnMap() async {
+    final picked = await Navigator.push<LatLng>(
+      context,
+      MaterialPageRoute(builder: (_) => PinPickerScreen(start: lat == null ? null : LatLng(lat!, lng!), hotelSlug: s.hotelSlug)),
+    );
+    if (picked == null || !mounted) return;
+    setState(() {
+      lat = picked.latitude;
+      lng = picked.longitude;
+    });
+    _requote();
+  }
+
   Future<void> _place({int? expected}) async {
     final q = quote;
     if (q == null) return;
-    if (_name.text.trim().length < 2) return toast(context, 'Enter your name');
-    if (_phone.text.trim().length < 9) return toast(context, 'Enter your phone number');
+    if (_name.text.trim().length < 2) return toast(context, tr('Enter your name'));
+    if (_phone.text.trim().length < 9) return toast(context, tr('Enter your phone number'));
     if (type == 'delivery' && (lat == null || _landmark.text.trim().length < 3)) {
-      return toast(context, 'Drop a pin and describe the delivery spot');
+      return toast(context, tr('Drop a pin and describe the delivery spot'));
     }
     setState(() {
       placing = true;
@@ -141,11 +157,11 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         final ok = await showDialog<bool>(
           context: context,
           builder: (ctx) => AlertDialog(
-            title: const Text('Price changed'),
-            content: Text('The total is now ${kes(nq['till_amount'])}. Continue?'),
+            title: Text(tr('Price changed')),
+            content: Text(tr('The total is now {amount}. Continue?', {'amount': kes(nq['till_amount'])})),
             actions: [
-              TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-              FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Continue')),
+              TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(tr('Cancel'))),
+              FilledButton(onPressed: () => Navigator.pop(ctx, true), child: Text(tr('Continue'))),
             ],
           ),
         );
@@ -163,15 +179,15 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     final cart = context.watch<AppState>();
     if (cart.lines.isEmpty) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Cart', style: TextStyle(fontWeight: FontWeight.w800)), actions: [if (Navigator.canPop(context)) IconButton(icon: const Icon(Icons.home_outlined), onPressed: () => goHome(context))]),
+        appBar: AppBar(title: Text(tr('Cart'), style: TextStyle(fontWeight: FontWeight.w800)), actions: [if (Navigator.canPop(context)) IconButton(icon: const Icon(Icons.home_outlined), onPressed: () => goHome(context))]),
         body: Center(
           child: Column(mainAxisSize: MainAxisSize.min, children: [
             const Text('🧺', style: TextStyle(fontSize: 56)),
             const SizedBox(height: 8),
-            const Text('Your cart is empty', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+            Text(tr('Your cart is empty'), style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 64, vertical: 16),
-              child: OutlinedButton(onPressed: () => goHome(context), child: const Text('Browse hotels')),
+              child: OutlinedButton(onPressed: () => goHome(context), child: Text(tr('Browse hotels'))),
             ),
           ]),
         ),
@@ -180,8 +196,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     final q = quote;
     return Scaffold(
       appBar: AppBar(
-        title: Text('Cart · ${cart.hotelName ?? ''}', style: const TextStyle(fontWeight: FontWeight.w800)),
-        actions: [if (Navigator.canPop(context)) IconButton(icon: const Icon(Icons.home_outlined), tooltip: 'Home', onPressed: () => goHome(context))],
+        title: Text('${tr('Cart')} · ${cart.hotelName ?? ''}', style: const TextStyle(fontWeight: FontWeight.w800)),
+        actions: [if (Navigator.canPop(context)) IconButton(icon: const Icon(Icons.home_outlined), tooltip: tr('Home'), onPressed: () => goHome(context))],
         bottom: quoting || locating ? const PreferredSize(preferredSize: Size.fromHeight(3), child: LinearProgressIndicator(minHeight: 3)) : null,
       ),
       // Always visible, never hidden behind the phone's gesture bar or the bottom nav.
@@ -193,7 +209,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             onPressed: placing || quoting || q == null || q['too_far'] == true ? null : () => _place(),
             child: placing
                 ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                : Text(q == null ? 'Place order' : (payment == 'cash' ? 'Place order · pay at pickup' : 'Place order · pay ${kes(q['till_amount'])}')),
+                : Text(q == null ? tr('Place order') : tr('Place order · pay {amount}', {'amount': kes(q['till_amount'])})),
           ),
         ),
       ),
@@ -202,19 +218,19 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           ListTile(
             contentPadding: EdgeInsets.zero,
             title: Text(l.name, style: kItem),
-            subtitle: l.optionsLabel.isEmpty ? null : Text(l.optionsLabel, style: kLabel),
+            subtitle: l.optionsLabel.isEmpty ? null : Text(l.optionsLabel, style: labelOf(context)),
             trailing: Row(mainAxisSize: MainAxisSize.min, children: [
               IconButton(icon: const Icon(Icons.remove_circle_outline), onPressed: () { cart.setQty(l, l.quantity - 1); _requote(); }),
               Text('${l.quantity}'),
-              IconButton(icon: const Icon(Icons.add_circle_outline), onPressed: () { cart.setQty(l, l.quantity + 1); _requote(); }),
+              IconButton(icon: Icon(Icons.add_circle_outline), onPressed: () { cart.setQty(l, l.quantity + 1); _requote(); }),
             ]),
           ),
-        const Divider(),
+        Divider(),
         SegmentedButton<String>(
-          segments: const [
-            ButtonSegment(value: 'delivery', label: Text('Delivery'), icon: Icon(Icons.delivery_dining)),
-            ButtonSegment(value: 'pickup', label: Text('Pickup'), icon: Icon(Icons.storefront)),
-            ButtonSegment(value: 'eat_in', label: Text('Eat in'), icon: Icon(Icons.restaurant)),
+          segments: [
+            ButtonSegment(value: 'delivery', label: Text(tr('Delivery')), icon: Icon(Icons.delivery_dining)),
+            ButtonSegment(value: 'pickup', label: Text(tr('Pickup')), icon: Icon(Icons.storefront)),
+            ButtonSegment(value: 'eat_in', label: Text(tr('Eat in')), icon: Icon(Icons.restaurant)),
           ],
           selected: {type},
           onSelectionChanged: (v) {
@@ -226,28 +242,49 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           },
         ),
         const SizedBox(height: 12),
-        TextField(controller: _name, decoration: const InputDecoration(labelText: 'Your name', border: OutlineInputBorder())),
+        TextField(controller: _name, decoration: InputDecoration(labelText: tr('Your name'), border: OutlineInputBorder())),
         const SizedBox(height: 12),
         TextField(
           controller: _phone,
           keyboardType: TextInputType.phone,
-          decoration: const InputDecoration(labelText: 'Phone (07..)', border: OutlineInputBorder()),
+          decoration: InputDecoration(labelText: tr('Phone (07..)'), border: OutlineInputBorder()),
           onEditingComplete: _requote,
         ),
         if (type == 'delivery') ...[
           const SizedBox(height: 12),
-          OutlinedButton.icon(
-            onPressed: locating ? null : _locate,
-            icon: const Icon(Icons.my_location),
-            label: Text(lat == null ? 'Use my current location' : 'Location set · tap to refresh'),
-          ),
+          Row(children: [
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: locating ? null : _locate,
+                icon: locating ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.my_location, size: 20),
+                label: Text(tr('My location')),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: _pickOnMap,
+                icon: const Icon(Icons.map_outlined, size: 20),
+                label: Text(tr('Pick on map')),
+              ),
+            ),
+          ]),
+          if (lat != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Row(children: [
+                const Icon(Icons.check_circle, size: 16, color: Color(0xFF16A34A)),
+                const SizedBox(width: 6),
+                Text(tr('Delivery spot set'), style: labelOf(context).copyWith(color: const Color(0xFF16A34A))),
+              ]),
+            ),
           if (s.places.isNotEmpty) ...[
             const SizedBox(height: 10),
             Wrap(spacing: 8, children: [
               for (final p in s.places)
                 InputChip(
                   avatar: Icon(p['label'] == 'Home' ? Icons.home_outlined : p['label'] == 'Work' ? Icons.work_outline : Icons.place_outlined, size: 18),
-                  label: Text('${p['label']}'),
+                  label: Text(tr('${p['label']}')),
                   onPressed: () {
                     setState(() {
                       lat = (p['lat'] as num).toDouble();
@@ -263,41 +300,41 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           const SizedBox(height: 12),
           TextField(
             controller: _landmark,
-            decoration: const InputDecoration(labelText: 'Describe the spot (gate colour, building)', border: OutlineInputBorder()),
+            decoration: InputDecoration(labelText: tr('Describe the spot (gate colour, building)'), border: OutlineInputBorder()),
           ),
           if (lat != null && _landmark.text.trim().length >= 3) ...[
             const SizedBox(height: 8),
             Row(children: [
-              const Text('Save this spot as', style: TextStyle(color: kMuted, fontSize: 13)),
+              Text(tr('Save this spot as'), style: TextStyle(color: mutedOf(context), fontSize: 13)),
               const SizedBox(width: 8),
               for (final l in const ['Home', 'Work', 'Other'])
                 Padding(
                   padding: const EdgeInsets.only(right: 6),
                   child: ActionChip(
-                    label: Text(l),
+                    label: Text(tr(l)),
                     visualDensity: VisualDensity.compact,
                     onPressed: () {
                       setState(() => s.savePlace(l, lat!, lng!, _landmark.text.trim()));
-                      toast(context, 'Saved as $l');
+                      toast(context, tr('Saved as {label}', {'label': tr(l)}));
                     },
                   ),
                 ),
             ]),
           ],
           const SizedBox(height: 12),
-          const Text('Rider fee', style: kSection),
+          Text(tr('Rider fee'), style: kSection),
           RadioListTile<String>(
             contentPadding: EdgeInsets.zero,
             value: 'included',
             groupValue: feeMode,
-            title: const Text('Pay it now with the order'),
+            title: Text(tr('Pay it now with the order')),
             onChanged: (v) { setState(() => feeMode = v!); _requote(); },
           ),
           RadioListTile<String>(
             contentPadding: EdgeInsets.zero,
             value: 'cash',
             groupValue: feeMode,
-            title: const Text('Pay the rider cash at the door'),
+            title: Text(tr('Pay the rider cash at the door')),
             onChanged: q != null && q['option_b_allowed'] == false ? null : (v) { setState(() => feeMode = v!); _requote(); },
           ),
         ],
@@ -305,18 +342,21 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           const SizedBox(height: 12),
           DropdownButtonFormField<int>(
             initialValue: arriveIn,
-            decoration: const InputDecoration(labelText: 'I will arrive in', border: OutlineInputBorder()),
-            items: [for (final m in [15, 30, 45, 60, 90]) DropdownMenuItem(value: m, child: Text('$m minutes'))],
+            decoration: InputDecoration(labelText: tr('I will arrive in'), border: OutlineInputBorder()),
+            items: [for (final m in [15, 30, 45, 60, 90]) DropdownMenuItem(value: m, child: Text(tr('{n} minutes', {'n': m})))],
             onChanged: (v) => setState(() => arriveIn = v ?? 30),
           ),
         ],
-        if (type == 'pickup' && q?['cash_allowed'] == true) ...[
+        if (type != 'delivery') ...[
           const SizedBox(height: 8),
-          SwitchListTile(
-            contentPadding: EdgeInsets.zero,
-            title: const Text('Pay cash at pickup'),
-            value: payment == 'cash',
-            onChanged: (v) => setState(() => payment = v ? 'cash' : 'mpesa'),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(color: const Color(0xFFDCFCE7), borderRadius: BorderRadius.circular(14)),
+            child: Row(children: [
+              const Icon(Icons.phone_android, size: 20, color: Color(0xFF15803D)),
+              const SizedBox(width: 10),
+              Expanded(child: Text(tr('Pay with M-Pesa first. The hotel starts cooking once your payment arrives.'), style: const TextStyle(color: Color(0xFF15803D), fontWeight: FontWeight.w600, fontSize: 13))),
+            ]),
           ),
         ],
         const SizedBox(height: 12),
@@ -324,9 +364,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           controller: _promo,
           textCapitalization: TextCapitalization.characters,
           decoration: InputDecoration(
-            labelText: 'Promo code (optional)',
+            labelText: tr('Promo code (optional)'),
             border: const OutlineInputBorder(),
-            suffixIcon: TextButton(onPressed: _requote, child: const Text('Apply')),
+            suffixIcon: TextButton(onPressed: _requote, child: Text(tr('Apply'))),
           ),
         ),
         const SizedBox(height: 16),
@@ -334,7 +374,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         if (q?['too_far'] == true)
           Padding(
             padding: const EdgeInsets.only(top: 8),
-            child: Text('Too far for delivery: ${q!['distance_km']} km away (max ${q['max_delivery_km']} km). Choose Pickup or a closer spot.', style: const TextStyle(color: Colors.red)),
+            child: Text(tr('Too far for delivery: {km} km away (max {max} km). Choose Pickup or a closer spot.', {'km': q!['distance_km'], 'max': q['max_delivery_km']}), style: const TextStyle(color: Colors.red)),
           ),
         if (q?['promo_error'] != null) Text('${q!['promo_error']}', style: const TextStyle(color: Colors.red)),
         if (error != null) Padding(padding: const EdgeInsets.only(top: 8), child: Text(error!, style: const TextStyle(color: Colors.red))),

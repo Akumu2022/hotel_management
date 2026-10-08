@@ -4,8 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../api.dart';
 import '../store.dart';
+import '../i18n.dart';
 import '../util.dart';
 import 'rider_map.dart';
+import 'safety.dart';
 import 'shell.dart';
 
 const _labels = {
@@ -58,7 +60,13 @@ class _TrackScreenState extends State<TrackScreen> {
   Future<void> _load() async {
     try {
       final r = await apiGet('/track/${widget.token}') as Json;
+      final before = t?['status'];
       if (mounted) setState(() { t = r; error = null; });
+      // Tell the customer when their order moves along while they are looking at it.
+      if (before != null && before != r['status'] && mounted) {
+        HapticFeedback.mediumImpact();
+        toast(context, tr(_labels[r['status']] ?? '${r['status']}'));
+      }
     } on ApiError catch (e) {
       if (mounted && t == null) setState(() => error = e.message);
     }
@@ -87,15 +95,15 @@ class _TrackScreenState extends State<TrackScreen> {
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, set) => AlertDialog(
-          title: const Text('Rate your order'),
+          title: Text(tr('Rate your order')),
           content: Column(mainAxisSize: MainAxisSize.min, children: [
-            _Stars('Hotel', hotel, (v) => set(() => hotel = v)),
-            if (needsRider) _Stars('Rider', rider, (v) => set(() => rider = v)),
-            TextField(controller: comment, decoration: const InputDecoration(hintText: 'Comment (optional)')),
+            _Stars(tr('Hotel'), hotel, (v) => set(() => hotel = v)),
+            if (needsRider) _Stars(tr('Rider'), rider, (v) => set(() => rider = v)),
+            TextField(controller: comment, decoration: InputDecoration(hintText: tr('Comment (optional)'))),
           ]),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Later')),
-            FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Send')),
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(tr('Later'))),
+            FilledButton(onPressed: () => Navigator.pop(ctx, true), child: Text(tr('Send'))),
           ],
         ),
       ),
@@ -105,7 +113,7 @@ class _TrackScreenState extends State<TrackScreen> {
             'hotel_stars': hotel,
             'rider_stars': needsRider ? rider : null,
             'comment': comment.text.trim().isEmpty ? null : comment.text.trim(),
-          }), ok: 'Thanks for rating!');
+          }), ok: tr('Thanks for rating!'));
       // Rated = order finished: back to the hotels after a moment to read the thanks.
       Future.delayed(const Duration(milliseconds: 1800), () {
         if (mounted) goHome(context);
@@ -118,7 +126,7 @@ class _TrackScreenState extends State<TrackScreen> {
     final o = t;
     if (o == null) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Your order'), actions: [_homeButton(context)]),
+        appBar: AppBar(title: Text(tr('Your order')), actions: [_homeButton(context)]),
         body: error != null
             ? Center(child: Text(error!))
             : ListView(padding: const EdgeInsets.all(16), children: const [Skel(40), SizedBox(height: 14), Skel(90), SizedBox(height: 14), Skel(200)]),
@@ -129,7 +137,7 @@ class _TrackScreenState extends State<TrackScreen> {
     final idx = steps.indexOf(status);
     return Scaffold(
       appBar: AppBar(
-        title: Text('Order ${o['code']}'),
+        title: Text(tr('Order {code}', {'code': o['code']})),
         actions: [_homeButton(context)],
         bottom: busy ? const PreferredSize(preferredSize: Size.fromHeight(3), child: LinearProgressIndicator(minHeight: 3)) : null,
       ),
@@ -140,7 +148,7 @@ class _TrackScreenState extends State<TrackScreen> {
           const SizedBox(height: 4),
           const SizedBox(height: 4),
           Wrap(children: [
-            Pill(_labels[status] ?? status,
+            Pill(tr(_labels[status] ?? status),
                 bg: _ended.contains(status) ? const Color(0xFFFEE2E2) : const Color(0xFFFFE4D6),
                 fg: _ended.contains(status) ? const Color(0xFFB91C1C) : brand),
           ]),
@@ -149,27 +157,36 @@ class _TrackScreenState extends State<TrackScreen> {
           const SizedBox(height: 12),
           if (status == 'awaiting_payment') _payCard(o),
           if (status == 'checking_payment')
-            const Card(
+            Card(
               child: ListTile(
                 leading: SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2.5)),
-                title: Text('We are checking your payment'),
+                title: Text(tr('We are checking your payment')),
               ),
             ),
           if (o['delivery_code'] != null && (status == 'on_the_way' || status == 'picked_up'))
             Card(
               child: ListTile(
                 leading: const Icon(Icons.pin),
-                title: Text('Give the rider this code: ${o['delivery_code']}'),
+                title: Text(tr('Give the rider this code: {code}', {'code': o['delivery_code']})),
               ),
             ),
+          if (o['type'] != 'delivery' && o['delivery_code'] != null && !_ended.contains(status) && !const ['awaiting_payment', 'checking_payment', 'collected'].contains(status))
+            _pinCard(o),
           if (o['live'] != null && o['rider_name'] != null && (status == 'on_the_way' || status == 'picked_up'))
             Padding(padding: const EdgeInsets.only(bottom: 12), child: RiderMap(token: widget.token, live: o['live'] as Json, riderName: '${o['rider_name']}')),
           if (o['rider_name'] != null)
             Card(
-              child: ListTile(
-                leading: const Icon(Icons.delivery_dining),
-                title: Text('${o['rider_name']}'),
-                subtitle: Text('${o['rider_phone'] ?? ''}'),
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Column(children: [
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.delivery_dining),
+                    title: Text('${o['rider_name']}', style: kItem),
+                    subtitle: Text(tr('Your rider')),
+                  ),
+                  ContactRow(o['rider_phone'] as String?, message: 'Hi ${o['rider_name']}, about my order #${o['code']}.'),
+                ]),
               ),
             ),
           if (o['fee_question'] == true)
@@ -177,10 +194,10 @@ class _TrackScreenState extends State<TrackScreen> {
               child: Padding(
                 padding: const EdgeInsets.all(12),
                 child: Column(children: [
-                  const Text('Did you pay the rider the delivery fee in cash?'),
+                  Text(tr('Did you pay the rider the delivery fee in cash?')),
                   Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                    TextButton(onPressed: busy ? null : () => _act(() => apiPost('/track/${widget.token}/rider-fee-answer', {'paid': false})), child: const Text('No')),
-                    FilledButton(onPressed: busy ? null : () => _act(() => apiPost('/track/${widget.token}/rider-fee-answer', {'paid': true})), child: const Text('Yes')),
+                    TextButton(onPressed: busy ? null : () => _act(() => apiPost('/track/${widget.token}/rider-fee-answer', {'paid': false})), child: Text(tr('No'))),
+                    FilledButton(onPressed: busy ? null : () => _act(() => apiPost('/track/${widget.token}/rider-fee-answer', {'paid': true})), child: Text(tr('Yes'))),
                   ]),
                 ]),
               ),
@@ -190,7 +207,7 @@ class _TrackScreenState extends State<TrackScreen> {
               ListTile(
                 dense: true,
                 leading: Icon(i <= idx ? Icons.check_circle : Icons.radio_button_unchecked, color: i <= idx ? Colors.green : Colors.grey),
-                title: Text(_labels[steps[i]]!, style: TextStyle(fontWeight: i == idx ? FontWeight.bold : null)),
+                title: Text(tr(_labels[steps[i]]!), style: TextStyle(fontWeight: i == idx ? FontWeight.bold : null)),
               ),
           const Divider(),
           for (final i in (o['items'] as List).cast<Json>())
@@ -200,28 +217,31 @@ class _TrackScreenState extends State<TrackScreen> {
               subtitle: (i['options'] as List).isEmpty ? null : Text((i['options'] as List).join(', ')),
               trailing: Text(kes(i['line_total'])),
             ),
-          ListTile(dense: true, title: const Text('Total paid via till'), trailing: Text(kes(o['till_amount']), style: const TextStyle(fontWeight: FontWeight.bold))),
+          ListTile(dense: true, title: Text(tr('Total paid via till')), trailing: Text(kes(o['till_amount']), style: const TextStyle(fontWeight: FontWeight.bold))),
           if ((o['rider_fee_cash'] as int) > 0)
-            ListTile(dense: true, title: const Text('Cash to rider'), trailing: Text(kes(o['rider_fee_cash']))),
-          if (o['hotel_phone'] != null) ListTile(dense: true, leading: const Icon(Icons.phone), title: Text('Hotel: ${o['hotel_phone']}')),
+            ListTile(dense: true, title: Text(tr('Cash to rider')), trailing: Text(kes(o['rider_fee_cash']))),
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: ContactRow(o['hotel_phone'] as String?, message: 'Hello ${o['hotel_name']}, about my order #${o['code']}.'),
+          ),
           const SizedBox(height: 8),
           if (o['can_cancel'] == true)
             OutlinedButton(
-              onPressed: busy ? null : () => _act(() => apiPost('/track/${widget.token}/cancel'), ok: 'Order cancelled'),
-              child: const Text('Cancel order'),
+              onPressed: busy ? null : () => _act(() => apiPost('/track/${widget.token}/cancel'), ok: tr('Order cancelled')),
+              child: Text(tr('Cancel order')),
             ),
-          if (o['can_rate'] == true && o['rated'] != true) FilledButton(style: fullWidthFilled, onPressed: _rate, child: const Text('Rate this order')),
+          if (o['can_rate'] == true && o['rated'] != true) FilledButton(style: fullWidthFilled, onPressed: _rate, child: Text(tr('Rate this order'))),
           if ((o['items'] as List).isNotEmpty && o['hotel_slug'] != null && (status == 'delivered' || status == 'collected' || _ended.contains(status)))
             Padding(
               padding: const EdgeInsets.only(top: 8),
               child: OutlinedButton.icon(
                 icon: const Icon(Icons.replay),
-                label: const Text('Order again'),
+                label: Text(tr('Order again')),
                 onPressed: () {
                   context.read<AppState>().orderAgain(o);
                   tabIndex.value = 2; // Cart tab
                   Navigator.of(context).popUntil((r) => r.isFirst);
-                  toast(context, 'Your order is back in the basket');
+                  toast(context, tr('Your order is back in the basket'));
                 },
               ),
             ),
@@ -232,13 +252,45 @@ class _TrackScreenState extends State<TrackScreen> {
     );
   }
 
-  Widget _homeButton(BuildContext context) => IconButton(icon: const Icon(Icons.home_outlined), tooltip: 'Home', onPressed: () => goHome(context));
+/// Pickup and eat-in: the customer reads this PIN to the hotel, who only hand over the food once
+  /// it matches. It stops someone else collecting your order.
+  Widget _pinCard(Json o) {
+    final eatIn = o['type'] == 'eat_in';
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            const Icon(Icons.lock_outline, color: brand),
+            const SizedBox(width: 8),
+            Text(tr(eatIn ? 'Eat-in PIN' : 'Pickup PIN'), style: kSection),
+          ]),
+          const SizedBox(height: 4),
+          Text(tr('Tell the hotel this PIN when you get there. They only hand over your food once you give it.'), style: labelOf(context)),
+          const SizedBox(height: 12),
+          Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+            for (final d in '${o['delivery_code']}'.split(''))
+              Container(
+                width: 52,
+                height: 64,
+                margin: const EdgeInsets.symmetric(horizontal: 5),
+                alignment: Alignment.center,
+                decoration: BoxDecoration(color: const Color(0xFFFFE4D6), borderRadius: BorderRadius.circular(14)),
+                child: Text(d, style: const TextStyle(fontSize: 34, fontWeight: FontWeight.w900, color: brand)),
+              ),
+          ]),
+        ]),
+      ),
+    );
+  }
+
+  Widget _homeButton(BuildContext context) => IconButton(icon: const Icon(Icons.home_outlined), tooltip: tr('Home'), onPressed: () => goHome(context));
 
   /// "Step 3 of 7" with a bar that fills as the order moves along.
   Widget _progress(List<String> steps, int idx) => Padding(
         padding: const EdgeInsets.only(top: 12),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('Step ${idx + 1} of ${steps.length}', style: const TextStyle(color: kMuted, fontSize: 13, fontWeight: FontWeight.w600)),
+          Text(tr('Step {n} of {total}', {'n': idx + 1, 'total': steps.length}), style: TextStyle(color: mutedOf(context), fontSize: 13, fontWeight: FontWeight.w600)),
           const SizedBox(height: 6),
           TweenAnimationBuilder<double>(
             tween: Tween(end: (idx + 1) / steps.length),
@@ -266,7 +318,7 @@ class _TrackScreenState extends State<TrackScreen> {
             const SizedBox(width: 12),
             Expanded(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                const Text('Pay with M-Pesa', style: kLabel),
+                Text(tr('Pay with M-Pesa'), style: labelOf(context)),
                 Text(kes(o['till_amount']), style: kTitle.copyWith(fontSize: 26)),
               ]),
             ),
@@ -284,24 +336,44 @@ class _TrackScreenState extends State<TrackScreen> {
               child: Row(children: [
                 Expanded(
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    const Text('BUY GOODS TILL NUMBER', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: kMuted, letterSpacing: .6)),
+                    Text(tr('BUY GOODS TILL NUMBER'), style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: mutedOf(context), letterSpacing: .6)),
                     const SizedBox(height: 2),
                     Text(till, style: const TextStyle(fontSize: 32, fontWeight: FontWeight.w900, letterSpacing: 3)),
-                    Text('${o['hotel_name']}', style: kLabel),
+                    o['till_name'] != null
+                        ? Text(tr('M-Pesa will show: {name}', {'name': o['till_name']}), style: kItem.copyWith(fontSize: 14))
+                        : Text('${o['hotel_name']}', style: labelOf(context)),
                   ]),
                 ),
                 IconButton.filledTonal(
-                  tooltip: 'Copy till number',
+                  tooltip: tr('Copy till number'),
                   icon: const Icon(Icons.copy_rounded),
                   onPressed: () {
                     Clipboard.setData(ClipboardData(text: till));
-                    toast(context, 'Till number copied');
+                    toast(context, tr('Till number copied'));
                   },
                 ),
               ]),
             ),
-            const SizedBox(height: 14),
-            for (final (i, step) in ['Open M-Pesa → Lipa na M-Pesa → Buy Goods and Services', 'Till $till, amount ${kes(o['till_amount'])} exactly', 'Enter your PIN and keep the M-Pesa message'].indexed)
+            if (o['till_name'] != null)
+              Container(
+                width: double.infinity,
+                margin: const EdgeInsets.only(top: 10),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(color: const Color(0xFFDCFCE7), borderRadius: BorderRadius.circular(14)),
+                child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  const Icon(Icons.shield_outlined, size: 20, color: Color(0xFF15803D)),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      tr("Before you enter your PIN, check that M-Pesa shows this name. If it shows a different name, don't pay: call the hotel."),
+                      style: const TextStyle(color: Color(0xFF15803D), fontWeight: FontWeight.w600, fontSize: 13),
+                    ),
+                  ),
+                ]),
+              ),
+            TextButton(onPressed: () => showSafetySheet(context), child: Text(tr('How we keep your money safe'))),
+            const SizedBox(height: 4),
+            for (final (i, step) in [tr('Open M-Pesa → Lipa na M-Pesa → Buy Goods and Services'), tr('Till {till}, amount {amount} exactly', {'till': till, 'amount': kes(o['till_amount'])}), tr('Enter your PIN and keep the M-Pesa message')].indexed)
               Padding(
                 padding: const EdgeInsets.only(bottom: 8),
                 child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -317,28 +389,28 @@ class _TrackScreenState extends State<TrackScreen> {
                 ]),
               ),
             const SizedBox(height: 6),
-            const Text('Then paste the M-Pesa transaction code', style: kSection),
+            Text(tr('Then paste the M-Pesa transaction code'), style: kSection),
             const SizedBox(height: 8),
             TextField(
               controller: _code,
               textCapitalization: TextCapitalization.characters,
-              decoration: const InputDecoration(hintText: 'e.g. SJK3ABC123'),
+              decoration: InputDecoration(hintText: tr('e.g. SJK3ABC123')),
             ),
             const SizedBox(height: 10),
             FilledButton(
               style: fullWidthFilled,
               onPressed: busy ? null : () => _act(() => apiPost('/track/${widget.token}/payment-code', {'code': _code.text.trim().toUpperCase()})),
-              child: busy ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Text('Submit code'),
+              child: busy ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : Text(tr('Submit code')),
             ),
             const SizedBox(height: 10),
-            const Text('This page updates by itself once the hotel confirms your payment.', style: kLabel),
+            Text(tr('This page updates by itself once the hotel confirms your payment.'), style: labelOf(context)),
             if ((o['rider_fee_cash'] as int) > 0)
               Container(
                 width: double.infinity,
                 margin: const EdgeInsets.only(top: 12),
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(color: const Color(0xFFFEF3C7), borderRadius: BorderRadius.circular(12)),
-                child: Text('Also have ${kes(o['rider_fee_cash'])} cash ready for the rider.', style: const TextStyle(color: Color(0xFF92400E), fontWeight: FontWeight.w700)),
+                child: Text(tr('Also have {amount} cash ready for the rider.', {'amount': kes(o['rider_fee_cash'])}), style: const TextStyle(color: Color(0xFF92400E), fontWeight: FontWeight.w700)),
               ),
           ]),
         ),

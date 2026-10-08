@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
+import 'i18n.dart';
 import 'package:flutter/material.dart' show ThemeMode;
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -46,6 +47,7 @@ class AppState extends ChangeNotifier {
       recent = [for (final r in (jsonDecode(_p.getString('recent') ?? '[]') as List)) Map<String, dynamic>.from(r)];
       places = [for (final r in (jsonDecode(_p.getString('places') ?? '[]') as List)) Map<String, dynamic>.from(r)];
       mode = _p.getString('mode') ?? 'delivery';
+      lang.value = _p.getString('lang') ?? 'en';
       final pd = _p.getString('pending');
       pending = pd == null ? null : Map<String, dynamic>.from(jsonDecode(pd) as Map);
       themeMode = ThemeMode.values.firstWhere((m) => m.name == _p.getString('theme'), orElse: () => ThemeMode.system);
@@ -108,6 +110,12 @@ class AppState extends ChangeNotifier {
       ...recent.where((r) => r['token'] != token),
     ].take(200).toList();
     _save();
+  }
+
+  void setLang(String l) {
+    lang.value = l;
+    _p.setString('lang', l);
+    notifyListeners();
   }
 
   void setPending(Map<String, dynamic>? p) {
