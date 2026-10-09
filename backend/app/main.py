@@ -25,6 +25,7 @@ from app.api.v1 import (
     push,
     reports,
     riders,
+    wallet,
 )
 from app.core.config import get_config
 from app.core.errors import install_error_handlers
@@ -124,6 +125,7 @@ def create_app() -> FastAPI:
     v1.include_router(forwarder.hotel)
     v1.include_router(forwarder.admin)
     v1.include_router(push.router)
+    v1.include_router(wallet.router)
     v1.include_router(payments_routes.router)  # Daraja callbacks; 404 unless PAYMENTS_ENABLED
     app.include_router(v1)
 

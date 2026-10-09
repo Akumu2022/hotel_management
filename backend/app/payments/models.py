@@ -99,6 +99,8 @@ class StkRequest(PBase):
     order_ref: Mapped[str] = mapped_column(String(40))
     phone: Mapped[str] = mapped_column(String(16))
     amount: Mapped[int] = mapped_column(Integer)
+    # Part of `amount` that is the rider's fee: held on success, credited to whoever delivers.
+    rider_fee: Mapped[int] = mapped_column(Integer, server_default=text("0"))
     status: Mapped[str] = mapped_column(String(10), server_default=text("'created'"))
     checkout_request_id: Mapped[str | None] = mapped_column(String(80), unique=True)
     merchant_request_id: Mapped[str | None] = mapped_column(String(80))

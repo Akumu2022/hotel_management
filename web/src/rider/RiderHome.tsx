@@ -1,7 +1,7 @@
 /** Rider app shell: KYC steps until the Chakula team approves, then jobs. */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import clsx from "clsx";
-import { Bike, Camera, CheckCircle2, Clock, IdCard, KeyRound, LogOut, ShieldAlert, ShieldCheck, UserRound } from "lucide-react";
+import { Bike, Camera, CheckCircle2, Clock, IdCard, KeyRound, ListChecks, LogOut, ShieldAlert, ShieldCheck, UserRound, Wallet } from "lucide-react";
 import { type ReactNode, useRef, useState, useSyncExternalStore } from "react";
 import { Link, Navigate } from "react-router-dom";
 
@@ -13,6 +13,7 @@ import { api, auth } from "../lib/api";
 import { compressImage } from "../lib/format";
 import { JobsPage } from "./JobsPage";
 import { RiderSteps } from "./JoinPage";
+import { WalletLoading, WalletPage, useWallet } from "./WalletPage";
 
 export type RiderMe = {
   id: string;
@@ -178,6 +179,30 @@ function StatusCard({ icon, title, body, tone }: { icon: ReactNode; title: strin
   );
 }
 
+/** Approved riders: jobs, plus a Wallet tab once the payments module is switched on. */
+function ApprovedHome({ me }: { me: RiderMe }) {
+  const [tab, setTab] = useState<"jobs" | "wallet">("jobs");
+  const wallet = useWallet();
+  const w = wallet.data?.enabled ? wallet.data : null;
+  return (
+    <>
+      {tab === "wallet" && w ? <WalletPage w={w} /> : tab === "wallet" ? <WalletLoading /> : <JobsPage me={me} />}
+      {w ? (
+        <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur">
+          <div className="mx-auto grid max-w-2xl grid-cols-2">
+            {([["jobs", "Jobs", ListChecks], ["wallet", "Wallet", Wallet]] as const).map(([id, label, Icon]) => (
+              <button key={id} onClick={() => setTab(id)} className={clsx("flex flex-col items-center gap-0.5 py-2.5 text-sm font-semibold", tab === id ? "text-brand" : "text-muted")}>
+                <Icon className="size-6" />
+                {label}
+              </button>
+            ))}
+          </div>
+        </nav>
+      ) : null}
+    </>
+  );
+}
+
 export function RiderHome() {
   const user = useSyncExternalStore(auth.subscribe, auth.user);
   const me = useQuery({ queryKey: ["rider", "me"], queryFn: () => api.get<RiderMe>("/rider/me"), enabled: user?.role === "rider", refetchInterval: (q) => (q.state.data?.kyc_status === "pending" ? 30_000 : false) });
@@ -209,7 +234,7 @@ export function RiderHome() {
       ) : d.kyc_status === "suspended" ? (
         <StatusCard icon={<ShieldAlert className="size-8" />} title="Your account is paused" tone="bad" body={<><p>{d.kyc_note}</p><p className="mt-2">Contact the Chakula team to talk about it.</p></>} />
       ) : (
-        <JobsPage me={d} />
+        <ApprovedHome me={d} />
       )}
       {d.kyc_status === "approved" ? null : (
         <p className="mt-6 flex items-center justify-center gap-1.5 text-xs text-muted"><ShieldCheck className="size-4 text-ok" /> Your ID is private to the Chakula team.</p>

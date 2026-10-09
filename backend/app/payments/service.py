@@ -13,27 +13,25 @@ from app.payments.models import WalletEntry
 async def _collected(session: AsyncSession, order_ref: str) -> bool:
     return bool(
         await session.scalar(
-            select(WalletEntry.id).where(WalletEntry.idem_key == f"collect:{order_ref}:rider:in")
+            select(WalletEntry.id).where(WalletEntry.idem_key == f"collect:{order_ref}:hold:in")
         )
     )
 
 
-async def request_collection(
-    session: AsyncSession, order_ref: str, rider_id: uuid.UUID, rider_fee: int
-) -> bool:
-    """Record that the customer's payment covered the rider fee: it sits as the rider's PENDING
-    money until delivery. (The STK Push to Daraja arrives with the Daraja adapter.)"""
+async def request_collection(session: AsyncSession, order_ref: str, rider_fee: int) -> bool:
+    """The customer's payment for this order is in: the rider-fee part is HELD by the platform
+    against the order (not yet any rider's). The STK Push itself lives in collection.start_stk."""
     if rider_fee <= 0:
         return False
     return await ledger.move(
         session,
-        idem_key=f"collect:{order_ref}:rider",
-        party_type="rider",
-        party_id=rider_id,
+        idem_key=f"collect:{order_ref}:hold",
+        party_type="platform",
+        party_id=None,
         src=None,
         dst="pending",
         amount=rider_fee,
-        kind="rider_fee_pending",
+        kind="rider_fee_held",
         order_ref=order_ref,
         shadow=get_payments_config().payments_shadow,
     )
@@ -52,14 +50,13 @@ async def confirm_delivery(
     if not await _collected(session, order_ref):
         if not cfg.payments_shadow:
             return 0
-        await request_collection(session, order_ref, rider_id, rider_fee)
-    moved = await ledger.move(
+        await request_collection(session, order_ref, rider_fee)
+    # Paid out of THIS order's hold, to the rider who entered the correct delivery code.
+    moved = await ledger.transfer(
         session,
         idem_key=f"deliver:{order_ref}:rider",
-        party_type="rider",
-        party_id=rider_id,
-        src="pending",
-        dst="available",
+        src=("platform", None, "pending"),
+        dst=("rider", rider_id, "available"),
         amount=rider_fee,
         kind="rider_fee_credit",
         order_ref=order_ref,
@@ -75,23 +72,21 @@ async def confirm_delivery(
     return rider_fee
 
 
-async def reverse(
-    session: AsyncSession, order_ref: str, rider_id: uuid.UUID, rider_fee: int
-) -> bool:
-    """Order rejected/cancelled before delivery: pending money is withdrawn. Money already made
-    available is never reversed automatically (an admin adjustment handles disputes)."""
+async def reverse(session: AsyncSession, order_ref: str, rider_fee: int) -> bool:
+    """Order rejected/cancelled before delivery: the hold is released (the customer is refunded
+    by the refund flow). Money already credited to a rider is never reversed automatically."""
     cfg = get_payments_config()
     if not cfg.payments_enabled or not await _collected(session, order_ref):
         return False
     return await ledger.move(
         session,
-        idem_key=f"reverse:{order_ref}:rider",
-        party_type="rider",
-        party_id=rider_id,
+        idem_key=f"reverse:{order_ref}:hold",
+        party_type="platform",
+        party_id=None,
         src="pending",
         dst=None,
         amount=rider_fee,
-        kind="rider_fee_reversed",
+        kind="rider_fee_released",
         order_ref=order_ref,
         shadow=cfg.payments_shadow,
     )

@@ -6,7 +6,7 @@ from sqlalchemy import select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.payments import outbox
+from app.payments import ledger, outbox
 from app.payments.adapter import ProviderError
 from app.payments.config import get_payments_config
 from app.payments.models import RawCallback, StkRequest
@@ -20,7 +20,13 @@ def callback_url() -> str:
 
 
 async def start_stk(
-    session: AsyncSession, *, order_ref: str, phone: str, amount: int, provider=None
+    session: AsyncSession,
+    *,
+    order_ref: str,
+    phone: str,
+    amount: int,
+    rider_fee: int = 0,
+    provider=None,
 ) -> StkRequest:
     """One STK attempt for an order. A second attempt while one is live or paid is refused."""
     live = await session.scalar(
@@ -31,7 +37,9 @@ async def start_stk(
     )
     if live:
         raise ValueError("a payment for this order is already in progress or done")
-    req = StkRequest(order_ref=order_ref, phone=phone, amount=amount, status="created")
+    req = StkRequest(
+        order_ref=order_ref, phone=phone, amount=amount, rider_fee=rider_fee, status="created"
+    )
     session.add(req)
     await session.flush()
     try:
@@ -95,6 +103,21 @@ async def _settle(
     )
     if res.rowcount != 1:
         return False
+    if status == "success" and req.rider_fee > 0:
+        # The rider fee is now money the platform holds FOR this order. It is paid to
+        # whichever rider delivers it, when the delivery code is entered.
+        await ledger.move(
+            session,
+            idem_key=f"collect:{req.order_ref}:hold",
+            party_type="platform",
+            party_id=None,
+            src=None,
+            dst="pending",
+            amount=req.rider_fee,
+            kind="rider_fee_held",
+            order_ref=req.order_ref,
+            shadow=get_payments_config().payments_shadow,
+        )
     outbox.publish(
         session,
         "payment.confirmed" if status == "success" else "payment.failed",

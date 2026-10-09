@@ -78,3 +78,63 @@ async def move(
         )
     await session.flush()
     return True
+
+
+async def transfer(
+    session: AsyncSession,
+    *,
+    idem_key: str,
+    src: tuple[str, uuid.UUID | None, str],
+    dst: tuple[str, uuid.UUID | None, str],
+    amount: int,
+    kind: str,
+    order_ref: str | None,
+    shadow: bool,
+) -> bool:
+    """Move money between two parties' buckets atomically (e.g. platform hold -> rider wallet).
+    Each side is (party_type, party_id, bucket). Idempotent on idem_key."""
+    if amount <= 0:
+        raise ValueError("amount must be positive")
+    for party_type, party_id in sorted({(src[0], src[1]), (dst[0], dst[1])}, key=str):
+        await lock_party(session, party_type, party_id)
+    keys = [f"{idem_key}:out", f"{idem_key}:in"]
+    if await session.scalar(select(WalletEntry.id).where(WalletEntry.idem_key.in_(keys)).limit(1)):
+        return False
+    if await balance(session, src[0], src[1], src[2], shadow=shadow) < amount:
+        raise InsufficientFunds(f"{src[0]} {src[1]} has less than {amount} in {src[2]}")
+    group = uuid.uuid4()
+    for (ptype, pid, bucket), signed, key in ((src, -amount, keys[0]), (dst, amount, keys[1])):
+        session.add(
+            WalletEntry(
+                idem_key=key,
+                group_id=group,
+                party_type=ptype,
+                party_id=pid,
+                bucket=bucket,
+                amount=signed,
+                kind=kind,
+                order_ref=order_ref,
+                shadow=shadow,
+            )
+        )
+    await session.flush()
+    return True
+
+
+async def credits(
+    session: AsyncSession, party_id: uuid.UUID, *, shadow: bool, limit: int = 30
+) -> list[WalletEntry]:
+    """A rider's wallet history: money that arrived in the available bucket, newest first."""
+    q = (
+        select(WalletEntry)
+        .where(
+            WalletEntry.party_type == "rider",
+            WalletEntry.party_id == party_id,
+            WalletEntry.bucket == "available",
+            WalletEntry.amount > 0,
+            WalletEntry.shadow == shadow,
+        )
+        .order_by(WalletEntry.created_at.desc())
+        .limit(limit)
+    )
+    return list((await session.scalars(q)).all())
