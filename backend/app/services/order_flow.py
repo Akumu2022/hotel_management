@@ -18,8 +18,8 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import AppError
-from app.payments import hook as payments_hook
 from app.models import Customer, Hotel, Order, OrderEvent
+from app.payments import hook as payments_hook
 from app.services import events, ledger, payments, settings
 
 MAX_PIN_ATTEMPTS = 5
@@ -83,6 +83,8 @@ async def _move(
     )
     await session.flush()
     events.order_changed(session, order)
+    if to in ("rejected", "cancelled"):
+        await payments_hook.on_cancelled(session, order)  # no-op unless paid by STK
     return order
 
 
@@ -141,11 +143,16 @@ async def collected(session, order_id, *, user_id, hotel_id, now, code: str | No
     if order.delivery_code:
         if order.delivery_code_attempts >= MAX_PIN_ATTEMPTS:
             raise AppError(
-                423, "code_locked", "Too many wrong PINs. Call the customer to confirm who they are."
+                423,
+                "code_locked",
+                "Too many wrong PINs. Call the customer to confirm who they are.",
             )
         if not code:
             raise AppError(
-                422, "code_required", "Ask the customer for their 4-digit pickup PIN", extra={"field": "code"}
+                422,
+                "code_required",
+                "Ask the customer for their 4-digit pickup PIN",
+                extra={"field": "code"},
             )
         if code != order.delivery_code:
             order.delivery_code_attempts += 1
@@ -154,7 +161,9 @@ async def collected(session, order_id, *, user_id, hotel_id, now, code: str | No
             raise AppError(
                 422,
                 "wrong_code",
-                f"Wrong PIN. {left} tries left." if left else "Wrong PIN. Locked: call the customer.",
+                f"Wrong PIN. {left} tries left."
+                if left
+                else "Wrong PIN. Locked: call the customer.",
                 extra={"field": "code"},
             )
     if order.payment_method == "cash" and order.paid_at is None:

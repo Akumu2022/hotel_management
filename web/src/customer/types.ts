@@ -149,6 +149,8 @@ export type Track = {
   bonus_kind: "stamp" | "free_delivery" | null;
   delivery_code: string | null;
   till_name: string | null;
+  pay_by_stk?: boolean;
+  stk_status?: "sent" | "failed" | "cancelled" | "success" | "review" | "created" | null;
   hotel_verified: boolean;
   customer_trans_code: string | null;
   distance_km: number | null;

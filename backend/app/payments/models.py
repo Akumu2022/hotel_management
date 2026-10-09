@@ -233,3 +233,13 @@ class HotelSettlement(PBase):
     submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class HotelFlag(PBase):
+    """Which hotels take STK payments at checkout. Lives here, not on the hotels table."""
+
+    __tablename__ = "hotel_flags"
+
+    hotel_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    stk_enabled: Mapped[bool] = mapped_column(Boolean, server_default=text("false"))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

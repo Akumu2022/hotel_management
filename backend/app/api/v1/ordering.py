@@ -23,6 +23,7 @@ from app.models import (
     RiderProfile,
     User,
 )
+from app.payments import hook as payments_hook
 from app.schemas.catalogue import Input
 from app.schemas.common import Schema
 from app.schemas.orders import (
@@ -69,6 +70,10 @@ async def place_order(
     await session.commit()
     if not created:
         response.status_code = 200
+    stk = None
+    if created:
+        stk = await payments_hook.start_checkout(session, order)  # None unless STK is on
+        await session.commit()
     hotel = await session.get(Hotel, order.hotel_id)
     return OrderPlaced(
         code=order.code,
@@ -80,7 +85,24 @@ async def place_order(
         bonus_kind=order.bonus_kind,
         payment_method=order.payment_method,
         expires_at=order.expires_at,
+        pay_by_stk=stk is not None and stk.status == "sent",
     )
+
+
+@router.post("/track/{token}/pay", dependencies=[Depends(limit("stk_retry", 6))])
+async def pay_again(token: str, session: Session):
+    """Send the M-Pesa prompt again (customer cancelled, or it never arrived)."""
+    order = await _by_token(session, token)
+    if order.status != "awaiting_payment":
+        raise AppError(409, "not_waiting", "This order is not waiting for payment")
+    last = await payments_hook.stk_status(session, order.id)
+    if last is None:
+        raise AppError(409, "not_stk", "This order is paid another way")
+    if last in ("sent", "success", "review"):
+        raise AppError(409, "in_progress", "A payment prompt is already on your phone")
+    stk = await payments_hook.start_checkout(session, order)
+    await session.commit()
+    return {"sent": stk is not None and stk.status == "sent"}
 
 
 async def _by_token(session, token: str) -> Order:
@@ -138,6 +160,8 @@ async def track(token: str, session: Session, storage: StorageDep):
         hotel_phone=hotel.phone,
         till_number=hotel.till_number,
         till_name=hotel.till_name,
+        pay_by_stk=(stk_state := await payments_hook.stk_status(session, order.id)) is not None,
+        stk_status=stk_state,
         hotel_verified=hotel.verified_at is not None,
         items=[
             TrackItem(

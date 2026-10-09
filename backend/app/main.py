@@ -127,6 +127,7 @@ def create_app() -> FastAPI:
     v1.include_router(push.router)
     v1.include_router(wallet.router)
     v1.include_router(wallet.hotel)
+    v1.include_router(wallet.admin)
     v1.include_router(payments_routes.router)  # Daraja callbacks; 404 unless PAYMENTS_ENABLED
     app.include_router(v1)
 

@@ -29,6 +29,7 @@ async def start_stk(
     hotel_id=None,
     hotel_share: int = 0,
     platform_fee: int = 0,
+    account_ref: str | None = None,
     provider=None,
 ) -> StkRequest:
     """One STK attempt for an order. A second attempt while one is live or paid is refused."""
@@ -54,7 +55,10 @@ async def start_stk(
     await session.flush()
     try:
         ok = await (provider or get_provider()).collect(
-            phone=phone, amount=amount, account_ref=order_ref, callback_url=callback_url()
+            phone=phone,
+            amount=amount,
+            account_ref=account_ref or order_ref,
+            callback_url=callback_url(),
         )
     except ProviderError as e:
         req.status, req.result_desc = "failed", str(e)[:300]
@@ -173,4 +177,14 @@ async def query_stuck(session: AsyncSession, order_ref: str, provider=None) -> b
         return False
     return await _settle(
         session, req.checkout_request_id, st.result_code, st.result_desc, st.receipt, None
+    )
+
+
+async def request_for(session: AsyncSession, body: dict) -> StkRequest | None:
+    """The STK request a callback body belongs to."""
+    checkout_id = body.get("Body", {}).get("stkCallback", {}).get("CheckoutRequestID")
+    if not checkout_id:
+        return None
+    return await session.scalar(
+        select(StkRequest).where(StkRequest.checkout_request_id == checkout_id)
     )

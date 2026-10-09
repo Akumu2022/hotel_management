@@ -129,6 +129,57 @@ function CodeEntry({ token, onDone }: { token: string; onDone: () => void }) {
   );
 }
 
+/** Paid by an M-Pesa prompt on the customer's own phone: nothing to type, no Till to copy. */
+function StkCard({ t, token, onDone }: { t: Track; token: string; onDone: () => void }) {
+  const countdown = useCountdown(t.expires_at);
+  const again = useMutation({ mutationFn: () => api.post(`/track/${token}/pay`), onSuccess: onDone });
+  const failed = t.stk_status === "failed" || t.stk_status === "cancelled";
+  return (
+    <Card className="overflow-hidden">
+      <div className="flex items-center justify-between gap-3 border-b border-line px-5 py-4">
+        <div className="flex items-center gap-3">
+          <span className="flex size-11 items-center justify-center rounded-xl bg-ok text-white"><Smartphone className="size-5" /></span>
+          <div>
+            <p className="text-sm text-muted">Pay with M-Pesa</p>
+            <p className="money text-2xl font-bold">{money(t.till_amount)}</p>
+          </div>
+        </div>
+        {countdown ? (
+          <div className="flex items-center gap-2 rounded-xl bg-subtle px-3 py-2">
+            <Timer className="size-4" />
+            <span className="money text-lg font-bold">{countdown.text}</span>
+          </div>
+        ) : null}
+      </div>
+      <div className="p-5">
+        {failed ? (
+          <>
+            <p className="rounded-xl bg-warn-soft px-4 py-3 text-sm font-semibold text-warn">
+              {t.stk_status === "cancelled" ? "You cancelled the M-Pesa prompt." : "The M-Pesa prompt did not go through."} Nothing was charged.
+            </p>
+            <button onClick={() => again.mutate()} disabled={again.isPending} className="mt-4 h-12 w-full rounded-2xl bg-brand font-bold text-white shadow-md shadow-brand/25 disabled:opacity-60">
+              {again.isPending ? "Sending…" : "Send the M-Pesa prompt again"}
+            </button>
+            <ErrorNote error={again.error} />
+          </>
+        ) : (
+          <>
+            <p className="text-lg font-bold">Check your phone</p>
+            <ol className="mt-3 flex flex-col gap-2.5 text-sm">
+              {["An M-Pesa prompt is on your phone now.", `Check that it shows ${t.hotel_name} or Chakula and ${money(t.till_amount)}.`, "Enter your M-Pesa PIN. This page updates by itself."].map((step, i) => (
+                <li key={i} className="flex gap-3">
+                  <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-brand text-xs font-bold text-white">{i + 1}</span>
+                  <span className="pt-0.5">{step}</span>
+                </li>
+              ))}
+            </ol>
+          </>
+        )}
+      </div>
+    </Card>
+  );
+}
+
 function PayCard({ t, token, onCode }: { t: Track; token: string; onCode: () => void }) {
   const tt = useT();
   const countdown = useCountdown(t.expires_at);
@@ -368,7 +419,7 @@ export function TrackPage() {
             </span>
           </section>
 
-          {awaiting ? <PayCard t={t} token={token} onCode={() => track.refetch()} /> : null}
+          {awaiting ? (t.pay_by_stk ? <StkCard t={t} token={token} onDone={() => track.refetch()} /> : <PayCard t={t} token={token} onCode={() => track.refetch()} />) : null}
           {t.status === "expired" && t.payment_method === "mpesa" ? (
             <Card className="p-5">
               <p className="font-semibold">{tt("Already paid?")}</p>

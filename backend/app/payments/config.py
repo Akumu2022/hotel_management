@@ -11,6 +11,9 @@ class PaymentsConfig(BaseSettings):
     payments_enabled: bool = False
     # Shadow mode: the ledger records what would have been credited, no money moves.
     payments_shadow: bool = True
+    # Customers pay by STK Push at checkout. Needs PAYMENTS_ENABLED, shadow OFF, and the hotel
+    # switched on in the admin list. Until refunds to customers are automated, sandbox only.
+    payments_stk_checkout: bool = False
     # "fake" (tests, shadow) or "daraja". Keys live only in .env on the server.
     payments_provider: str = "fake"
     daraja_env: str = "sandbox"  # sandbox | production

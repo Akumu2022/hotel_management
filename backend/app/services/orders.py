@@ -30,6 +30,7 @@ from app.models import (
     Product,
     PromoRedemption,
 )
+from app.payments import hook as payments_hook
 from app.schemas.orders import OrderIn, QuoteIn, QuoteLineOut, QuoteOut
 from app.services import bonus, catalogue, events, hours, ledger, pricing, routing, settings
 from app.services.settings import PlatformSettings
@@ -123,6 +124,10 @@ async def price(
     session: AsyncSession, body: QuoteIn, now: datetime, *, lock_promo: bool = False
 ) -> Priced:
     hotel = await _hotel_by_slug(session, body.hotel_slug)
+    if body.type == "delivery" and await payments_hook.stk_enabled_for(session, hotel.id):
+        # Paid by STK Push: the rider fee is part of the one payment and goes to the rider's
+        # wallet, so the customer owes nothing at the door (quote and order both come through here).
+        body.rider_fee_mode = "included"
     values, _ = await settings.load(session)
     products = await _catalogue(session, hotel.id, {ln.product_id for ln in body.lines}, now)
 

@@ -27,7 +27,12 @@ async def stk_callback(token: str, request: Request, session: Session):
     if not _allowed(request, token):
         raise not_found()
     body = await request.json()
-    await collection.handle_stk_callback(session, body)
+    if await collection.handle_stk_callback(session, body):
+        from app.payments import hook
+
+        req = await collection.request_for(session, body)
+        if req is not None and req.status == "success":
+            await hook.mark_order_paid(session, req.order_ref)
     await session.commit()
     return {"ResultCode": 0, "ResultDesc": "Accepted"}
 

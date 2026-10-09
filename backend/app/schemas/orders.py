@@ -114,6 +114,7 @@ class OrderPlaced(Schema):
     till_amount: int
     payment_method: str
     expires_at: datetime | None
+    pay_by_stk: bool = False  # an M-Pesa prompt was sent to the customer phone
 
 
 class TrackItem(Schema):
@@ -155,6 +156,8 @@ class TrackOut(Schema):
     hotel_phone: str
     till_number: str
     till_name: str | None = None  # M-Pesa shows this name before the customer enters their PIN
+    pay_by_stk: bool = False
+    stk_status: str | None = None  # sent | failed | cancelled | success | review
     hotel_verified: bool = False
     items: list[TrackItem]
     items_total: int

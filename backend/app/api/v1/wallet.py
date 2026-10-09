@@ -8,7 +8,7 @@ from pydantic import Field
 from sqlalchemy import select
 
 from app import payments
-from app.api.deps import HotelAdmin, Session
+from app.api.deps import HotelAdmin, Session, SuperAdmin
 from app.api.v1.riders import Rider
 from app.core.errors import AppError
 from app.core.security import verify_password
@@ -17,7 +17,7 @@ from app.models import Hotel, Order, RiderProfile, User
 from app.payments import ledger, payouts
 from app.schemas.catalogue import Input
 from app.payments.config import get_payments_config
-from app.payments.models import HotelSettlement
+from app.payments.models import HotelFlag, HotelSettlement
 
 router = APIRouter(prefix="/rider/wallet", tags=["wallet"])
 
@@ -159,3 +159,56 @@ async def hotel_settlements(user: HotelAdmin, session: Session):
             for r in rows
         ],
     }
+
+
+admin = APIRouter(prefix="/admin/payments", tags=["wallet"])
+
+
+class HotelFlagIn(Input):
+    stk_enabled: bool
+
+
+@admin.get("/hotels")
+async def admin_hotels(_: SuperAdmin, session: Session):
+    """Which hotels take STK payments at checkout, and whether the module is ready for it."""
+    cfg = get_payments_config()
+    flags = {
+        h: on
+        for h, on in (
+            await session.execute(select(HotelFlag.hotel_id, HotelFlag.stk_enabled))
+        ).all()
+    }
+    hotels = (await session.execute(select(Hotel.id, Hotel.name).order_by(Hotel.name))).all()
+    return {
+        "module_on": cfg.payments_enabled,
+        "shadow": cfg.payments_shadow,
+        "checkout_switch": cfg.payments_stk_checkout,
+        "hotels": [
+            {"id": str(i), "name": n, "stk_enabled": flags.get(i, False)} for i, n in hotels
+        ],
+    }
+
+
+@admin.put("/hotels/{hotel_id}")
+async def admin_set_hotel(
+    hotel_id: uuid.UUID, body: HotelFlagIn, user: SuperAdmin, session: Session
+):
+    from app.services import audit
+
+    if await session.get(Hotel, hotel_id) is None:
+        raise AppError(404, "not_found", "Hotel not found")
+    row = await session.get(HotelFlag, hotel_id)
+    if row is None:
+        session.add(HotelFlag(hotel_id=hotel_id, stk_enabled=body.stk_enabled))
+    else:
+        row.stk_enabled = body.stk_enabled
+    await audit.log(
+        session,
+        actor_id=user.id,
+        action="payments.hotel_stk",
+        target_type="hotel",
+        target_id=hotel_id,
+        details={"stk_enabled": body.stk_enabled},
+    )
+    await session.commit()
+    return {"id": str(hotel_id), "stk_enabled": body.stk_enabled}
