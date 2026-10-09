@@ -8,7 +8,7 @@ from pydantic import Field
 from sqlalchemy import select
 
 from app import payments
-from app.api.deps import Session
+from app.api.deps import HotelAdmin, Session
 from app.api.v1.riders import Rider
 from app.core.errors import AppError
 from app.core.security import verify_password
@@ -17,6 +17,7 @@ from app.models import Hotel, Order, RiderProfile, User
 from app.payments import ledger, payouts
 from app.schemas.catalogue import Input
 from app.payments.config import get_payments_config
+from app.payments.models import HotelSettlement
 
 router = APIRouter(prefix="/rider/wallet", tags=["wallet"])
 
@@ -105,3 +106,56 @@ async def withdraw(
         raise AppError(409 if e.code == "charge_needed" else 422, e.code, e.message, e.extra) from e
     await session.commit()
     return {"status": p.status, "amount": p.amount, "charge": p.charge}
+
+
+hotel = APIRouter(prefix="/hotel/settlements", tags=["wallet"])
+
+
+@hotel.get("")
+async def hotel_settlements(user: HotelAdmin, session: Session):
+    """The hotel's daily payouts, each with the orders it is made of."""
+    cfg = get_payments_config()
+    if not cfg.payments_enabled:
+        return {"enabled": False}
+    rows = (
+        await session.scalars(
+            select(HotelSettlement)
+            .where(HotelSettlement.hotel_id == user.hotel_id)
+            .order_by(HotelSettlement.statement_date.desc(), HotelSettlement.created_at.desc())
+            .limit(60)
+        )
+    ).all()
+    refs = {i["order_ref"] for r in rows for i in r.detail or []}
+    ids = []
+    for ref in refs:
+        try:
+            ids.append(uuid.UUID(ref))
+        except ValueError:
+            pass
+    codes = {}
+    if ids:
+        q = select(Order.id, Order.code).where(Order.id.in_(ids), Order.hotel_id == user.hotel_id)
+        codes = {str(i): c for i, c in (await session.execute(q)).all()}
+    shadow = cfg.payments_shadow
+    return {
+        "enabled": True,
+        "practice": shadow,
+        "coming": await ledger.balance(session, "hotel", user.hotel_id, "pending", shadow=shadow),
+        "ready": await ledger.balance(session, "hotel", user.hotel_id, "available", shadow=shadow),
+        "settlements": [
+            {
+                "id": str(r.id),
+                "date": r.statement_date.isoformat(),
+                "amount": r.amount,
+                "status": r.status,
+                "to": r.destination[-4:],
+                "channel": r.channel,
+                "code": r.transaction_id,
+                "orders": [
+                    {"code": codes.get(i["order_ref"]), "amount": i["amount"]}
+                    for i in r.detail or []
+                ],
+            }
+            for r in rows
+        ],
+    }

@@ -48,6 +48,18 @@ class FakeProvider:
         )
         return DisburseAccepted(f"AG_fake_{originator_id[:8]}", final)
 
+    async def pay_till(self, *, till, amount, originator_id, result_url, timeout_url):
+        self.disbursed.append({"till": till, "amount": amount, "originator_id": originator_id})
+        if self.disburse_error:
+            err, self.disburse_error = self.disburse_error, None
+            raise err
+        final = (
+            DisburseStatus(0, "shadow", f"SHADOW{originator_id[:8].upper()}")
+            if self.auto_complete
+            else None
+        )
+        return DisburseAccepted(f"AG_fake_{originator_id[:8]}", final)
+
     async def query_disbursement(self, originator_id, *, result_url, timeout_url):
         return self.disburse_statuses.get(originator_id)
 

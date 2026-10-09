@@ -1,14 +1,14 @@
 """B2C payouts: never twice, never lost, never past the float."""
 
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 import pytest
 from sqlalchemy import func, select
 
 from app import payments
-from app.payments import ledger, payouts, scheduler
+from app.payments import payouts, scheduler
 from app.payments.adapter import DisburseStatus, ProviderError
 from app.payments.config import PaymentsConfig
 from app.payments.fake import FakeProvider
@@ -154,7 +154,12 @@ async def test_float_check_blocks_payouts(db):
     assert "float.low" in topics
     # Fixed: the same day can still run afterwards (a blocked run is not "done").
     p.balance = 1000
-    out2 = await scheduler.daily_rider_payout(db, NIGHT, {rider.id: "254700000001"}, p)
+    # Inside the same quarter hour it is not retried (Daraja is not asked every minute)...
+    same = await scheduler.daily_rider_payout(db, NIGHT, {rider.id: "254700000001"}, p)
+    assert same.get("already_ran") and not p.disbursed
+    # ...but a quarter of an hour later it is.
+    later = NIGHT + timedelta(minutes=16)
+    out2 = await scheduler.daily_rider_payout(db, later, {rider.id: "254700000001"}, p)
     assert out2["paid"] == 1
 
 

@@ -18,6 +18,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import AppError
+from app.payments import hook as payments_hook
 from app.models import Customer, Hotel, Order, OrderEvent
 from app.services import events, ledger, payments, settings
 
@@ -159,7 +160,7 @@ async def collected(session, order_id, *, user_id, hotel_id, now, code: str | No
     if order.payment_method == "cash" and order.paid_at is None:
         await payments.cash_received(session, order.id, user_id, now)  # cash recorded at collection
     await _count_completed(session, order, now)
-    return await _move(
+    moved = await _move(
         session,
         order,
         "collected",
@@ -169,6 +170,8 @@ async def collected(session, order_id, *, user_id, hotel_id, now, code: str | No
         collected_at=now,
         closed_at=now,
     )
+    await payments_hook.on_handover(session, order)  # no-op unless PAYMENTS_ENABLED
+    return moved
 
 
 async def _count_completed(session, order: Order, now: datetime) -> None:

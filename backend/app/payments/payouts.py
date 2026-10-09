@@ -207,8 +207,10 @@ async def handle_result(session: AsyncSession, body: dict) -> bool:
     }
     code = int(res.get("ResultCode", -1))
     p = await session.get(Payout, payout_id)
-    if p is None:
-        return False
+    if p is None:  # not a rider payout: maybe a hotel settlement
+        from app.payments import settlements
+
+        return await settlements.apply_callback(session, payout_id, res, params)
     if p.conversation_id is None and res.get("ConversationID"):
         p.conversation_id = res["ConversationID"]
     if (
@@ -241,7 +243,11 @@ async def handle_timeout(session: AsyncSession, body: dict) -> bool:
         .where(Payout.id == payout_id, Payout.status == "submitted")
         .values(status="unknown", reason="Daraja timed out")
     )
-    return r.rowcount == 1
+    if r.rowcount == 1:
+        return True
+    from app.payments import settlements
+
+    return await settlements.mark_unknown(session, payout_id)
 
 
 async def resolve_unknown(session: AsyncSession, now: datetime, provider=None) -> int:

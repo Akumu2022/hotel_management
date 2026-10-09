@@ -126,6 +126,38 @@ class DarajaB2C(DarajaProvider):
             )
         return DisburseAccepted(data.get("ConversationID", ""))
 
+    async def pay_till(self, *, till, amount, originator_id, result_url, timeout_url):
+        from app.payments.adapter import DisburseAccepted
+
+        body = {
+            "Initiator": self.cfg.daraja_initiator_name,
+            "SecurityCredential": self.cfg.daraja_security_credential,
+            "CommandID": "BusinessBuyGoods",
+            "SenderIdentifierType": "4",
+            "RecieverIdentifierType": "2",
+            "Amount": amount,
+            "PartyA": self.cfg.daraja_b2c_shortcode,
+            "PartyB": till,
+            "AccountReference": originator_id[:12],
+            "Remarks": "Hotel settlement",
+            "QueueTimeOutURL": timeout_url,
+            "ResultURL": result_url,
+            "OriginatorConversationID": originator_id,
+        }
+        r = await self.client.post(
+            f"{self.base}/mpesa/b2b/v1/paymentrequest",
+            json=body,
+            headers={"Authorization": f"Bearer {await self._b2c_auth()}"},
+        )
+        if r.status_code >= 500:
+            raise RuntimeError(f"daraja {r.status_code}")
+        data = r.json()
+        if r.status_code != 200 or data.get("ResponseCode") != "0":
+            raise ProviderError(
+                data.get("errorMessage") or data.get("ResponseDescription") or "rejected"
+            )
+        return DisburseAccepted(data.get("ConversationID", ""))
+
     async def query_disbursement(self, originator_id, *, result_url, timeout_url):
         return None  # Transaction Status answers on the result URL (wired in the sandbox step)
 

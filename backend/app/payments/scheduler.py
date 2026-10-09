@@ -9,7 +9,7 @@ from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.payments import ledger, outbox, payouts
+from app.payments import ledger, outbox, payouts, settlements
 from app.payments.config import get_payments_config
 from app.payments.models import JobRun, Payout, WalletEntry
 from app.payments.provider import get_provider
@@ -27,6 +27,23 @@ async def _claim_run(session: AsyncSession, job: str, run_key: str) -> bool:
         .returning(JobRun.id)
     )
     return res.scalar() is not None
+
+
+async def _skip_today(session: AsyncSession, job: str, day, now: datetime) -> bool:
+    """True if this job already ran today, or was blocked within the last 15 minutes (so a
+    blocked day asks Daraja for the balance every 15 minutes, not every minute)."""
+    key = day.isoformat()
+    if await session.scalar(select(JobRun.id).where(JobRun.job == job, JobRun.run_key == key)):
+        return True
+    bucket = f"{key}:blk:{now.astimezone(NAIROBI).hour * 4 + now.astimezone(NAIROBI).minute // 15}"
+    return bool(
+        await session.scalar(select(JobRun.id).where(JobRun.job == job, JobRun.run_key == bucket))
+    )
+
+
+async def _note_blocked(session: AsyncSession, job: str, day, now: datetime) -> None:
+    local = now.astimezone(NAIROBI)
+    await _claim_run(session, job, f"{day.isoformat()}:blk:{local.hour * 4 + local.minute // 15}")
 
 
 async def owed(session: AsyncSession, *, shadow: bool) -> int:
@@ -63,9 +80,12 @@ async def daily_rider_payout(
     provider = provider or get_provider()
     day = now.astimezone(NAIROBI).date()
     out = {"paid": 0, "skipped": 0, "capped": 0, "blocked": False}
+    if await _skip_today(session, "rider_payout", day, now):
+        return {**out, "already_ran": True}
     ok, _, _ = await float_ok(session, provider)
     if not ok:
-        out["blocked"] = True  # balances stay available; try again at the next run
+        out["blocked"] = True  # balances stay available; try again in a quarter of an hour
+        await _note_blocked(session, "rider_payout", day, now)
         await session.commit()
         return out
     if not await _claim_run(session, "rider_payout", day.isoformat()):
@@ -112,6 +132,60 @@ async def daily_rider_payout(
     return out
 
 
+SETTLE_AT = time(6, 0)
+
+
+async def daily_hotel_settlement(
+    session: AsyncSession, now: datetime, payees: dict, provider=None
+) -> dict:
+    """`payees` maps hotel_id -> (channel, destination, name). Pays each hotel what it earned on
+    orders completed before today (the one-day dispute window), once, itemised."""
+    cfg = get_payments_config()
+    provider = provider or get_provider()
+    local = now.astimezone(NAIROBI)
+    day = local.date()
+    cutoff = datetime.combine(day, time(0, 0), tzinfo=NAIROBI)
+    out = {"paid": 0, "skipped": 0, "blocked": False}
+    if await _skip_today(session, "hotel_settlement", day, now):
+        return {**out, "already_ran": True}
+    ok, _, _ = await float_ok(session, provider)
+    if not ok:
+        out["blocked"] = True
+        await _note_blocked(session, "hotel_settlement", day, now)
+        await session.commit()
+        return out
+    if not await _claim_run(session, "hotel_settlement", day.isoformat()):
+        return {**out, "already_ran": True}
+    await session.commit()
+    for hotel_id, (channel, destination, _name) in payees.items():
+        try:
+            items = await settlements.statement_for(
+                session, hotel_id, cutoff, cfg.settle_hotel_daily_cap
+            )
+            if sum(i["amount"] for i in items) < 1:
+                out["skipped"] += 1
+                continue
+            row = await settlements.queue_settlement(
+                session,
+                hotel_id=hotel_id,
+                day=day,
+                channel=channel,
+                destination=destination,
+                items=items,
+            )
+            if row is None:
+                out["skipped"] += 1
+                continue
+            await session.commit()
+            await settlements.submit(session, row.id, provider)
+            out["paid"] += 1
+        except Exception:  # noqa: BLE001 - one hotel's failure must not stop the others
+            await session.rollback()
+            log.exception("settlement failed for hotel %s", hotel_id)
+    await session.commit()
+    return out
+
+
 async def run(session: AsyncSession, now: datetime) -> int:
     """Entry point for services/jobs.py (every minute). Does nothing unless payments are on."""
     cfg = get_payments_config()
@@ -119,7 +193,13 @@ async def run(session: AsyncSession, now: datetime) -> int:
         return 0
     provider = get_provider()
     n = await payouts.resolve_unknown(session, now, provider)
+    n += await settlements.resolve_unknown(session, now, provider)
     await session.commit()
+    if now.astimezone(NAIROBI).time() >= SETTLE_AT:
+        from app.payments.hook import eligible_hotels
+
+        r = await daily_hotel_settlement(session, now, await eligible_hotels(session), provider)
+        n += r.get("paid", 0)
     if now.astimezone(NAIROBI).time() >= CUTOFF:
         from app.payments.hook import eligible_riders
 

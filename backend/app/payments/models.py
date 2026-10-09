@@ -22,7 +22,7 @@ from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 SCHEMA = "payments"
-BUCKETS = ("pending", "available", "reserved", "paid")
+BUCKETS = ("pending", "available", "reserved", "paid", "earned")
 PARTY_TYPES = ("rider", "hotel", "platform")
 
 
@@ -102,6 +102,9 @@ class StkRequest(PBase):
     amount: Mapped[int] = mapped_column(Integer)
     # Part of `amount` that is the rider's fee: held on success, credited to whoever delivers.
     rider_fee: Mapped[int] = mapped_column(Integer, server_default=text("0"))
+    hotel_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    hotel_share: Mapped[int] = mapped_column(Integer, server_default=text("0"))
+    platform_fee: Mapped[int] = mapped_column(Integer, server_default=text("0"))
     status: Mapped[str] = mapped_column(String(10), server_default=text("'created'"))
     checkout_request_id: Mapped[str | None] = mapped_column(String(80), unique=True)
     merchant_request_id: Mapped[str | None] = mapped_column(String(80))
@@ -190,3 +193,43 @@ class JobRun(PBase):
     run_key: Mapped[str] = mapped_column(String(40))
     detail: Mapped[dict | None] = mapped_column(JSONB)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+SETTLEMENT_CHANNELS = ("till", "phone")
+
+
+class HotelSettlement(PBase):
+    """A hotel's daily payout. One per hotel per day (statement_date); money is reserved when
+    queued and follows the same never-twice rules as rider payouts. `detail` lists the orders
+    the statement is made of, so the hotel can see exactly what it is being paid for."""
+
+    __tablename__ = "hotel_settlements"
+    __table_args__ = (
+        CheckConstraint(
+            f"status IN ({', '.join(repr(x) for x in PAYOUT_STATUSES)})", name="status"
+        ),
+        CheckConstraint("amount > 0", name="amount_positive"),
+        Index(
+            "uq_settlement_hotel_day",
+            "hotel_id",
+            "statement_date",
+            unique=True,
+            postgresql_where=text("status <> 'failed'"),
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = _pk()
+    hotel_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True))
+    statement_date: Mapped[date] = mapped_column(Date)
+    channel: Mapped[str] = mapped_column(String(6))  # till (B2B) | phone (B2C)
+    destination: Mapped[str] = mapped_column(String(20))
+    amount: Mapped[int] = mapped_column(Integer)
+    status: Mapped[str] = mapped_column(String(14), server_default=text("'queued'"))
+    detail: Mapped[list | None] = mapped_column(JSONB)  # [{"order_ref", "amount"}]
+    conversation_id: Mapped[str | None] = mapped_column(String(80), unique=True)
+    transaction_id: Mapped[str | None] = mapped_column(String(30), unique=True)
+    result_code: Mapped[int | None] = mapped_column(Integer)
+    reason: Mapped[str | None] = mapped_column(String(300))
+    submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

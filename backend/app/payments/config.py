@@ -33,6 +33,8 @@ class PaymentsConfig(BaseSettings):
     payout_min: int = 50
     payout_rider_daily_cap: int = 10000
     payout_global_daily_cap: int = 200000
+    settle_hotels_to_till: bool = False  # False = B2C to the hotel phone; True = B2B to its Till
+    settle_hotel_daily_cap: int = 100000
     payout_extra_charge: int = 30  # taken from the rider on a 2nd+ withdrawal in a day
 
 

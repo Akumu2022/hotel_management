@@ -1,7 +1,7 @@
 /** Hotel staff shell in the D.CC reference style: store card, sidebar nav, user card. */
 import clsx from "clsx";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, BadgePercent, ClipboardList, KeyRound, LayoutDashboard, LogOut, Megaphone, Receipt, Settings, UtensilsCrossed, Wallet } from "lucide-react";
+import { AlertTriangle, BadgePercent, Banknote, ClipboardList, KeyRound, LayoutDashboard, LogOut, Megaphone, Receipt, Settings, UtensilsCrossed, Wallet } from "lucide-react";
 import { Link, NavLink, Navigate, Outlet, useLocation } from "react-router-dom";
 
 import { Button, Switch } from "../components/ui";
@@ -13,6 +13,7 @@ import { api, auth } from "../lib/api";
 import { useLive } from "../lib/live";
 import { money } from "../lib/format";
 import type { HotelBilling } from "./BillingPage";
+import { useHotelPayouts } from "./PayoutsPage";
 import { keys, useHotelSettings, useMe, useSave } from "./hooks";
 
 const MAIN = [
@@ -24,12 +25,14 @@ const MAIN = [
   { to: "offers", label: "Offers", icon: Megaphone },
 ];
 /** Shorter labels so seven tabs fit a 360 px phone. */
-const TAB_LABEL: Record<string, string> = { dashboard: "Home", payments: "Pay", discounts: "Deals", billing: "Bill" };
+const TAB_LABEL: Record<string, string> = { dashboard: "Home", payments: "Pay", discounts: "Deals", billing: "Bill", payouts: "Payouts" };
 
 /** The bill to the platform is for hotel admins only (cashiers never see it). */
 const BILLING = { to: "billing", label: "Chakula bill", icon: Receipt };
+/** Daily payouts: appears only once the payments module is switched on. */
+const PAYOUTS = { to: "payouts", label: "Daily payouts", icon: Banknote };
 const OTHER = [{ to: "settings", label: "Settings", icon: Settings }];
-const TITLES: Record<string, string> = { billing: "Chakula bill", orders: "Orders", dashboard: "Dashboard", payments: "Payments", menu: "Menu", discounts: "Discounts & promos", offers: "Offers", settings: "Settings" };
+const TITLES: Record<string, string> = { payouts: "Daily payouts", billing: "Chakula bill", orders: "Orders", dashboard: "Dashboard", payments: "Payments", menu: "Menu", discounts: "Discounts & promos", offers: "Offers", settings: "Settings" };
 
 function initials(name: string) {
   return name.split(/\s+/).map((p) => p[0]).slice(0, 2).join("").toUpperCase();
@@ -132,7 +135,9 @@ export function HotelLayout() {
   const { pathname } = useLocation();
   const section = pathname.split("/")[2] ?? "orders";
   const isAdmin = me?.role === "hotel_admin";
-  const other = isAdmin ? [BILLING, ...OTHER] : OTHER;
+  const payouts = useHotelPayouts();
+  const hasPayouts = isAdmin && payouts.data?.enabled === true;
+  const other = isAdmin ? [...(hasPayouts ? [PAYOUTS] : []), BILLING, ...OTHER] : OTHER;
   const tabs = [...MAIN, ...other];
 
   if (!me) return <Navigate to="/login" replace />;

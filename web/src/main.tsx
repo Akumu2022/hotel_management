@@ -28,6 +28,7 @@ const MenuPage = lazy(() => import("./hotel/MenuPage").then((m) => ({ default: m
 const DiscountsPage = lazy(() => import("./hotel/DiscountsPage").then((m) => ({ default: m.DiscountsPage })));
 const OffersPage = lazy(() => import("./hotel/OffersPage").then((m) => ({ default: m.OffersPage })));
 const BillingPage = lazy(() => import("./hotel/BillingPage").then((m) => ({ default: m.BillingPage })));
+const PayoutsPage = lazy(() => import("./hotel/PayoutsPage").then((m) => ({ default: m.PayoutsPage })));
 const AdminBillingPage = lazy(() => import("./admin/BillingPage").then((m) => ({ default: m.AdminBillingPage })));
 const SettingsPage = lazy(() => import("./hotel/SettingsPage").then((m) => ({ default: m.SettingsPage })));
 /** Hotel admins land on the dashboard; cashiers on the order board, where the alarm rings. */
@@ -92,6 +93,7 @@ createRoot(document.getElementById("root")!).render(
                 <Route path="offers" element={<OffersPage />} />
                 <Route path="settings" element={<SettingsPage />} />
                 <Route path="billing" element={<BillingPage />} />
+                <Route path="payouts" element={<PayoutsPage />} />
               </Route>
               <Route path="/admin" element={<AdminLayout />}>
                 <Route index element={<Navigate to="dashboard" replace />} />

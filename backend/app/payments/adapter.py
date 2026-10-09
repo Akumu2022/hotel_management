@@ -50,6 +50,12 @@ class Provider(Protocol):
         timeout, 5xx) means "we do not know if it was sent"."""
         ...
 
+    async def pay_till(
+        self, *, till: str, amount: int, originator_id: str, result_url: str, timeout_url: str
+    ) -> DisburseAccepted:
+        """B2B to a hotel's Till. Same ProviderError / unknown-outcome rules as disburse."""
+        ...
+
     async def query_disbursement(
         self, originator_id: str, *, result_url: str, timeout_url: str
     ) -> DisburseStatus | None:
