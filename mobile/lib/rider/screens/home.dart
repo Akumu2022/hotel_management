@@ -9,6 +9,7 @@ import '../session.dart';
 import 'auth.dart';
 import 'jobs.dart';
 import 'status.dart';
+import 'wallet.dart';
 
 /// The approved rider's app: Jobs, History and Profile with a bottom bar.
 class RiderHome extends StatefulWidget {
@@ -19,13 +20,39 @@ class RiderHome extends StatefulWidget {
 
 class _RiderHomeState extends State<RiderHome> {
   int _tab = 0;
+  Json? _wallet; // set only when the payments module is on: adds the Wallet tab
+
+  @override
+  void initState() {
+    super.initState();
+    _loadWallet();
+  }
+
+  Future<void> _loadWallet() async {
+    try {
+      final w = await context.read<RiderSession>().call('GET', '/rider/wallet') as Json;
+      if (mounted && w['enabled'] == true) setState(() => _wallet = w);
+    } catch (_) {
+      // No wallet is fine: the app works exactly as before.
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final me = context.watch<RiderSession>().me ?? {};
     final first = '${me['name'] ?? ''}'.split(' ').first;
+    final hasWallet = _wallet != null;
+    final profile = hasWallet ? 3 : 2;
+    final title = _tab == 0
+        ? (first.isEmpty ? 'Chakula Rider' : tr('Hi {name}', {'name': first}))
+        : _tab == 1
+            ? tr('History')
+            : _tab == profile
+                ? tr('Profile')
+                : tr('Wallet');
     return Scaffold(
       appBar: AppBar(
-        title: Text(_tab == 0 ? (first.isEmpty ? 'Chakula Rider' : tr('Hi {name}', {'name': first})) : _tab == 1 ? tr('History') : tr('Profile'), style: kTitle),
+        title: Text(title, style: kTitle),
         actions: [
           Padding(padding: const EdgeInsets.only(right: 12), child: langSwitch()),
         ],
@@ -33,6 +60,7 @@ class _RiderHomeState extends State<RiderHome> {
       body: IndexedStack(index: _tab, children: [
         const JobsTab(),
         _tab == 1 ? const HistoryTab() : const SizedBox.shrink(),
+        if (hasWallet) WalletTab(initial: _wallet!),
         const ProfileTab(),
       ]),
       bottomNavigationBar: NavigationBar(
@@ -42,6 +70,7 @@ class _RiderHomeState extends State<RiderHome> {
         destinations: [
           NavigationDestination(icon: const Icon(Icons.two_wheeler_outlined), selectedIcon: const Icon(Icons.two_wheeler, color: brand), label: tr('Jobs')),
           NavigationDestination(icon: const Icon(Icons.receipt_long_outlined), selectedIcon: const Icon(Icons.receipt_long, color: brand), label: tr('History')),
+          if (hasWallet) NavigationDestination(icon: const Icon(Icons.account_balance_wallet_outlined), selectedIcon: const Icon(Icons.account_balance_wallet, color: brand), label: tr('Wallet')),
           NavigationDestination(icon: const Icon(Icons.person_outline), selectedIcon: const Icon(Icons.person, color: brand), label: tr('Profile')),
         ],
       ),
@@ -91,7 +120,7 @@ class _HistoryTabState extends State<HistoryTab> {
                   child: Card(
                     child: ListTile(
                       title: Text('${j['hotel_name']} · #${j['code']}', style: kItem),
-                      subtitle: Text('${(j['items'] as List).join(', ')}', maxLines: 2, overflow: TextOverflow.ellipsis),
+                      subtitle: Text((j['items'] as List).join(', '), maxLines: 2, overflow: TextOverflow.ellipsis),
                       trailing: j['status'] == 'delivered' ? Text(kes(j['rider_fee']), style: const TextStyle(color: Color(0xFF16A34A), fontWeight: FontWeight.w800)) : Text(tr('Failed'), style: const TextStyle(color: Colors.red, fontWeight: FontWeight.w800)),
                     ),
                   ),
