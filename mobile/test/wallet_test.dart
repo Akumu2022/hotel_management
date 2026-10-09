@@ -38,4 +38,18 @@ void main() {
     await tester.pumpWidget(MaterialApp(home: Scaffold(body: WalletTab(initial: data([])))));
     expect(find.textContaining('Nothing yet'), findsOneWidget);
   });
+
+  testWidgets('withdraw opens a sheet that asks for the password', (tester) async {
+    tester.view.physicalSize = const Size(900, 3000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final w = data([])..['can_withdraw'] = true;
+    await tester.pumpWidget(MaterialApp(home: Scaffold(body: WalletTab(initial: w))));
+    await tester.tap(find.text('Withdraw now'));
+    await tester.pumpAndSettle();
+    expect(find.text('Type your password to confirm'), findsOneWidget);
+    // Nothing can be sent until a password is typed.
+    final button = tester.widget<FilledButton>(find.widgetWithText(FilledButton, 'Withdraw now · KES 470'));
+    expect(button.onPressed, isNull);
+  });
 }

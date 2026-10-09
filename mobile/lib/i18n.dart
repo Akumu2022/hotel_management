@@ -14,6 +14,17 @@ String tr(String s, [Map<String, Object?>? vars]) {
 }
 
 const Map<String, String> _sw = {
+  'Done': 'Imekamilika',
+  "You'll receive": 'Utapokea',
+  'to your M-Pesa 0•••• {last4}. The first one each day is free.': 'kwenda M-Pesa yako 0•••• {last4}. Ya kwanza kila siku ni bure.',
+  'Type your password to confirm': 'Andika nenosiri lako kuthibitisha',
+  'is being sent to your M-Pesa 0•••• {last4}. You will get the M-Pesa message in a moment.': 'inatumwa M-Pesa yako 0•••• {last4}. Utapata ujumbe wa M-Pesa punde.',
+  "You already took money out today, so this one costs {amount}. Waiting until tonight's payout is free.": 'Tayari ulitoa pesa leo, kwa hiyo hii inagharimu {amount}. Kusubiri malipo ya usiku ni bure.',
+  'You have': 'Una',
+  'Charge': 'Gharama',
+  'You get': 'Unapata',
+  'Wait for tonight': 'Subiri usiku',
+  'Pay and withdraw': 'Lipa na utoe',
   'Wallet': 'Pochi',
   'Today': 'Leo',
   'Yesterday': 'Jana',

@@ -63,11 +63,11 @@ class RiderSession extends ChangeNotifier {
   }
 
   /// A call with the login attached; one silent re-login if the access token has expired.
-  Future<dynamic> call(String method, String path, {Object? body}) async {
+  Future<dynamic> call(String method, String path, {Object? body, Map<String, String>? headers}) async {
     try {
-      return await apiSend(method, path, body: body, headers: _headers);
+      return await apiSend(method, path, body: body, headers: {..._headers, ...?headers});
     } on ApiError catch (e) {
-      if (e.status == 401 && await _renew()) return apiSend(method, path, body: body, headers: _headers);
+      if (e.status == 401 && await _renew()) return apiSend(method, path, body: body, headers: {..._headers, ...?headers});
       if (e.status == 401) notifyListeners(); // signed out
       rethrow;
     }
