@@ -150,6 +150,8 @@ export type Track = {
   delivery_code: string | null;
   till_name: string | null;
   pay_by_stk?: boolean;
+  refund_status?: string | null;
+  refund_amount?: number | null;
   stk_status?: "sent" | "failed" | "cancelled" | "success" | "review" | "created" | null;
   hotel_verified: boolean;
   customer_trans_code: string | null;

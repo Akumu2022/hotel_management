@@ -158,6 +158,8 @@ class TrackOut(Schema):
     till_name: str | None = None  # M-Pesa shows this name before the customer enters their PIN
     pay_by_stk: bool = False
     stk_status: str | None = None  # sent | failed | cancelled | success | review
+    refund_status: str | None = None  # a refund to the paying phone: queued | ... | succeeded
+    refund_amount: int | None = None
     hotel_verified: bool = False
     items: list[TrackItem]
     items_total: int

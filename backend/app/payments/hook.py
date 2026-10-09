@@ -156,6 +156,23 @@ async def stk_status(session: AsyncSession, order_id) -> str | None:
     return states[0]
 
 
+async def refund_info(session: AsyncSession, order_id) -> tuple[str | None, int | None]:
+    """(status, amount) of the customer's refund for this order, for the tracking page."""
+    from sqlalchemy import select
+
+    from app.payments.models import CustomerRefund
+
+    row = (
+        await session.execute(
+            select(CustomerRefund.status, CustomerRefund.amount)
+            .where(CustomerRefund.order_ref == str(order_id))
+            .order_by(CustomerRefund.attempt.desc())
+            .limit(1)
+        )
+    ).first()
+    return (row[0], row[1]) if row else (None, None)
+
+
 async def mark_order_paid(session: AsyncSession, order_ref: str) -> bool:
     """An STK payment was confirmed: the order becomes Paid, once. Deliberately does NOT write the
     pilot's Till ledger entries: the platform holds this money, the hotel never received it."""
@@ -166,7 +183,7 @@ async def mark_order_paid(session: AsyncSession, order_ref: str) -> bool:
 
     from app.core.time import utcnow
     from app.models import Order, OrderEvent
-    from app.services import events, payments
+    from app.services import events
 
     try:
         oid = uuid.UUID(order_ref)
@@ -176,16 +193,9 @@ async def mark_order_paid(session: AsyncSession, order_ref: str) -> bool:
     if order is None:
         return False
     if order.status not in ("awaiting_payment", "checking_payment"):
-        # Paid by another way, expired or cancelled meanwhile: the money is held, a person decides.
-        await payments.open_review(
-            session,
-            type="overpaid",
-            hotel_id=order.hotel_id,
-            order_id=order.id,
-            reason=(
-                f"STK payment of KES {order.till_amount:,} arrived for an order that is "
-                f"{order.status}: refund the customer"
-            ),
+        # Paid by another way, expired or cancelled meanwhile: the money is held, so give it back.
+        await refund_stk_order(
+            session, order, f"payment arrived after the order was {order.status}"
         )
         return False
     now = utcnow()
@@ -206,23 +216,71 @@ async def mark_order_paid(session: AsyncSession, order_ref: str) -> bool:
     return True
 
 
-async def on_cancelled(session: AsyncSession, order) -> None:
-    """Rejected or cancelled order: if the customer paid by STK, release the holds and tell a
-    person to refund the customer (automatic refunds are not built yet)."""
-    if not get_payments_config().payments_enabled:
-        return
-    from app.payments import reverse
-    from app.payments.service import _collected
+async def refund_stk_order(session: AsyncSession, order, why: str) -> int:
+    """Give a customer their STK payment back: holds move to their refund balance and a refund
+    is queued (sent within a minute by the scheduler). Returns the KES being refunded."""
+    from sqlalchemy import select
+
+    from app.payments import refunds, reverse
+    from app.payments.models import StkRequest
     from app.services import payments
 
     ref = str(order.id)
-    if not await _collected(session, ref) or get_payments_config().payments_shadow:
+    owed = await reverse(session, ref)
+    if owed <= 0:
+        return 0
+    phone = await session.scalar(
+        select(StkRequest.phone).where(StkRequest.order_ref == ref, StkRequest.status == "success")
+    )
+    row = await refunds.queue_refund(
+        session, order_ref=ref, phone=phone or "", amount=owed, reason=why
+    )
+    if row is None or not phone:
+        await payments.open_review(
+            session,
+            type="overpaid",
+            hotel_id=order.hotel_id,
+            order_id=order.id,
+            reason=f"Refund the customer KES {owed:,} (order {order.status}): {why}",
+        )
+    return owed
+
+
+async def on_cancelled(session: AsyncSession, order) -> None:
+    """Rejected or cancelled order: if the customer paid by STK, refund them automatically."""
+    cfg = get_payments_config()
+    if not cfg.payments_enabled or cfg.payments_shadow:
         return
-    await reverse(session, ref)
+    from app.payments.service import _collected
+
+    if await _collected(session, str(order.id)):
+        await refund_stk_order(session, order, f"order {order.status}")
+
+
+async def stk_needs_review(session: AsyncSession, req) -> None:
+    """A payment arrived that the module will not confirm by itself (wrong amount, no receipt).
+    The money is in the Paybill but not held for anyone: a person decides."""
+    from sqlalchemy import select
+
+    from app.models import Order
+    from app.services import payments
+
+    try:
+        import uuid
+
+        order = await session.scalar(select(Order).where(Order.id == uuid.UUID(req.order_ref)))
+    except ValueError:
+        return
+    if order is None:
+        return
     await payments.open_review(
         session,
         type="overpaid",
         hotel_id=order.hotel_id,
         order_id=order.id,
-        reason=f"Order {order.status}: refund the customer KES {order.till_amount:,} paid by STK Push",
+        reason=(
+            f"STK payment needs checking: order total KES {order.till_amount:,}, "
+            f"result {req.result_code} ({req.result_desc or 'no receipt'}). "
+            "Check the M-Pesa statement, then refund or confirm by hand."
+        ),
     )

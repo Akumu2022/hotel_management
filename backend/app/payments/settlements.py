@@ -186,6 +186,10 @@ async def submit(session: AsyncSession, sid: uuid.UUID, provider=None) -> str:
     ) or "gone"
 
 
+async def exists(session: AsyncSession, sid: uuid.UUID) -> bool:
+    return await session.get(HotelSettlement, sid) is not None
+
+
 async def apply_callback(session: AsyncSession, sid: uuid.UUID, res: dict, params: dict) -> bool:
     """A Daraja result for a settlement (called by payouts.handle_result when the id is not a
     rider payout)."""

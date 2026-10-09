@@ -222,53 +222,45 @@ async def confirm_handover(
     return await _release_to_owners(session, order_ref, hotel_id, cfg.payments_shadow)
 
 
-async def reverse(session: AsyncSession, order_ref: str, rider_fee: int = 0) -> bool:
-    """Order rejected/cancelled before delivery: every hold is released (the customer is refunded
-    by the refund flow). Money already credited to a rider or hotel is never reversed
-    automatically."""
+async def reverse(session: AsyncSession, order_ref: str, rider_fee: int = 0) -> int:
+    """Order rejected/cancelled before delivery: every hold moves to the CUSTOMER's refund
+    balance for this order (still counted as owed, so the float check covers it). Returns the
+    KES now owed back to the customer (0 if nothing was held or it was already reversed). Money
+    already credited to a rider or hotel is never reversed automatically."""
     cfg = get_payments_config()
     if not cfg.payments_enabled or not await _collected(session, order_ref):
-        return False
+        return 0
+    try:
+        customer = uuid.UUID(order_ref)  # the refund balance is kept per order
+    except ValueError:
+        return 0
     shadow = cfg.payments_shadow
-    did = False
-    for kind, ptype, pid_from in (
-        ("rider_fee", "platform", None),
-        ("platform_fee", "platform", None),
+    hotel_id = await session.scalar(
+        select(WalletEntry.party_id).where(
+            WalletEntry.order_ref == order_ref, WalletEntry.kind == "hotel_share_held"
+        )
+    )
+    total = 0
+    for kind, src in (
+        ("rider_fee", ("platform", None, "pending")),
+        ("platform_fee", ("platform", None, "pending")),
+        ("hotel_share", ("hotel", hotel_id, "pending")),
     ):
         amount = await held(session, order_ref, kind)
-        if amount > 0:
-            did |= await ledger.move(
-                session,
-                idem_key=f"reverse:{order_ref}:{kind}",
-                party_type=ptype,
-                party_id=pid_from,
-                src="pending",
-                dst=None,
-                amount=amount,
-                kind=f"{kind}_released",
-                order_ref=order_ref,
-                shadow=shadow,
-            )
-    hotel_part = await held(session, order_ref, "hotel_share")
-    if hotel_part > 0:
-        hotel_id = await session.scalar(
-            select(WalletEntry.party_id).where(
-                WalletEntry.order_ref == order_ref, WalletEntry.kind == "hotel_share_held"
-            )
-        )
-        did |= await ledger.move(
+        if amount <= 0:
+            continue
+        await ledger.transfer(
             session,
-            idem_key=f"reverse:{order_ref}:hotel_share",
-            party_type="hotel",
-            party_id=hotel_id,
-            src="pending",
-            dst=None,
-            amount=hotel_part,
-            kind="hotel_share_released",
+            idem_key=f"reverse:{order_ref}:{kind}",
+            src=src,
+            dst=("customer", customer, "reserved"),
+            amount=amount,
+            kind=f"{kind}_released",
             order_ref=order_ref,
             shadow=shadow,
         )
-    return did
+        total += amount
+    return total
 
 
 async def request_withdrawal(session: AsyncSession, rider_id: uuid.UUID):

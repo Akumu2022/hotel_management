@@ -9,7 +9,7 @@ from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.payments import ledger, outbox, payouts, settlements
+from app.payments import ledger, outbox, payouts, refunds, settlements
 from app.payments.config import get_payments_config
 from app.payments.models import JobRun, Payout, WalletEntry
 from app.payments.provider import get_provider
@@ -195,6 +195,7 @@ async def run(session: AsyncSession, now: datetime) -> int:
     n = await payouts.resolve_unknown(session, now, provider)
     n += await settlements.resolve_unknown(session, now, provider)
     await session.commit()
+    n += await refunds.process(session, now, provider)
     if now.astimezone(NAIROBI).time() >= SETTLE_AT:
         from app.payments.hook import eligible_hotels
 

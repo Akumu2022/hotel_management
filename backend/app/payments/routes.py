@@ -33,6 +33,8 @@ async def stk_callback(token: str, request: Request, session: Session):
         req = await collection.request_for(session, body)
         if req is not None and req.status == "success":
             await hook.mark_order_paid(session, req.order_ref)
+        elif req is not None and req.status == "review":
+            await hook.stk_needs_review(session, req)
     await session.commit()
     return {"ResultCode": 0, "ResultDesc": "Accepted"}
 

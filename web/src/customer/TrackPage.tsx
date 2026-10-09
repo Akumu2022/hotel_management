@@ -129,6 +129,20 @@ function CodeEntry({ token, onDone }: { token: string; onDone: () => void }) {
   );
 }
 
+/** The customer's money coming back after a paid order was rejected or cancelled. */
+function RefundCard({ t }: { t: Track }) {
+  const done = t.refund_status === "succeeded";
+  return (
+    <Card className="p-5">
+      <p className="text-sm text-muted">{done ? "Refund sent" : "Refund on its way"}</p>
+      <p className="money text-2xl font-bold">{money(t.refund_amount ?? 0)}</p>
+      <p className="mt-1 text-sm text-muted">
+        {done ? "Your money is back in your M-Pesa. Check your M-Pesa messages." : "We are sending your money back to the M-Pesa number that paid. This usually takes a minute or two."}
+      </p>
+    </Card>
+  );
+}
+
 /** Paid by an M-Pesa prompt on the customer's own phone: nothing to type, no Till to copy. */
 function StkCard({ t, token, onDone }: { t: Track; token: string; onDone: () => void }) {
   const countdown = useCountdown(t.expires_at);
@@ -419,6 +433,7 @@ export function TrackPage() {
             </span>
           </section>
 
+          {t.refund_status ? <RefundCard t={t} /> : null}
           {awaiting ? (t.pay_by_stk ? <StkCard t={t} token={token} onDone={() => track.refetch()} /> : <PayCard t={t} token={token} onCode={() => track.refetch()} />) : null}
           {t.status === "expired" && t.payment_method === "mpesa" ? (
             <Card className="p-5">

@@ -173,7 +173,7 @@ async def test_paid_order_delivered_credits_rider_and_hotel(client, db, setup):
     assert await ledger.balance(db, "hotel", hotel.id, "available", shadow=False) == req.hotel_share
 
 
-async def test_rejecting_a_stk_paid_order_releases_holds_and_asks_for_a_refund(client, db, setup):
+async def test_rejecting_a_stk_paid_order_queues_an_automatic_refund(client, db, setup):
     _, _ = setup
     hotel, placed = await place(client, db)
     order, req = await stk_of(db, placed["code"])
@@ -191,14 +191,45 @@ async def test_rejecting_a_stk_paid_order_releases_holds_and_asks_for_a_refund(c
         hotel_id=hotel.id,
         now=utcnow(),
     )
-    total = await db.scalar(
-        select(func.coalesce(func.sum(WalletEntry.amount), 0)).where(
-            WalletEntry.order_ref == str(order.id)
-        )
+    from app.payments.models import CustomerRefund
+
+    refund = await db.scalar(
+        select(CustomerRefund).where(CustomerRefund.order_ref == str(order.id))
     )
-    assert total == 0  # every hold released
+    assert refund.amount == order.till_amount and refund.phone == req.phone
+    assert refund.status == "queued"
+    assert (
+        await ledger.balance(db, "customer", order.id, "reserved", shadow=False)
+        == order.till_amount
+    )
+    # Nobody has to refund by hand, and the customer can see it coming.
+    assert await db.scalar(select(ReviewItem).where(ReviewItem.order_id == order.id)) is None
+    t = (await client.get(f"/api/v1/track/{placed['tracking_token']}")).json()
+    assert t["refund_status"] == "queued" and t["refund_amount"] == order.till_amount
+
+
+async def test_payment_after_the_order_was_cancelled_is_refunded_by_itself(client, db, setup):
+    _, _ = setup
+    hotel, placed = await place(client, db)
+    order, req = await stk_of(db, placed["code"])
+    order.status = "cancelled"  # the customer cancelled while the prompt was still live
+    await db.flush()
+    await client.post(f"/api/v1/payments/daraja/{TOKEN}/stk", json=callback(req))
+    from app.payments.models import CustomerRefund
+
+    refund = await db.scalar(
+        select(CustomerRefund).where(CustomerRefund.order_ref == str(order.id))
+    )
+    assert refund is not None and refund.amount == order.till_amount
+
+
+async def test_wrong_amount_payment_is_flagged_for_a_person(client, db, setup):
+    _, _ = setup
+    _, placed = await place(client, db)
+    order, req = await stk_of(db, placed["code"])
+    await client.post(f"/api/v1/payments/daraja/{TOKEN}/stk", json=callback(req, amount=10))
     item = await db.scalar(select(ReviewItem).where(ReviewItem.order_id == order.id))
-    assert item is not None and "refund the customer" in item.reason
+    assert item is not None and "needs checking" in item.reason
 
 
 async def test_admin_can_switch_a_hotel_on_and_off(client, db, setup):

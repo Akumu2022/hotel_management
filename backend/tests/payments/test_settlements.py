@@ -112,12 +112,15 @@ async def test_pickup_handover_pays_hotel_and_platform_only(db):
     assert await confirm_handover(db, "O3", hotel_id=hotel.id) == 0
 
 
-async def test_rejected_order_releases_every_hold(db):
+async def test_rejected_order_moves_every_hold_to_the_customer(db):
     hotel = await make_hotel(db)
-    await pay_order(db, "O4", hotel_id=hotel.id)
-    assert await payments.reverse(db, "O4")
-    assert await total(db, "O4") == 0
+    ref = str(uuid.uuid4())
+    await pay_order(db, ref, hotel_id=hotel.id)
+    assert await payments.reverse(db, ref) == 660
+    assert await total(db, ref) == 660  # still held, now as the customer refund
+    assert await ledger.balance(db, "customer", uuid.UUID(ref), "reserved", shadow=False) == 660
     assert await ledger.balance(db, "hotel", hotel.id, "pending", shadow=False) == 0
+    assert await ledger.balance(db, "platform", None, "pending", shadow=False) == 0
 
 
 async def test_daily_settlement_pays_once_itemised(db):

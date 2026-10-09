@@ -1,5 +1,7 @@
 """Payments module: instant credit, idempotency, flag-off no-op, append-only ledger."""
 
+import uuid
+
 import pytest
 from sqlalchemy import select, text
 
@@ -60,12 +62,14 @@ async def test_order_not_paid_through_module_is_ignored_unless_shadow(db, flag):
     assert (await payments.get_balance(db, rider.id))["available"] == 100  # shadow balance
 
 
-async def test_reverse_pending_only(db, flag):
+async def test_reverse_moves_the_hold_to_the_customer_refund_balance(db, flag):
     flag()
-    await make_rider(db)
-    await payments.request_collection(db, "ORD3", 80)
-    assert await payments.reverse(db, "ORD3", 80)
+    ref = str(uuid.uuid4())
+    await payments.request_collection(db, ref, 80)
+    assert await payments.reverse(db, ref) == 80
+    assert await payments.reverse(db, ref) == 0  # once
     assert await ledger.balance(db, "platform", None, "pending", shadow=False) == 0
+    assert await ledger.balance(db, "customer", uuid.UUID(ref), "reserved", shadow=False) == 80
 
 
 async def test_ledger_is_append_only(db, flag):

@@ -23,7 +23,7 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 SCHEMA = "payments"
 BUCKETS = ("pending", "available", "reserved", "paid", "earned")
-PARTY_TYPES = ("rider", "hotel", "platform")
+PARTY_TYPES = ("rider", "hotel", "platform", "customer")
 
 
 class PBase(DeclarativeBase):
@@ -242,4 +242,39 @@ class HotelFlag(PBase):
 
     hotel_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
     stk_enabled: Mapped[bool] = mapped_column(Boolean, server_default=text("false"))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class CustomerRefund(PBase):
+    """Money back to a customer for an order that was paid but never completed. One live refund
+    per order; same never-twice rules as payouts (unknown is never resent)."""
+
+    __tablename__ = "customer_refunds"
+    __table_args__ = (
+        CheckConstraint(
+            f"status IN ({', '.join(repr(x) for x in PAYOUT_STATUSES)})", name="status"
+        ),
+        CheckConstraint("amount > 0", name="amount_positive"),
+        Index(
+            "uq_refund_order",
+            "order_ref",
+            unique=True,
+            postgresql_where=text("status <> 'failed'"),
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = _pk()
+    order_ref: Mapped[str] = mapped_column(String(40))
+    phone: Mapped[str] = mapped_column(String(16))
+    amount: Mapped[int] = mapped_column(Integer)
+    reason: Mapped[str] = mapped_column(String(300))
+    status: Mapped[str] = mapped_column(String(14), server_default=text("'queued'"))
+    attempt: Mapped[int] = mapped_column(Integer, server_default=text("1"))
+    retry_of: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    conversation_id: Mapped[str | None] = mapped_column(String(80), unique=True)
+    transaction_id: Mapped[str | None] = mapped_column(String(30), unique=True)
+    result_code: Mapped[int | None] = mapped_column(Integer)
+    result_desc: Mapped[str | None] = mapped_column(String(300))
+    submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

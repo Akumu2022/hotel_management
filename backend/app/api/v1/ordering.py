@@ -162,6 +162,8 @@ async def track(token: str, session: Session, storage: StorageDep):
         till_name=hotel.till_name,
         pay_by_stk=(stk_state := await payments_hook.stk_status(session, order.id)) is not None,
         stk_status=stk_state,
+        refund_status=(refund := await payments_hook.refund_info(session, order.id))[0],
+        refund_amount=refund[1],
         hotel_verified=hotel.verified_at is not None,
         items=[
             TrackItem(
