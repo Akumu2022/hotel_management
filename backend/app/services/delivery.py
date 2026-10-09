@@ -31,6 +31,7 @@ from app.models import (
     RiderProfile,
     RiderStrike,
 )
+from app.payments import hook as payments_hook
 from app.services import events, ledger, payments, push, riders, settings
 
 CLAIMABLE = ("accepted", "preparing", "ready")
@@ -377,6 +378,7 @@ async def delivered(
         await ledger.record_rider_fee(
             session, order, rider_id=rider_id, payout_mode="instant", created_by=rider_id
         )
+    await payments_hook.on_delivered(session, order)  # no-op unless PAYMENTS_ENABLED
     await session.flush()
     return order
 
