@@ -28,6 +28,7 @@ from app.api.v1 import (
 )
 from app.core.config import get_config
 from app.core.errors import install_error_handlers
+from app.payments import routes as payments_routes
 
 logger = logging.getLogger("app")
 
@@ -123,6 +124,7 @@ def create_app() -> FastAPI:
     v1.include_router(forwarder.hotel)
     v1.include_router(forwarder.admin)
     v1.include_router(push.router)
+    v1.include_router(payments_routes.router)  # Daraja callbacks; 404 unless PAYMENTS_ENABLED
     app.include_router(v1)
 
     # Development: serve uploaded photos from the local media folder (R2 in production).
