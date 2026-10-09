@@ -25,3 +25,18 @@ async def on_delivered(session: AsyncSession, order) -> None:
             tag=f"wallet-{order.id}",
             rider_id=order.rider_id,
         )
+
+
+async def eligible_riders(session: AsyncSession) -> dict:
+    """Riders who may be paid: approved, with an M-Pesa number. App-side knowledge, so it lives
+    here at the boundary and not inside the module."""
+    from sqlalchemy import select
+
+    from app.models import RiderProfile
+
+    rows = await session.execute(
+        select(RiderProfile.user_id, RiderProfile.mpesa_number).where(
+            RiderProfile.kyc_status == "approved", RiderProfile.mpesa_number != ""
+        )
+    )
+    return {uid: phone for uid, phone in rows.all()}

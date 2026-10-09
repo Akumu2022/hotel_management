@@ -23,6 +23,17 @@ class PaymentsConfig(BaseSettings):
     daraja_callback_token: str = ""
     # Safaricom source IPs, comma separated. Empty = not enforced (sandbox).
     daraja_allowed_ips: str = ""
+    # B2C (payouts) uses its own Daraja app and initiator. Never logged, never in the repo.
+    daraja_b2c_consumer_key: str = ""
+    daraja_b2c_consumer_secret: str = ""
+    daraja_b2c_shortcode: str = ""
+    daraja_initiator_name: str = ""
+    daraja_security_credential: str = ""
+    # Payout rules (spec 1.3). Amounts in KES.
+    payout_min: int = 50
+    payout_rider_daily_cap: int = 10000
+    payout_global_daily_cap: int = 200000
+    payout_extra_charge: int = 30  # taken from the rider on a 2nd+ withdrawal in a day
 
 
 @lru_cache

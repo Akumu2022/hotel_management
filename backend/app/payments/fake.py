@@ -2,7 +2,13 @@
 
 import itertools
 
-from app.payments.adapter import CollectAccepted, CollectStatus, ProviderError
+from app.payments.adapter import (
+    CollectAccepted,
+    CollectStatus,
+    DisburseAccepted,
+    DisburseStatus,
+    ProviderError,
+)
 
 
 class FakeProvider:
@@ -11,6 +17,11 @@ class FakeProvider:
         self.fail_next: str | None = None
         self.statuses: dict[str, CollectStatus] = {}
         self._n = itertools.count(1)
+        self.disbursed: list[dict] = []
+        self.disburse_error: Exception | None = None  # raised on the next disburse()
+        self.disburse_statuses: dict[str, DisburseStatus] = {}
+        self.balance = 10_000_000
+        self.auto_complete = False  # shadow mode: payouts finish at once, no money moves
 
     async def collect(self, *, phone, amount, account_ref, callback_url) -> CollectAccepted:
         self.calls.append(
@@ -24,3 +35,21 @@ class FakeProvider:
 
     async def query_collection(self, checkout_request_id: str) -> CollectStatus:
         return self.statuses.get(checkout_request_id, CollectStatus(result_code=None))
+
+    async def disburse(self, *, phone, amount, originator_id, result_url, timeout_url):
+        self.disbursed.append({"phone": phone, "amount": amount, "originator_id": originator_id})
+        if self.disburse_error:
+            err, self.disburse_error = self.disburse_error, None
+            raise err
+        final = (
+            DisburseStatus(0, "shadow", f"SHADOW{originator_id[:8].upper()}")
+            if self.auto_complete
+            else None
+        )
+        return DisburseAccepted(f"AG_fake_{originator_id[:8]}", final)
+
+    async def query_disbursement(self, originator_id, *, result_url, timeout_url):
+        return self.disburse_statuses.get(originator_id)
+
+    async def account_balance(self) -> int:
+        return self.balance

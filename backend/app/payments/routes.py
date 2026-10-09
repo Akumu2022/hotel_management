@@ -6,7 +6,7 @@ from fastapi import APIRouter, Request
 
 from app.api.deps import Session
 from app.core.errors import not_found
-from app.payments import collection
+from app.payments import collection, payouts
 from app.payments.config import get_payments_config
 
 router = APIRouter(prefix="/payments/daraja", tags=["payments"])
@@ -28,5 +28,23 @@ async def stk_callback(token: str, request: Request, session: Session):
         raise not_found()
     body = await request.json()
     await collection.handle_stk_callback(session, body)
+    await session.commit()
+    return {"ResultCode": 0, "ResultDesc": "Accepted"}
+
+
+@router.post("/{token}/b2c/result")
+async def b2c_result(token: str, request: Request, session: Session):
+    if not _allowed(request, token):
+        raise not_found()
+    await payouts.handle_result(session, await request.json())
+    await session.commit()
+    return {"ResultCode": 0, "ResultDesc": "Accepted"}
+
+
+@router.post("/{token}/b2c/timeout")
+async def b2c_timeout(token: str, request: Request, session: Session):
+    if not _allowed(request, token):
+        raise not_found()
+    await payouts.handle_timeout(session, await request.json())
     await session.commit()
     return {"ResultCode": 0, "ResultDesc": "Accepted"}

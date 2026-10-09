@@ -13,6 +13,7 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core.time import utcnow
+from app.payments import scheduler as payments_scheduler
 from app.models import Hotel, Order, OrderEvent, Payment, ReviewItem
 from app.services import (
     billing,
@@ -139,6 +140,7 @@ async def run_all(sessionmaker: async_sessionmaker, now: datetime | None = None)
         ("auto_rejected", order_flow.auto_reject_late),
         ("fee_answers_timed_out", delivery.answer_timeouts),
         ("billing", billing.weekly_job),
+        ("rider_payouts", payments_scheduler.run),  # no-op unless PAYMENTS_ENABLED
         ("nonces_pruned", forwarder.prune_nonces),
         ("pings_pruned", tracking.prune),
     ):

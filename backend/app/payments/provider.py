@@ -6,10 +6,13 @@ from app.payments.config import get_payments_config
 @lru_cache
 def get_provider():
     cfg = get_payments_config()
-    if cfg.payments_provider == "daraja":
-        from app.payments.daraja import DarajaProvider
+    # Shadow mode can never move real money, whatever else is configured.
+    if cfg.payments_provider == "daraja" and not cfg.payments_shadow:
+        from app.payments.daraja import DarajaB2C
 
-        return DarajaProvider(cfg)
+        return DarajaB2C(cfg)
     from app.payments.fake import FakeProvider
 
-    return FakeProvider()
+    fake = FakeProvider()
+    fake.auto_complete = True  # shadow: payouts "succeed" at once in the ledger only
+    return fake

@@ -82,3 +82,54 @@ class DarajaProvider:
         return CollectStatus(
             result_code=int(data["ResultCode"]), result_desc=data.get("ResultDesc", "")
         )
+
+
+class DarajaB2C(DarajaProvider):
+    """Payouts. Separate Daraja app and initiator from collection. Verify each call in the
+    sandbox before any live use: the field names below follow Safaricom's B2C v3 docs."""
+
+    async def _b2c_auth(self) -> str:
+        r = await self.client.get(
+            f"{self.base}/oauth/v1/generate?grant_type=client_credentials",
+            auth=(self.cfg.daraja_b2c_consumer_key, self.cfg.daraja_b2c_consumer_secret),
+        )
+        r.raise_for_status()
+        return r.json()["access_token"]
+
+    async def disburse(self, *, phone, amount, originator_id, result_url, timeout_url):
+        from app.payments.adapter import DisburseAccepted
+
+        body = {
+            "OriginatorConversationID": originator_id,
+            "InitiatorName": self.cfg.daraja_initiator_name,
+            "SecurityCredential": self.cfg.daraja_security_credential,
+            "CommandID": "BusinessPayment",
+            "Amount": amount,
+            "PartyA": self.cfg.daraja_b2c_shortcode,
+            "PartyB": phone,
+            "Remarks": "Rider earnings",
+            "QueueTimeOutURL": timeout_url,
+            "ResultURL": result_url,
+            "Occasion": "Payout",
+        }
+        r = await self.client.post(
+            f"{self.base}/mpesa/b2c/v3/paymentrequest",
+            json=body,
+            headers={"Authorization": f"Bearer {await self._b2c_auth()}"},
+        )
+        if r.status_code >= 500:
+            raise RuntimeError(f"daraja {r.status_code}")  # unknown outcome: never a clean no
+        data = r.json()
+        if r.status_code != 200 or data.get("ResponseCode") != "0":
+            raise ProviderError(
+                data.get("errorMessage") or data.get("ResponseDescription") or "rejected"
+            )
+        return DisburseAccepted(data.get("ConversationID", ""))
+
+    async def query_disbursement(self, originator_id, *, result_url, timeout_url):
+        return None  # Transaction Status answers on the result URL (wired in the sandbox step)
+
+    async def account_balance(self) -> int:
+        # Daraja answers Account Balance on a callback. Until that is wired, report "unknown":
+        # the float check then fails closed and no live payout runs.
+        raise ProviderError("account balance is not wired yet")

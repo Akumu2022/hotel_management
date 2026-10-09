@@ -2,12 +2,13 @@
 orders and parties are plain ids, so the module can be lifted out later."""
 
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 
 from sqlalchemy import (
     BigInteger,
     Boolean,
     CheckConstraint,
+    Date,
     DateTime,
     Index,
     Integer,
@@ -122,4 +123,70 @@ class RawCallback(PBase):
     external_id: Mapped[str] = mapped_column(String(120))
     body: Mapped[dict] = mapped_column(JSONB)
     processed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+PAYOUT_STATUSES = (
+    "queued",
+    "submitted",
+    "succeeded",
+    "failed",
+    "unknown",
+    "manual_review",
+)
+PAYOUT_KINDS = ("auto", "withdraw", "withdraw_extra")
+
+
+class Payout(PBase):
+    """One B2C payment to a rider. OriginatorConversationID is this row's id, so Daraja can
+    never be asked to pay the same row twice. A timeout is `unknown` and is NEVER resent: a
+    retry after a confirmed failure is a new row pointing at the old one (retry_of)."""
+
+    __tablename__ = "payouts"
+    __table_args__ = (
+        CheckConstraint(
+            f"status IN ({', '.join(repr(x) for x in PAYOUT_STATUSES)})", name="status"
+        ),
+        CheckConstraint(f"kind IN ({', '.join(repr(x) for x in PAYOUT_KINDS)})", name="kind"),
+        CheckConstraint("amount > 0 AND charge >= 0", name="amounts"),
+        # One automatic-or-free payout per rider per day: a job run twice cannot pay twice.
+        Index(
+            "uq_payout_rider_day",
+            "rider_id",
+            "payout_date",
+            unique=True,
+            postgresql_where=text("kind IN ('auto', 'withdraw') AND status <> 'failed'"),
+        ),
+        Index("ix_payout_status", "status"),
+    )
+
+    id: Mapped[uuid.UUID] = _pk()
+    rider_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True))
+    kind: Mapped[str] = mapped_column(String(16))
+    payout_date: Mapped[date] = mapped_column(Date)
+    phone: Mapped[str] = mapped_column(String(16))
+    amount: Mapped[int] = mapped_column(Integer)  # what the rider receives
+    charge: Mapped[int] = mapped_column(Integer, server_default=text("0"))  # taken from rider
+    status: Mapped[str] = mapped_column(String(14), server_default=text("'queued'"))
+    idem_key: Mapped[str | None] = mapped_column(String(80), unique=True)
+    retry_of: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    conversation_id: Mapped[str | None] = mapped_column(String(80), unique=True)
+    transaction_id: Mapped[str | None] = mapped_column(String(30), unique=True)
+    result_code: Mapped[int | None] = mapped_column(Integer)
+    reason: Mapped[str | None] = mapped_column(String(300))
+    submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class JobRun(PBase):
+    """A scheduled job's marker: (job, run_key) is unique, so a second run exits at once."""
+
+    __tablename__ = "job_runs"
+    __table_args__ = (UniqueConstraint("job", "run_key"),)
+
+    id: Mapped[uuid.UUID] = _pk()
+    job: Mapped[str] = mapped_column(String(40))
+    run_key: Mapped[str] = mapped_column(String(40))
+    detail: Mapped[dict | None] = mapped_column(JSONB)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
