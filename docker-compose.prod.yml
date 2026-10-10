@@ -1,0 +1,118 @@
+# Production stack for orderfood.co.ke. Development keeps using docker-compose.yml.
+#
+#   docker compose -f docker-compose.prod.yml up -d --build
+#
+# Only Caddy (ports 80 and 443) is reachable from the internet. The database, the API and the web
+# server have no published ports, so they cannot be reached or attacked directly.
+#
+# Run exactly ONE api container: live updates (SSE) and the order timers live inside that
+# process (see backend/app/services/events.py). Do not scale it or add --workers.
+name: chakula
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-hotel}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-hotel}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-hotel} -d ${POSTGRES_DB:-hotel}"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    logging: *logging
+
+  api:
+    build: ./backend
+    restart: unless-stopped
+    # Bring the schema up to date first, so new code never meets an old database.
+    # --proxy-headers: rate limits and logs must see each customer's real address, not Caddy's.
+    # That is safe only because this container has no published port (nobody can send it a
+    # forged header) and Caddy replaces any forwarded address a client supplies.
+    command: >
+      sh -c "alembic upgrade head &&
+      uvicorn app.main:app --host 0.0.0.0 --port 8000 --no-access-log
+      --proxy-headers --forwarded-allow-ips='*' --timeout-graceful-shutdown 10"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-hotel}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-hotel}
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env}
+      FORWARDER_KEY: ${FORWARDER_KEY:?Set FORWARDER_KEY in .env}
+      CORS_ORIGINS: https://${DOMAIN:?Set DOMAIN in .env}
+      APP_ENV: production
+      COOKIE_SECURE: "true"
+      PAYMENT_SIMULATOR: "false"
+      OSRM_URL: ${OSRM_URL:-https://router.project-osrm.org/route/v1/driving}
+      REDIS_URL: ""
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+      VAPID_SUBJECT: ${VAPID_SUBJECT:-mailto:admin@orderfood.co.ke}
+    volumes:
+      - media:/app/media # menu photos
+      - private_media:/app/private_media # rider ID photos: never served publicly
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://127.0.0.1:8000/health', timeout=4)"]
+      interval: 15s
+      timeout: 6s
+      retries: 5
+      start_period: 40s
+    logging: *logging
+
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile.prod
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    logging: *logging
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      DOMAIN: ${DOMAIN}
+      ACME_EMAIL: ${ACME_EMAIL:?Set ACME_EMAIL in .env}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data # the HTTPS certificates: keep this volume
+      - caddy_config:/config
+    depends_on:
+      - web
+    logging: *logging
+
+  # Optional: your own road-routing server (README, "Road routing"). Start with
+  #   docker compose -f docker-compose.prod.yml --profile routing up -d osrm
+  # then set OSRM_URL=http://osrm:5000/route/v1/driving in .env and restart the api.
+  osrm:
+    profiles: ["routing"]
+    image: ghcr.io/project-osrm/osrm-backend:latest
+    command: osrm-routed --algorithm mld /data/kenya-latest.osrm
+    volumes:
+      - ./osrm-data:/data:ro
+    restart: unless-stopped
+    logging: *logging
+
+volumes:
+  pgdata:
+  media:
+  private_media:
+  caddy_data:
+  caddy_config:

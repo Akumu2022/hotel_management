@@ -15,3 +15,5 @@ web/public/downloads/*.apk
 *.tsbuildinfo
 .till_sim.json
 osrm-data/
+
+backups/

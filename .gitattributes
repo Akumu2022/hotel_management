@@ -1,0 +1,8 @@
+# The server runs Linux: these files must keep Unix line endings even when checked out on Windows,
+# or the scripts fail with "bad interpreter" / "\r: command not found".
+*.sh text eol=lf
+deploy/Caddyfile text eol=lf
+deploy/env.production.example text eol=lf
+docker-compose*.yml text eol=lf
+Dockerfile* text eol=lf
+nginx.conf text eol=lf
