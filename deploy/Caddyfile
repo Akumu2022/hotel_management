@@ -1,0 +1,27 @@
+# HTTPS front door. Caddy gets and renews the certificate by itself (Let's Encrypt) once the
+# domain's DNS points at this server and ports 80 and 443 are open.
+{
+	email {$ACME_EMAIL}
+}
+
+{$DOMAIN} {
+	encode zstd gzip
+
+	header {
+		# Browsers must use HTTPS for this site from now on.
+		Strict-Transport-Security "max-age=31536000"
+		-Server
+	}
+
+	# Everything goes to the web container, which serves the app and forwards /api and /media to
+	# the API. flush_interval -1 keeps the live-update stream (SSE) flowing instead of buffered.
+	# Caddy replaces any X-Forwarded-For a visitor sends with their real address.
+	reverse_proxy web:80 {
+		flush_interval -1
+	}
+}
+
+# www.orderfood.co.ke goes to the plain address.
+www.{$DOMAIN} {
+	redir https://{$DOMAIN}{uri} permanent
+}
