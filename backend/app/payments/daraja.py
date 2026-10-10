@@ -158,10 +158,67 @@ class DarajaB2C(DarajaProvider):
             )
         return DisburseAccepted(data.get("ConversationID", ""))
 
+    def _async_urls(self, leaf: str) -> tuple[str, str]:
+        base = (
+            f"{self.cfg.daraja_callback_base.rstrip('/')}/api/v1/payments/daraja/"
+            f"{self.cfg.daraja_callback_token}"
+        )
+        return f"{base}/{leaf}/result", f"{base}/{leaf}/timeout"
+
+    async def _post_async(self, path: str, body: dict) -> None:
+        r = await self.client.post(
+            f"{self.base}{path}",
+            json=body,
+            headers={"Authorization": f"Bearer {await self._b2c_auth()}"},
+        )
+        data = r.json()
+        if r.status_code != 200 or data.get("ResponseCode") != "0":
+            raise ProviderError(
+                data.get("errorMessage") or data.get("ResponseDescription") or "rejected"
+            )
+
     async def query_disbursement(self, originator_id, *, result_url, timeout_url):
-        return None  # Transaction Status answers on the result URL (wired in the sandbox step)
+        """Transaction Status. Daraja answers on the status result URL (never here), where the
+        route applies it to the payout. Returns None now: 'ask again next run'."""
+        result, timeout = self._async_urls("status")
+        await self._post_async(
+            "/mpesa/transactionstatus/v1/query",
+            {
+                "Initiator": self.cfg.daraja_initiator_name,
+                "SecurityCredential": self.cfg.daraja_security_credential,
+                "CommandID": "TransactionStatus",
+                "OriginatorConversationID": originator_id,
+                "PartyA": self.cfg.daraja_b2c_shortcode,
+                "IdentifierType": "4",
+                "ResultURL": result,
+                "QueueTimeOutURL": timeout,
+                "Remarks": "Status check",
+                "Occasion": originator_id[:100],
+            },
+        )
+        return None
 
     async def account_balance(self) -> int:
-        # Daraja answers Account Balance on a callback. Until that is wired, report "unknown":
-        # the float check then fails closed and no live payout runs.
-        raise ProviderError("account balance is not wired yet")
+        """Daraja answers Account Balance on a callback, which caches it (see balance.py). A
+        fresh cached value is returned; otherwise a request is sent and, until it lands, the
+        answer is 'unknown' so the float check fails closed."""
+        from app.payments import balance
+
+        cached = balance.fresh()
+        if cached is not None:
+            return cached
+        result, timeout = self._async_urls("balance")
+        await self._post_async(
+            "/mpesa/accountbalance/v1/query",
+            {
+                "Initiator": self.cfg.daraja_initiator_name,
+                "SecurityCredential": self.cfg.daraja_security_credential,
+                "CommandID": "AccountBalance",
+                "PartyA": self.cfg.daraja_b2c_shortcode,
+                "IdentifierType": "4",
+                "Remarks": "Float check",
+                "QueueTimeOutURL": timeout,
+                "ResultURL": result,
+            },
+        )
+        raise ProviderError("balance requested, waiting for Daraja")

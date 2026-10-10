@@ -6,7 +6,7 @@ from fastapi import APIRouter, Request
 
 from app.api.deps import Session
 from app.core.errors import not_found
-from app.payments import collection, payouts
+from app.payments import balance, collection, payouts
 from app.payments.config import get_payments_config
 
 router = APIRouter(prefix="/payments/daraja", tags=["payments"])
@@ -54,4 +54,37 @@ async def b2c_timeout(token: str, request: Request, session: Session):
         raise not_found()
     await payouts.handle_timeout(session, await request.json())
     await session.commit()
+    return {"ResultCode": 0, "ResultDesc": "Accepted"}
+
+
+@router.post("/{token}/balance/result")
+async def balance_result(token: str, request: Request, session: Session):
+    if not _allowed(request, token):
+        raise not_found()
+    amount = balance.parse(await request.json())
+    if amount is not None:
+        balance.record(amount)
+    return {"ResultCode": 0, "ResultDesc": "Accepted"}
+
+
+@router.post("/{token}/balance/timeout")
+async def balance_timeout(token: str, request: Request):
+    if not _allowed(request, token):
+        raise not_found()
+    return {"ResultCode": 0, "ResultDesc": "Accepted"}
+
+
+@router.post("/{token}/status/result")
+async def status_result(token: str, request: Request, session: Session):
+    if not _allowed(request, token):
+        raise not_found()
+    await payouts.handle_status_result(session, await request.json())
+    await session.commit()
+    return {"ResultCode": 0, "ResultDesc": "Accepted"}
+
+
+@router.post("/{token}/status/timeout")
+async def status_timeout(token: str, request: Request):
+    if not _allowed(request, token):
+        raise not_found()
     return {"ResultCode": 0, "ResultDesc": "Accepted"}

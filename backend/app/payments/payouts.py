@@ -232,6 +232,51 @@ async def handle_result(session: AsyncSession, body: dict) -> bool:
     )
 
 
+async def handle_status_result(session: AsyncSession, body: dict) -> bool:
+    """Transaction Status answer for a payout of unknown outcome. The query's own ResultCode only
+    says the QUERY worked; the payout's fate is in TransactionStatus. Anything unclear is left
+    alone (still unknown, asked again next run, then manual review after 24 hours)."""
+    from app.payments.collection import store_callback
+
+    res = body.get("Result", body)
+    params = {
+        i.get("Key"): i.get("Value")
+        for i in res.get("ResultParameters", {}).get("ResultParameter", [])
+    }
+    refs = {
+        i.get("Key"): i.get("Value")
+        for i in (res.get("ReferenceData", {}) or {}).get("ReferenceItem", [])
+        if isinstance(i, dict)
+    }
+    originator = refs.get("Occasion") or params.get("OriginatorConversationID")
+    try:
+        payout_id = uuid.UUID(str(originator))
+    except ValueError:
+        return False
+    key = f"{res.get('OriginatorConversationID', originator)}:{res.get('ResultCode', '')}"
+    if not await store_callback(session, "b2c_status", key, body):
+        return False
+    if int(res.get("ResultCode", -1)) != 0:
+        return False
+    status = str(params.get("TransactionStatus", "")).lower()
+    if status not in ("completed", "failed"):
+        return False
+    code = 0 if status == "completed" else -1
+    txn = str(params.get("ReceiptNo") or "") or None
+    reason = str(params.get("ReasonType") or res.get("ResultDesc", ""))
+    if await session.get(Payout, payout_id) is not None:
+        return await _apply_result(session, payout_id, code, reason, txn if code == 0 else None)
+    from app.payments import refunds, settlements
+
+    if await settlements.exists(session, payout_id):
+        return await settlements.apply_callback(
+            session, payout_id, {"ResultCode": code, "ResultDesc": reason, "TransactionID": txn}, params
+        )
+    return await refunds.apply_callback(
+        session, payout_id, {"ResultCode": code, "ResultDesc": reason, "TransactionID": txn}, params
+    )
+
+
 async def handle_timeout(session: AsyncSession, body: dict) -> bool:
     """Daraja gave up waiting: we do not know the outcome. Mark unknown, resolve by query."""
     res = body.get("Result", body)
