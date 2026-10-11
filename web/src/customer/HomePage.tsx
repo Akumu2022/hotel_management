@@ -13,6 +13,7 @@ import { TOWNS, areaQuery, locate, setArea, townArea, useArea, type Area } from 
 import { useOrderMode } from "./store";
 import { InstallBanner } from "./InstallBanner";
 import { StatusChip } from "./HotelPage";
+import { OfferCarousel } from "./OfferCarousel";
 import { useRecentOrders } from "./store";
 import { money } from "../lib/format";
 import type { PublicHotel, PublicOffer, SearchHit } from "./types";
@@ -60,50 +61,6 @@ function HotelCard({ hotel }: { hotel: PublicHotel }) {
           <ArrowRight className="size-5" />
         </span>
       </div>
-    </Link>
-  );
-}
-
-/** "PIZZA WEDNESDAY\nBuy one Get One Free!" -> big headline + highlighted sub-line. */
-function splitTitle(title: string): [string, string] {
-  const [head, ...rest] = title.split("\n");
-  return [head.trim(), rest.join(" ").trim()];
-}
-
-function OfferBanner({ offer: o, cta }: { offer: PublicOffer; cta: string }) {
-  const [head, sub] = splitTitle(o.title);
-  const left = o.ends_at ? Math.max(0, new Date(o.ends_at).getTime() - Date.now()) : null;
-  const ending = left != null && left < 24 * 3600_000 ? (left < 3600_000 ? `${Math.max(1, Math.round(left / 60_000))} min left` : `${Math.round(left / 3600_000)} h left`) : null;
-  return (
-    <Link
-      to={`/h/${o.hotel_slug}`}
-      className="group relative flex h-48 w-[90%] shrink-0 snap-center overflow-hidden rounded-3xl bg-gradient-to-br from-brand to-[#7a1d00] text-white shadow-lg shadow-brand/20 sm:w-[32rem]"
-    >
-      {o.image_url ? (
-        // The photo fills all the space the text doesn't use, fading into the colour behind the words.
-        <img
-          src={o.image_url}
-          alt=""
-          className="absolute inset-y-0 right-0 h-full w-[68%] object-cover transition-transform duration-500 group-hover:scale-105"
-          style={{ maskImage: "linear-gradient(to right, transparent, #000 38%)", WebkitMaskImage: "linear-gradient(to right, transparent, #000 38%)" }}
-        />
-      ) : (
-        <span className="absolute top-3 right-4 text-8xl select-none">🔥</span>
-      )}
-      <span className="pointer-events-none absolute inset-0 bg-gradient-to-r from-black/50 via-black/10 to-transparent" />
-      <span className="relative flex w-[57%] flex-col justify-between p-4">
-        <span className="flex flex-wrap items-center gap-1.5">
-          <span className="truncate rounded-full bg-white/95 px-2.5 py-1 text-xs font-bold text-ink">{o.hotel_name}</span>
-          {ending ? <span className="rounded-full bg-black/45 px-2 py-1 text-xs font-semibold backdrop-blur">⏱ {ending}</span> : null}
-        </span>
-        <span className="block">
-          <span className="block text-2xl leading-[1.05] font-extrabold tracking-tight uppercase drop-shadow-[0_2px_6px_rgba(0,0,0,0.45)] sm:text-3xl">{head}</span>
-          {sub ? <span className="mt-2 inline-block rounded-lg bg-amber-300 px-2.5 py-1 text-sm font-extrabold text-ink">{sub}</span> : null}
-        </span>
-        <span className="flex items-center gap-1 text-sm font-bold">
-          {cta} <ArrowRight className="size-4 transition-transform group-hover:translate-x-1" />
-        </span>
-      </span>
     </Link>
   );
 }
@@ -254,11 +211,7 @@ export function HomePage() {
             <h2 className="mb-3 flex items-center gap-2 text-lg font-semibold">
               <Flame className="size-5 text-brand" /> {t("Today's deals")}
             </h2>
-            <div className="no-scrollbar -mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-1 sm:-mx-6 sm:px-6">
-              {offers.data.map((o) => (
-                <OfferBanner key={o.id} offer={o} cta={t("Order now")} />
-              ))}
-            </div>
+            <OfferCarousel offers={offers.data} cta={t("Order now")} />
           </section>
         ) : null}
 

@@ -27,6 +27,8 @@ const SW: Record<string, string> = {
   "Pay by M-Pesa straight to the hotel": "Lipa kwa M-Pesa moja kwa moja kwa hoteli",
   "Today's deals": "Ofa za leo",
   "Hotels near you": "Hoteli zilizo karibu nawe",
+  "Hot deals": "Ofa moto",
+  "{n} dishes": "vyakula {n}",
   "{km} km": "km {km}",
   "Pickup only": "Kuchukua tu",
   "Where are you?": "Uko wapi?",

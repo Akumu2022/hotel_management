@@ -8,11 +8,12 @@ import { ErrorNote, Skeleton } from "../components/ui";
 import { api } from "../lib/api";
 import { hhmm, money } from "../lib/format";
 import { tr, useT } from "../lib/i18n";
+import { OfferCarousel } from "./OfferCarousel";
 import { ConfirmDialog, HotelCover, JourneySteps, VerifiedBadge, categoryEmoji, etaText, toast } from "./bits";
 import { TopBar } from "./CustomerLayout";
 import { FoodImage } from "./FoodImage";
 import { cart, useCart, useOrderMode } from "./store";
-import type { Menu, MenuCategory, MenuProduct, PublicHotel } from "./types";
+import type { Menu, MenuCategory, MenuProduct, PublicHotel, PublicOffer } from "./types";
 
 type Sort = "popular" | "low" | "high";
 
@@ -78,59 +79,60 @@ function ProductCard({
   }
 
   return (
-    <article className={clsx("group flex min-w-0 flex-col rounded-2xl border border-line bg-surface p-2 transition-shadow hover:shadow-md", unavailable && "opacity-70")}>
+    <article className={clsx("group flex min-w-0 flex-col rounded-3xl bg-surface p-2.5 shadow-sm ring-1 ring-line/70 transition-all hover:-translate-y-0.5 hover:shadow-xl", unavailable && "opacity-70")}>
       <button
         type="button"
         onClick={item.options.length && !unavailable && canOrder ? onOptions : undefined}
-        className="relative block aspect-[4/3] w-full overflow-hidden rounded-xl"
+        className="relative block aspect-square w-full overflow-hidden rounded-2xl bg-brand-soft"
         tabIndex={-1}
       >
-        <FoodImage src={item.image_url ?? item.thumb_url} name={item.name} dim={unavailable} className="transition-transform duration-300 group-hover:scale-[1.03]" />
-        <span className="absolute top-2.5 left-2.5 flex gap-1.5">
+        <FoodImage src={item.image_url ?? item.thumb_url} name={item.name} dim={unavailable} className="transition-transform duration-500 group-hover:scale-105" />
+        <span className="absolute top-2.5 left-2.5 flex flex-wrap gap-1.5">
           {item.is_sold_out ? (
-            <span className="rounded-md bg-surface px-2 py-1 text-xs font-semibold text-bad shadow-sm">{t("Sold out")}</span>
+            <span className="rounded-full bg-surface px-2.5 py-1 text-xs font-semibold text-bad shadow-sm">{t("Sold out")}</span>
           ) : !item.categoryOpen ? (
-            <span className="rounded-md bg-surface px-2 py-1 text-xs font-semibold text-ink shadow-sm">{item.window}</span>
+            <span className="rounded-full bg-surface px-2.5 py-1 text-xs font-semibold text-ink shadow-sm">{item.window}</span>
           ) : pct > 0 ? (
-            <span className="rounded-md bg-brand px-2 py-1 text-xs font-semibold text-white shadow-sm">−{pct}%</span>
+            <span className="rounded-full bg-brand px-2.5 py-1 text-xs font-bold text-white shadow-sm">−{pct}%</span>
           ) : null}
           {inCart && item.options.length ? (
-            <span className="rounded-md bg-surface px-2 py-1 text-xs font-semibold text-brand shadow-sm">{t("{n} in order", { n: inCart })}</span>
+            <span className="rounded-full bg-surface px-2.5 py-1 text-xs font-semibold text-brand shadow-sm">{t("{n} in order", { n: inCart })}</span>
           ) : null}
         </span>
       </button>
-      {/* Phones: name, price, then a full-width button. Wider: button beside the price. */}
-      <div className="flex flex-1 flex-col gap-2.5 px-1 pt-2.5 pb-0.5 sm:flex-row sm:items-end sm:justify-between sm:px-1.5 sm:pt-3">
-        <div className="min-w-0">
-          <h3 className="line-clamp-2 text-[0.875rem] leading-snug font-medium">{item.name}</h3>
-          <p className="money mt-1 flex flex-wrap items-baseline gap-x-1.5 text-[1rem] font-semibold whitespace-nowrap sm:text-[1.0625rem]">
+      <div className="flex flex-1 flex-col px-1.5 pt-3 pb-1">
+        <h3 className="line-clamp-1 text-[0.9375rem] leading-snug font-bold">{item.name}</h3>
+        <p className="mt-0.5 line-clamp-2 min-h-[2.4em] text-xs leading-snug text-muted">{item.description}</p>
+        <div className="mt-auto flex items-end justify-between gap-2 pt-3">
+          <p className="money flex min-w-0 flex-col text-[1.0625rem] leading-tight font-extrabold whitespace-nowrap">
             {money(price)}
             {pct > 0 ? <s className="text-xs font-normal text-muted">{money(item.price)}</s> : null}
           </p>
-        </div>
-        {unavailable || !canOrder ? null : line && !item.options.length ? (
-          <div className="flex h-10 shrink-0 items-center justify-between rounded-lg border border-brand bg-brand-soft">
-            <button className="flex h-full w-9 items-center justify-center text-brand" aria-label={`Remove one ${item.name}`} onClick={() => cart.setQuantity(key, line.quantity - 1)}>
-              <Minus className="size-4" />
-            </button>
-            <span className="money w-5 text-center text-sm font-bold text-brand">{line.quantity}</span>
+          {unavailable || !canOrder ? null : line && !item.options.length ? (
+            <div className="flex h-10 shrink-0 items-center rounded-full bg-brand-soft ring-1 ring-brand/30">
+              <button className="flex h-full w-9 items-center justify-center text-brand" aria-label={`Remove one ${item.name}`} onClick={() => cart.setQuantity(key, line.quantity - 1)}>
+                <Minus className="size-4" />
+              </button>
+              <span className="money w-4 text-center text-sm font-bold text-brand">{line.quantity}</span>
+              <button
+                className="flex h-full w-9 items-center justify-center text-brand disabled:opacity-40"
+                aria-label={`Add one ${item.name}`}
+                disabled={line.quantity >= 20}
+                onClick={() => cart.setQuantity(key, line.quantity + 1)}
+              >
+                <Plus className="size-4" />
+              </button>
+            </div>
+          ) : (
             <button
-              className="flex h-full w-9 items-center justify-center text-brand disabled:opacity-40"
-              aria-label={`Add one ${item.name}`}
-              disabled={line.quantity >= 20}
-              onClick={() => cart.setQuantity(key, line.quantity + 1)}
+              onClick={item.options.length ? onOptions : addPlain}
+              aria-label={`${t("Add")} ${item.name}`}
+              className="flex size-10 shrink-0 items-center justify-center rounded-full bg-brand text-white shadow-md shadow-brand/30 transition-transform hover:scale-110 active:scale-95"
             >
-              <Plus className="size-4" />
+              <Plus className="size-5" strokeWidth={2.75} />
             </button>
-          </div>
-        ) : (
-          <button
-            onClick={item.options.length ? onOptions : addPlain}
-            className="h-10 w-full shrink-0 rounded-lg border border-line bg-surface px-4 text-sm font-medium transition-colors hover:border-brand hover:text-brand sm:w-auto"
-          >
-            {t("Add")}
-          </button>
-        )}
+          )}
+        </div>
       </div>
     </article>
   );
@@ -231,6 +233,8 @@ export function HotelPage() {
   const c = useCart();
   const t = useT();
   const mode = useOrderMode();
+  const offers = useQuery({ queryKey: ["offers", "all"], queryFn: () => api.get<PublicOffer[]>("/offers") });
+  const hotelOffers = (offers.data ?? []).filter((o) => o.hotel_slug === slug);
 
   const groups: Group[] = useMemo(() => {
     if (!menu.data) return [];
@@ -263,7 +267,7 @@ export function HotelPage() {
   return (
     <>
       <TopBar />
-      <div className="flex-1 px-4 pt-4 pb-28 sm:px-6 lg:pb-8">
+      <div className="flex-1 bg-[linear-gradient(to_bottom,var(--color-brand-soft),transparent_34rem)] px-4 pt-4 pb-28 sm:px-6 lg:pb-8">
         <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-6">
           <Link to="/" className="flex h-10 w-fit shrink-0 items-center gap-2 rounded-xl border border-line bg-surface px-3.5 text-sm font-semibold hover:bg-subtle">
             <ArrowLeft className="size-4" /> {t("All hotels")}
@@ -294,57 +298,69 @@ export function HotelPage() {
           </div>
         ) : null}
 
-        {/* Toolbar */}
-        <div className="sticky top-0 z-30 -mx-4 mt-4 flex flex-col gap-3 bg-surface/95 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6 md:flex-row md:items-center md:justify-between">
-          <div className="no-scrollbar flex gap-1 overflow-x-auto rounded-2xl bg-subtle p-1">
-            {[{ id: "all", name: t("All Menu") }, ...(menu.data?.categories ?? [])].map((cat) => (
-              <button
-                key={cat.id}
-                onClick={() => setCategory(cat.id)}
-                className={clsx(
-                  "flex h-10 shrink-0 items-center gap-1.5 rounded-xl px-3.5 text-[0.8125rem] font-semibold whitespace-nowrap transition-all",
-                  category === cat.id ? "bg-surface text-ink shadow-sm" : "text-muted hover:text-ink",
-                )}
-              >
-                <span className="text-base">{cat.id === "all" ? "🍽️" : categoryEmoji(cat.name)}</span>
-                {cat.name}
-              </button>
-            ))}
-          </div>
-          <div className="flex gap-2">
-            <label className="relative flex-1 md:w-56 md:flex-none">
-              <Search className="pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-muted" />
-              <input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder={t("Search dishes")}
-                aria-label="Search the menu"
-                className="h-11 w-full rounded-xl border border-line bg-surface pr-3 pl-10 text-sm outline-none focus:border-brand"
-              />
-            </label>
-            <label className="relative">
-              <select
-                value={sort}
-                onChange={(e) => setSort(e.target.value as Sort)}
-                aria-label="Sort"
-                className="h-11 appearance-none rounded-xl border border-line bg-surface pr-9 pl-3.5 text-sm font-medium outline-none focus:border-brand"
-              >
-                <option value="popular">{t("By category")}</option>
-                <option value="low">{t("Price: low to high")}</option>
-                <option value="high">{t("Price: high to low")}</option>
-              </select>
-              <ChevronDown className="pointer-events-none absolute top-1/2 right-3 size-4 -translate-y-1/2 text-muted" />
-            </label>
+        {hotelOffers.length ? (
+          <section className="mt-5">
+            <h2 className="mb-3 flex items-center gap-2 text-lg font-extrabold">🔥 {t("Hot deals")}</h2>
+            <OfferCarousel offers={hotelOffers} wide cta={t("Order now")} />
+          </section>
+        ) : null}
+
+        {/* Search and sort */}
+        <div className="mt-5 flex gap-2">
+          <label className="relative flex-1 md:max-w-sm">
+            <Search className="pointer-events-none absolute top-1/2 left-4 size-4 -translate-y-1/2 text-muted" />
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder={t("Search dishes")}
+              aria-label="Search the menu"
+              className="h-12 w-full rounded-full bg-surface pr-4 pl-11 text-sm shadow-sm ring-1 ring-line/70 outline-none focus:ring-2 focus:ring-brand"
+            />
+          </label>
+          <label className="relative">
+            <select
+              value={sort}
+              onChange={(e) => setSort(e.target.value as Sort)}
+              aria-label="Sort"
+              className="h-12 appearance-none rounded-full bg-surface pr-10 pl-4 text-sm font-medium shadow-sm ring-1 ring-line/70 outline-none focus:ring-2 focus:ring-brand"
+            >
+              <option value="popular">{t("By category")}</option>
+              <option value="low">{t("Price: low to high")}</option>
+              <option value="high">{t("Price: high to low")}</option>
+            </select>
+            <ChevronDown className="pointer-events-none absolute top-1/2 right-4 size-4 -translate-y-1/2 text-muted" />
+          </label>
+        </div>
+
+        {/* Categories: round icons, sticky while you scroll the dishes */}
+        <div className="sticky top-0 z-30 -mx-4 mt-3 px-4 py-2 sm:-mx-6 sm:px-6">
+          <div className="no-scrollbar flex gap-2 overflow-x-auto rounded-3xl bg-surface p-3 shadow-md ring-1 ring-line/70">
+            {[{ id: "all", name: t("All Menu") }, ...(menu.data?.categories ?? [])].map((cat) => {
+              const active = category === cat.id;
+              return (
+                <button key={cat.id} onClick={() => setCategory(cat.id)} aria-pressed={active} className="group flex w-[4.5rem] shrink-0 flex-col items-center gap-1.5">
+                  <span
+                    className={clsx(
+                      "flex size-14 items-center justify-center rounded-full text-2xl transition-all",
+                      active ? "bg-brand shadow-lg shadow-brand/30 ring-4 ring-brand/15" : "bg-brand-soft group-hover:bg-brand-tint",
+                    )}
+                  >
+                    {cat.id === "all" ? "🍽️" : categoryEmoji(cat.name)}
+                  </span>
+                  <span className={clsx("w-full truncate text-center text-xs", active ? "font-bold text-ink" : "font-medium text-muted")}>{cat.name}</span>
+                </button>
+              );
+            })}
           </div>
         </div>
 
         {/* Grid */}
-        <div className="mt-2">
+        <div className="mt-3">
           {menu.isLoading ? (
             <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 xl:grid-cols-4">
               {Array.from({ length: 8 }, (_, i) => (
-                <div key={i} className="rounded-2xl border border-line p-2">
-                  <Skeleton className="aspect-[4/3] rounded-xl" />
+                <div key={i} className="rounded-3xl bg-surface p-2.5 ring-1 ring-line/70">
+                  <Skeleton className="aspect-square rounded-2xl" />
                   <Skeleton className="mt-3 h-4 w-2/3" />
                   <Skeleton className="mt-2 h-5 w-1/3" />
                 </div>
@@ -360,9 +376,9 @@ export function HotelPage() {
             groups.map((g) => (
               <section key={g.id} className="mb-6">
                 {showHeadings ? (
-                  <h2 className="mb-3 flex items-center gap-2 text-lg font-bold">
-                    <span>{g.id === "sorted" ? "↕️" : categoryEmoji(g.name)}</span> {g.name}
-                    <span className="text-sm font-medium text-muted">· {g.items.length}</span>
+                  <h2 className="mb-3 flex items-center justify-between gap-2 text-xl font-extrabold">
+                    <span className="flex items-center gap-2"><span>{g.id === "sorted" ? "↕️" : categoryEmoji(g.name)}</span> {g.name}</span>
+                    <span className="text-sm font-semibold text-brand">{t("{n} dishes", { n: g.items.length })}</span>
                   </h2>
                 ) : null}
                 <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 xl:grid-cols-4">
