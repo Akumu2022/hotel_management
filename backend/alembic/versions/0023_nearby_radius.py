@@ -4,7 +4,7 @@ Owner request 2026-10-11: customers see hotels near them; delivery reaches 30 km
 Only values still at the old defaults are changed; anything the owner edited is kept.
 
 Revision ID: 0023
-Revises: 0022
+Revises: 0015
 Create Date: 2026-10-11
 """
 
@@ -16,7 +16,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "0023"
-down_revision: str | None = "0022"
+down_revision: str | None = "0015"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
