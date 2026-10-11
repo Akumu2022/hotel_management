@@ -4,9 +4,11 @@ import { Button, ErrorNote, Field, Input, Sheet } from "../components/ui";
 import { api } from "../lib/api";
 import { hhmm } from "../lib/format";
 import type { Category } from "../lib/types";
+import { CATEGORY_SUGGESTIONS } from "./categorySuggestions";
 import { keys, useSave } from "./hooks";
 
-export function CategorySheet({ category, onClose }: { category: Category | null; onClose: () => void }) {
+export function CategorySheet({ category, existing = [], onClose }: { category: Category | null; existing?: string[]; onClose: () => void }) {
+  const taken = new Set(existing.map((n) => n.toLowerCase()));
   const [name, setName] = useState(category?.name ?? "");
   const [sortOrder, setSortOrder] = useState(String(category?.sort_order ?? 0));
   const [timed, setTimed] = useState(!!category?.available_from);
@@ -53,6 +55,30 @@ export function CategorySheet({ category, onClose }: { category: Category | null
       }
     >
       <form id="category-form" onSubmit={submit} className="flex flex-col gap-4">
+        {!category ? (
+          <div>
+            <p className="mb-2 text-sm font-medium">Tap one to start, or type your own below</p>
+            <div className="flex flex-wrap gap-2">
+              {CATEGORY_SUGGESTIONS.filter((s) => !taken.has(s.name.toLowerCase())).map((s) => (
+                <button
+                  key={s.name}
+                  type="button"
+                  onClick={() => {
+                    setName(s.name);
+                    if (s.window) {
+                      setTimed(true);
+                      setFrom(s.window[0]);
+                      setTo(s.window[1]);
+                    } else setTimed(false);
+                  }}
+                  className={`rounded-full border px-3.5 py-1.5 text-sm font-semibold transition-colors ${name === s.name ? "border-brand bg-brand-soft text-brand" : "border-line hover:border-brand"}`}
+                >
+                  {s.name}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : null}
         <Field label="Name">
           {(id) => <Input id={id} value={name} onChange={(e) => setName(e.target.value)} required maxLength={80} />}
         </Field>

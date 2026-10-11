@@ -5,6 +5,7 @@ import { Badge, Button, ErrorNote, Field, Input, MoneyInput, Select, Sheet, Text
 import { api } from "../lib/api";
 import { compressImage, money } from "../lib/format";
 import type { Category, Product, Upload } from "../lib/types";
+import { CATEGORY_SUGGESTIONS } from "./categorySuggestions";
 import { keys, useProducts, useSave } from "./hooks";
 
 function PhotoPicker({
@@ -175,6 +176,18 @@ export function ProductSheet({
   const [photoUrl, setPhotoUrl] = useState(product?.image_url ?? null);
   const [imageKey, setImageKey] = useState<string | null | undefined>(undefined); // undefined = unchanged
 
+  const [newCat, setNewCat] = useState<string | null>(null); // typing a new category right here
+  const makeCat = useSave(async (name: string) => api.post<Category>("/hotel/categories", { name: name.trim(), sort_order: categories.length }), [keys.categories]);
+  const taken = new Set(categories.map((c) => c.name.toLowerCase()));
+  const addCategory = (name: string) =>
+    name.trim() &&
+    makeCat.mutate(name, {
+      onSuccess: (c) => {
+        setCategoryId(c.id);
+        setNewCat(null);
+      },
+    });
+
   const save = useSave(async () => {
     const body: Record<string, unknown> = {
       name: name.trim(),
@@ -265,6 +278,27 @@ export function ProductSheet({
             </Select>
           )}
         </Field>
+        {newCat === null ? (
+          <button type="button" onClick={() => setNewCat("")} className="-mt-2 w-fit text-sm font-semibold text-brand">
+            + New category (Breakfast, Lunch, Dinner, Drinks…)
+          </button>
+        ) : (
+          <div className="-mt-2 flex flex-col gap-2 rounded-xl bg-subtle p-3">
+            <div className="flex flex-wrap gap-1.5">
+              {CATEGORY_SUGGESTIONS.filter((s) => !taken.has(s.name.toLowerCase())).map((s) => (
+                <button key={s.name} type="button" onClick={() => addCategory(s.name)} className="rounded-full border border-line bg-surface px-3 py-1 text-xs font-semibold hover:border-brand">
+                  {s.name}
+                </button>
+              ))}
+            </div>
+            <div className="flex gap-2">
+              <Input aria-label="New category name" placeholder="Or type a name" value={newCat} maxLength={80} onChange={(e) => setNewCat(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addCategory(newCat); } }} />
+              <Button type="button" busy={makeCat.isPending} onClick={() => addCategory(newCat)}>Add</Button>
+              <Button type="button" variant="ghost" onClick={() => setNewCat(null)}>Cancel</Button>
+            </div>
+            <ErrorNote error={makeCat.error} />
+          </div>
+        )}
         <Field label="Description" hint="Optional. What's in it, portion size.">
           {(id) => (
             <Textarea id={id} value={description} onChange={(e) => setDescription(e.target.value)} maxLength={1000} />

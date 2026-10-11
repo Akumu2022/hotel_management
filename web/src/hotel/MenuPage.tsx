@@ -218,7 +218,7 @@ export function MenuPage() {
         />
       ) : null}
       {editingCat ? (
-        <CategorySheet category={editingCat === "new" ? null : editingCat} onClose={() => setEditingCat(null)} />
+        <CategorySheet category={editingCat === "new" ? null : editingCat} existing={cats.map((c) => c.name)} onClose={() => setEditingCat(null)} />
       ) : null}
     </div>
   );
