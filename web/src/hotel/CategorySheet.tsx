@@ -10,7 +10,7 @@ import { keys, useSave } from "./hooks";
 export function CategorySheet({ category, existing = [], onClose }: { category: Category | null; existing?: string[]; onClose: () => void }) {
   const taken = new Set(existing.map((n) => n.toLowerCase()));
   const [name, setName] = useState(category?.name ?? "");
-  const [sortOrder, setSortOrder] = useState(String(category?.sort_order ?? 0));
+  const [sortOrder, setSortOrder] = useState(String(category?.sort_order ?? existing.length));
   const [timed, setTimed] = useState(!!category?.available_from);
   const [from, setFrom] = useState(hhmm(category?.available_from ?? "06:00"));
   const [to, setTo] = useState(hhmm(category?.available_to ?? "11:00"));

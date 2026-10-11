@@ -182,7 +182,9 @@ async def overview(session: AsyncSession, hotel: Hotel, now: datetime) -> dict:
         ).scalars()
     )
     till_changes = [
-        c for c in changes if c.created_at >= d30 and {"till_number", "till_name"} & set(c.details)
+        c
+        for c in changes
+        if c.action == "hotel.update" and c.created_at >= d30 and {"till_number", "till_name"} & set(c.details)
     ]
     if till_changes:
         flags.append(
