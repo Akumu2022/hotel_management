@@ -24,7 +24,7 @@ from app.schemas.admin import (
 )
 from app.schemas.auth import TempPasswordOut
 from app.schemas.common import Page
-from app.services import audit, ratings, routing, settings
+from app.services import audit, hotel_watch, ratings, routing, settings
 from app.services.auth import reset_password, revoke_all
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -133,6 +133,18 @@ async def create_hotel(body: HotelCreate, admin: SuperAdmin, session: Session):
     await session.commit()
     await session.refresh(hotel)
     return HotelOut.model_validate(hotel)
+
+
+@router.get("/hotels/{hotel_id}/overview")
+async def hotel_overview(hotel_id: uuid.UUID, _: SuperAdmin, session: Session):
+    """One hotel as the owner sees it: activity, commission standing, pin check, warning signs."""
+    hotel = await session.get(Hotel, hotel_id)
+    if hotel is None:
+        raise not_found("Hotel not found")
+    stars = await ratings.hotel_stars(session, [hotel.id])
+    out = HotelOut.model_validate(hotel)
+    out.rating, out.rating_count = stars[hotel.id].average, stars[hotel.id].count
+    return {"hotel": out, **await hotel_watch.overview(session, hotel, utcnow())}
 
 
 @router.patch("/hotels/{hotel_id}", response_model=HotelOut)

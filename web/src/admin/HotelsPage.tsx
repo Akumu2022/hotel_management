@@ -1,14 +1,15 @@
 /** Owner's hotel list: only the owner creates hotels, with the hotel admin's login, and can
  * reset any staff password. Each hotel admin pins their own location on the map. */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Building2, Plus, ShieldCheck, Users } from "lucide-react";
+import { Building2, ChevronRight, Plus, ShieldCheck, Users } from "lucide-react";
+import { Link } from "react-router-dom";
 import { type FormEvent, useState } from "react";
 
 import { Badge, Button, ErrorNote, Field, Input, PasswordInput, Sheet, Skeleton } from "../components/ui";
 import { ResetPassword, Stars } from "../components/accounts";
 import { api } from "../lib/api";
 
-type Hotel = {
+export type Hotel = {
   id: string;
   name: string;
   slug: string;
@@ -26,7 +27,7 @@ type Staff = { id: string; role: string; name: string; phone: string; is_active:
 
 const slugify = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 80);
 
-function StaffList({ hotel }: { hotel: Hotel }) {
+export function StaffList({ hotel }: { hotel: Hotel }) {
   const staff = useQuery({ queryKey: ["admin", "users", hotel.id], queryFn: () => api.get<{ items: Staff[] }>(`/admin/users?hotel_id=${hotel.id}&limit=100`) });
   if (staff.isLoading) return <Skeleton className="h-10" />;
   return (
@@ -46,7 +47,7 @@ function StaffList({ hotel }: { hotel: Hotel }) {
 }
 
 /** Record the name M-Pesa shows for the Till, and tick "checked" once you've met the hotel. Changing the Till clears the tick. */
-function VerifyPanel({ hotel }: { hotel: Hotel }) {
+export function VerifyPanel({ hotel }: { hotel: Hotel }) {
   const qc = useQueryClient();
   const [name, setName] = useState(hotel.till_name ?? "");
   const [checked, setChecked] = useState(hotel.verified);
@@ -153,6 +154,9 @@ export function HotelsPage() {
               </div>
               <div className="flex items-center gap-3">
                 <Stars rating={h.rating} count={h.rating_count} />
+                <Link to={`/admin/hotels/${h.id}`} className="inline-flex items-center gap-1 rounded-lg bg-brand px-2.5 py-1.5 text-sm font-semibold text-white hover:opacity-90">
+                  Open <ChevronRight className="size-4" />
+                </Link>
                 <button onClick={() => setOpen(open === h.id ? null : h.id)} className="inline-flex items-center gap-1 rounded-lg border border-line px-2.5 py-1.5 text-sm font-semibold hover:bg-subtle">
                   <Users className="size-4" /> Manage
                 </button>

@@ -44,6 +44,7 @@ const AdminDashboardPage = lazy(() =>
 );
 const FeesPage = lazy(() => import("./admin/FeesPage").then((m) => ({ default: m.FeesPage })));
 const RidersPage = lazy(() => import("./admin/RidersPage").then((m) => ({ default: m.RidersPage })));
+const AdminHotelDetailPage = lazy(() => import("./admin/HotelDetailPage").then((m) => ({ default: m.HotelDetailPage })));
 const AdminHotelsPage = lazy(() => import("./admin/HotelsPage").then((m) => ({ default: m.HotelsPage })));
 const DispatchPage = lazy(() => import("./admin/DispatchPage").then((m) => ({ default: m.DispatchPage })));
 const ToolsPage = lazy(() => import("./admin/ToolsPage").then((m) => ({ default: m.ToolsPage })));
@@ -101,6 +102,7 @@ createRoot(document.getElementById("root")!).render(
                 <Route path="billing" element={<AdminBillingPage />} />
                 <Route path="riders" element={<RidersPage />} />
                 <Route path="hotels" element={<AdminHotelsPage />} />
+                <Route path="hotels/:id" element={<AdminHotelDetailPage />} />
                 <Route path="fees" element={<FeesPage />} />
                 <Route path="delivery" element={<DeliveryPage />} />
                 <Route path="tools" element={<ToolsPage />} />
