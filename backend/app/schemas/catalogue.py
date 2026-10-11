@@ -10,17 +10,10 @@ Money = Annotated[int, Field(ge=0, le=1_000_000, strict=True)]
 Name = Annotated[str, Field(min_length=1, max_length=80)]
 
 
-# Hotels can only be pinned within 20 km of Bungoma town CBD (mirrors the hotel admin map).
-HOTEL_CBD = (0.5636, 34.5606)
-HOTEL_RADIUS_KM = 20.0
-
-
-def _km_from_cbd(lat: float, lng: float) -> float:
-    import math
-
-    p1, p2 = math.radians(HOTEL_CBD[0]), math.radians(lat)
-    a = math.sin((p2 - p1) / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(math.radians(lng - HOTEL_CBD[1]) / 2) ** 2
-    return 12742 * math.asin(math.sqrt(a))
+# No distance cap from town: a hotel can be anywhere in Kenya. The box only stops typos
+# (swapped or mistyped coordinates landing in the sea or another country).
+KENYA_LAT = (-4.8, 5.1)
+KENYA_LNG = (33.9, 41.95)
 
 
 class Input(Schema):
@@ -310,8 +303,9 @@ class HotelSettingsIn(Input):
             raise ValueError("Send latitude and longitude together")
         if (self.lat is None) != (self.lng is None):
             raise ValueError("Set both latitude and longitude, or neither")
-        if self.lat is not None and self.lng is not None and _km_from_cbd(self.lat, self.lng) > HOTEL_RADIUS_KM:
-            raise ValueError(f"The hotel must be within {HOTEL_RADIUS_KM:.0f} km of Bungoma town")
+        if self.lat is not None and self.lng is not None:
+            if not (KENYA_LAT[0] <= self.lat <= KENYA_LAT[1] and KENYA_LNG[0] <= self.lng <= KENYA_LNG[1]):
+                raise ValueError("That location is outside Kenya. Check the latitude and longitude (latitude first).")
         return self
 
 
@@ -336,6 +330,10 @@ class PublicHotel(Schema):
     prep_minutes: int = 15  # typical (median) prep time of its dishes, for time estimates
     rating: float | None = None  # average stars; None until rated
     rating_count: int = 0
+    # Only when the customer's location was sent: straight-line km, and whether it is beyond
+    # delivery range (pickup or eat in only).
+    distance_km: float | None = None
+    pickup_only: bool = False
 
 
 class MenuOption(Schema):

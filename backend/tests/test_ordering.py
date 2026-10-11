@@ -438,7 +438,7 @@ async def test_50_simultaneous_duplicates_create_one_order(committed):
 
 async def test_public_config(client, db):
     cfg = (await client.get("/api/v1/config")).json()
-    assert cfg["delivery_mode"] == "distance" and cfg["max_delivery_km"] == 10
+    assert cfg["delivery_mode"] == "distance" and cfg["max_delivery_km"] == 30
     await set_zone(db)
     cfg = (await client.get("/api/v1/config")).json()
     assert cfg["delivery_mode"] == "area" and cfg["delivery_zone"] == ZONE
@@ -489,7 +489,7 @@ async def test_rider_fee_from_distance(client, db, shop):
 
 async def test_too_far_is_refused(client, db, shop):
     hotel, product = shop
-    hotel.lat, hotel.lng = -1.20, 36.70  # ~16 km from INSIDE
+    hotel.lat, hotel.lng = -1.05, 36.70  # ~33 km from INSIDE, beyond the 30 km range
     await db.flush()
     q = (await client.post("/api/v1/quotes", json=quote_body(hotel, product, **INSIDE))).json()
     assert q["too_far"] is True

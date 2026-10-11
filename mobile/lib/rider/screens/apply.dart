@@ -222,7 +222,7 @@ class _ApplyScreenState extends State<ApplyScreen> {
         ),
       ),
       body: ListView(padding: const EdgeInsets.all(16), children: [
-        Text(tr('Step {n} of {total}', {'n': _step, 'total': 3}) + ' · ${titles[_step - 1]}', style: labelOf(context)),
+        Text('${tr('Step {n} of {total}', {'n': _step, 'total': 3})} · ${titles[_step - 1]}', style: labelOf(context)),
         const SizedBox(height: 12),
         if (_formError != null) Container(width: double.infinity, margin: const EdgeInsets.only(bottom: 12), padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: const Color(0xFFFEE2E2), borderRadius: BorderRadius.circular(12)), child: Text(_formError!, style: const TextStyle(color: Color(0xFFB91C1C), fontWeight: FontWeight.w700))),
         if (_step == 1) ...[

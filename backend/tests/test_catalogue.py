@@ -430,11 +430,46 @@ async def test_hotel_sets_its_location(client, hotel_a):
     assert menu["hotel"]["lat"] == 0.57
 
 
-async def test_hotel_location_must_be_within_20km_of_bungoma(client, hotel_a):
+async def test_hotel_location_is_any_spot_in_kenya(client, hotel_a):
     _, headers = hotel_a
-    far = await client.put(f"{API}/settings", headers=headers, json={"lat": -1.28, "lng": 36.82})  # Nairobi
-    assert far.status_code == 422
-    edge = await client.put(f"{API}/settings", headers=headers, json={"lat": 0.5636 + 0.19, "lng": 34.5606})  # ~21 km
-    assert edge.status_code == 422
-    near = await client.put(f"{API}/settings", headers=headers, json={"lat": 0.5636 + 0.15, "lng": 34.5606})  # ~16.6 km
-    assert near.status_code == 200
+    for lat, lng in [(0.5636 + 0.19, 34.5606), (-1.28, 36.82)]:  # ~21 km out, Nairobi: no cap
+        ok = await client.put(f"{API}/settings", headers=headers, json={"lat": lat, "lng": lng})
+        assert ok.status_code == 200
+    for lat, lng in [(34.564972, 0.593165), (51.5, -0.12)]:  # swapped order, London
+        bad = await client.put(f"{API}/settings", headers=headers, json={"lat": lat, "lng": lng})
+        assert bad.status_code == 422
+
+
+# --- Nearby hotels ------------------------------------------------------------------------------
+
+
+async def test_hotels_filtered_by_customer_location(client, hotel_a, db):
+    hotel, _ = hotel_a
+    hotel.lat, hotel.lng = 0.5636, 34.5606  # Bungoma
+    await db.flush()
+    bungoma = {"lat": 0.57, "lng": 34.56}
+    nairobi = {"lat": -1.2921, "lng": 36.8219}
+
+    near = (await client.get("/api/v1/hotels", params=bungoma)).json()
+    assert [h["slug"] for h in near] == [hotel.slug]
+    assert near[0]["distance_km"] < 2 and near[0]["pickup_only"] is False
+    assert (await client.get("/api/v1/hotels", params=nairobi)).json() == []
+    # No location sent: everything, as before.
+    assert hotel.slug in [h["slug"] for h in (await client.get("/api/v1/hotels")).json()]
+    # A wider radius reaches further; a hotel 20 km away is listed but pickup only.
+    far = {"lat": 0.74, "lng": 34.56}
+    (card,) = (await client.get("/api/v1/hotels", params={**far})).json()
+    assert card["pickup_only"] is False or card["distance_km"] <= 30
+    assert (await client.get("/api/v1/hotels", params={"lat": 0.5})).status_code == 422
+
+
+async def test_search_and_offers_only_nearby(client, hotel_a, db, storage):
+    hotel, headers = hotel_a
+    await build_menu(client, headers, storage)
+    hotel.lat, hotel.lng = 0.5636, 34.5606
+    await db.flush()
+    nairobi = {"lat": -1.2921, "lng": 36.8219}
+    assert (await client.get("/api/v1/search", params={"q": "pilau"})).json()
+    assert (await client.get("/api/v1/search", params={"q": "pilau", **nairobi})).json() == []
+    assert (await client.get("/api/v1/search", params={"q": "pilau", "lat": 0.57, "lng": 34.56})).json()
+    assert (await client.get("/api/v1/offers", params=nairobi)).json() == []

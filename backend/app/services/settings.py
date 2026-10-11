@@ -69,6 +69,7 @@ DEFAULT_BANDS = [
     RiderFeeBand(max_km=2, fee=100),
     RiderFeeBand(max_km=5, fee=150),
     RiderFeeBand(max_km=10, fee=200),
+    RiderFeeBand(max_km=30, fee=350),
 ]
 
 
@@ -97,9 +98,11 @@ class PlatformSettings(BaseModel):
     rider_fee_base: int = Field(50, ge=0, le=10_000, strict=True)
     rider_fee_per_km: int = Field(20, ge=0, le=2_000, strict=True)
     rider_fee_min: int = Field(100, ge=0, le=10_000, strict=True)
-    rider_fee_max_km: float = Field(10, gt=0, le=100)  # per_km mode: furthest we deliver
+    rider_fee_max_km: float = Field(30, gt=0, le=100)  # per_km mode: furthest we deliver
     # How distance is measured: "road" (routing, with a straight-line fallback) or "straight".
     distance_method: str = Field("road", pattern="^(road|straight)$")
+    # Customers see hotels, deals and dish search results within this many km of where they are.
+    nearby_radius_km: float = Field(30, gt=0, le=200)
     unpaid_expiry_minutes: int = Field(20, ge=1, le=240)
     late_payment_grace_hours: int = Field(24, ge=1, le=168)
     acceptance_alert_minutes: int = Field(5, ge=1, le=60)

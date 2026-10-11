@@ -18,6 +18,8 @@ export type PublicHotel = {
   prep_minutes: number;
   rating: number | null; // average stars
   rating_count: number;
+  distance_km?: number | null; // only when the customer's location was sent
+  pickup_only?: boolean; // beyond delivery range
 };
 
 export type MenuOption = { id: string; group_name: string; name: string; price_delta: number };

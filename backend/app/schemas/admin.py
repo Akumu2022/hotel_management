@@ -53,6 +53,7 @@ class SettingsOut(Schema):
     rider_fee_per_km: int
     rider_fee_min: int
     rider_fee_max_km: float
+    nearby_radius_km: float
     distance_method: str
     unpaid_expiry_minutes: int
     late_payment_grace_hours: int
@@ -97,6 +98,7 @@ class SettingsIn(Schema):
     rider_fee_per_km: int | None = Field(None, strict=True)
     rider_fee_min: int | None = Field(None, strict=True)
     rider_fee_max_km: float | None = None
+    nearby_radius_km: float | None = Field(None, gt=0, le=200)
     distance_method: Literal["road", "straight"] | None = None
     unpaid_expiry_minutes: int | None = Field(None, strict=True)
     late_payment_grace_hours: int | None = Field(None, strict=True)

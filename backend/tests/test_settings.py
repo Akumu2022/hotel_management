@@ -25,7 +25,7 @@ async def test_seeded_values_are_flagged_unconfirmed(client, admin):
     assert body["unconfirmed"] is True
     assert body["commission_percent"] == 10
     assert body["service_fee"] == 20
-    assert [b["fee"] for b in body["rider_fee_bands"]] == [100, 150, 200]
+    assert [b["fee"] for b in body["rider_fee_bands"]] == [100, 150, 200, 350]
     assert body["unpaid_expiry_minutes"] == 20
 
 
@@ -141,7 +141,8 @@ def test_distance_and_band_lookup():
     assert settings.rider_fee_for(2.0, bands) == 100
     assert settings.rider_fee_for(4.2, bands) == 150
     assert settings.rider_fee_for(10.0, bands) == 200
-    assert settings.rider_fee_for(10.1, bands) is None
+    assert settings.rider_fee_for(10.1, bands) == 350
+    assert settings.rider_fee_for(30.1, bands) is None
 
 
 async def test_support_whatsapp(client, admin):
@@ -170,4 +171,4 @@ def test_per_km_fee_formula():
     assert s.rider_fee_at(10.1) is None  # beyond the furthest distance
     assert s.base_rider_fee == 100
     bands = settings.PlatformSettings(rider_fee_mode="bands")
-    assert (bands.rider_fee_at(4), bands.max_delivery_km) == (150, 10)
+    assert (bands.rider_fee_at(4), bands.max_delivery_km) == (150, 30)

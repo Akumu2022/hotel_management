@@ -9,10 +9,17 @@ import { useT } from "../lib/i18n";
 
 type Point = { lat: number; lng: number };
 
-// Hotels can only be pinned within 20 km of Bungoma town CBD.
+// Map starts on Bungoma town, but a hotel can be pinned anywhere in Kenya (mirrors the server).
 const CBD = L.latLng(0.5636, 34.5606);
-const CBD_RADIUS_M = 20_000;
-const withinCbd = (p: Point) => CBD.distanceTo(L.latLng(p.lat, p.lng)) <= CBD_RADIUS_M;
+const inKenya = (p: Point) => p.lat >= -4.8 && p.lat <= 5.1 && p.lng >= 33.9 && p.lng <= 41.95;
+
+/** "0.593165, 34.564972" as copied from Google Maps (latitude first). */
+function parseCoords(text: string): Point | null {
+  const m = text.match(/(-?\d+(?:\.\d+)?)\s*[,;\s]\s*(-?\d+(?:\.\d+)?)/);
+  if (!m) return null;
+  const p = { lat: Number(m[1]), lng: Number(m[2]) };
+  return Math.abs(p.lat) <= 90 && Math.abs(p.lng) <= 180 ? p : null;
+}
 
 /**
  * Tap the map (or use GPS) to drop a pin. When a delivery zone is given, everything outside it
@@ -60,9 +67,6 @@ export default function MapPicker({
     const street = L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: "© OpenStreetMap" }).addTo(m);
     if (precise) {
       const sat = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", { maxZoom: 19, attribution: "Imagery © Esri" });
-      m.setMaxBounds(CBD.toBounds(CBD_RADIUS_M * 2.4));
-      m.setMinZoom(10);
-      L.circle(CBD, { radius: CBD_RADIUS_M, color: "#dc4b12", weight: 2.5, dashArray: "6 6", fillOpacity: 0.03, interactive: false }).addTo(m);
       if (!value) m.setView(CBD, 13);
       L.control.layers({ Map: street, Satellite: sat }, undefined, { position: "topright" }).addTo(m);
     }
@@ -95,7 +99,6 @@ export default function MapPicker({
     }
     m.on("click", (e: L.LeafletMouseEvent) => {
       const p = { lat: e.latlng.lat, lng: e.latlng.lng };
-      if (precise && !withinCbd(p)) return setGpsError("That's more than 20 km from Bungoma town. Pin a spot inside the dashed circle.");
       setGpsError(null);
       accuracy.current?.remove();
       accuracy.current = null;
@@ -126,16 +129,23 @@ export default function MapPicker({
     setSearching(true);
     setGpsError(null);
     try {
-      const box = CBD.toBounds(CBD_RADIUS_M * 2);
-      const vb = [box.getWest(), box.getNorth(), box.getEast(), box.getSouth()].join(",");
-      const r = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=ke&viewbox=${vb}&bounded=1&q=${encodeURIComponent(`${q}, Bungoma`)}`);
-      const hits = (await r.json()) as { lat: string; lon: string }[];
-      if (!hits.length) setGpsError("Couldn't find that within 20 km of Bungoma town. Try a nearby landmark, then tap the map.");
-      else {
-        const ll = { lat: Number(hits[0].lat), lng: Number(hits[0].lon) };
-        if (withinCbd(ll)) map.current?.setView([ll.lat, ll.lng], 18);
-        else setGpsError("That result is outside the 20 km Bungoma area.");
+      const typed = parseCoords(q);
+      if (typed) {
+        if (!inKenya(typed)) setGpsError("Those coordinates are outside Kenya. Latitude comes first, e.g. 0.593165, 34.564972.");
+        else {
+          setGpsError(null);
+          map.current?.setView([typed.lat, typed.lng], 19);
+          onChange(typed);
+        }
+        setSearching(false);
+        return;
       }
+      const box = map.current?.getBounds() ?? CBD.toBounds(40_000);
+      const vb = [box.getWest(), box.getNorth(), box.getEast(), box.getSouth()].join(",");
+      const r = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=ke&viewbox=${vb}&q=${encodeURIComponent(q)}`);
+      const hits = (await r.json()) as { lat: string; lon: string }[];
+      if (!hits.length) setGpsError("Couldn't find that. Try a nearby landmark, paste coordinates, or tap the map.");
+      else map.current?.setView([Number(hits[0].lat), Number(hits[0].lon)], 18);
     } catch {
       setGpsError("Search isn't available right now. Pan the map instead.");
     }
@@ -155,7 +165,6 @@ export default function MapPicker({
       (pos) => {
         setLocating(false);
         const p = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-        if (precise && !withinCbd(p)) return setGpsError("You're more than 20 km from Bungoma town. Search or tap the map inside the dashed circle.");
         onChange(p);
         const m = map.current;
         if (!m) return;
@@ -186,8 +195,8 @@ export default function MapPicker({
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search a place in Bungoma town"
-            aria-label="Search for a place"
+            placeholder="Search a place, or paste coordinates (0.593165, 34.564972)"
+            aria-label="Search for a place or paste coordinates"
             className="h-10 min-w-0 flex-1 rounded-xl border border-line bg-surface px-3.5 text-sm"
           />
           <button type="submit" disabled={searching} className="flex h-10 shrink-0 items-center gap-2 rounded-xl border border-line bg-surface px-3.5 text-sm font-semibold hover:bg-subtle disabled:opacity-60">

@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import clsx from "clsx";
-import { ArrowRight, Bike, Clock, Flame, Search, Star, Store, Timer, UtensilsCrossed, X } from "lucide-react";
+import { ArrowRight, Bike, Clock, Flame, LocateFixed, MapPin, Search, Star, Store, Timer, UtensilsCrossed, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
@@ -9,6 +9,7 @@ import { api } from "../lib/api";
 import { useT } from "../lib/i18n";
 import { TopBar } from "./CustomerLayout";
 import { HotelCover, VerifiedBadge, etaText } from "./bits";
+import { TOWNS, areaQuery, locate, setArea, townArea, useArea, type Area } from "./area";
 import { useOrderMode } from "./store";
 import { InstallBanner } from "./InstallBanner";
 import { StatusChip } from "./HotelPage";
@@ -46,6 +47,14 @@ function HotelCard({ hotel }: { hotel: PublicHotel }) {
           <span className="flex items-center gap-1 rounded-full bg-subtle px-2.5 py-1 text-xs font-semibold text-ink" title={mode === "delivery" ? t("Delivery") : t("Pickup")}>
             <Timer className="size-3.5" /> {t("{min} min", { min: etaText(hotel.prep_minutes, mode) })}
           </span>
+          {hotel.distance_km != null ? (
+            <span className="flex items-center gap-1 rounded-full bg-subtle px-2.5 py-1 text-xs font-semibold text-ink">
+              <MapPin className="size-3.5" /> {t("{km} km", { km: hotel.distance_km })}
+            </span>
+          ) : null}
+          {hotel.pickup_only ? (
+            <span className="rounded-full bg-subtle px-2.5 py-1 text-xs font-semibold text-muted">{t("Pickup only")}</span>
+          ) : null}
         </span>
         <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-brand text-white shadow-md shadow-brand/25 transition-transform group-hover:translate-x-0.5" aria-label={t("View menu")}>
           <ArrowRight className="size-5" />
@@ -99,7 +108,58 @@ function OfferBanner({ offer: o, cta }: { offer: PublicOffer; cta: string }) {
   );
 }
 
-function DishSearch({ q }: { q: string }) {
+/** Ask for the phone's location, or pick a town. Shown first time, and from "change". */
+function LocationPicker({ onDone, current }: { onDone: () => void; current: Area | null }) {
+  const t = useT();
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState("");
+  async function useMyLocation() {
+    setBusy(true);
+    setProblem("");
+    const res = await locate();
+    setBusy(false);
+    if (res === "ok") onDone();
+    else
+      setProblem(
+        res === "denied"
+          ? t("Location is blocked for this site. Allow it in your browser settings, or choose your town below.")
+          : t("We couldn't get your location. Choose your town below."),
+      );
+  }
+  return (
+    <div className="rounded-2xl border border-line bg-surface p-4">
+      <p className="font-semibold">{t("Where are you?")}</p>
+      <p className="mt-0.5 text-sm text-muted">{t("We use it only to show hotels close to you.")}</p>
+      <button
+        type="button"
+        onClick={useMyLocation}
+        disabled={busy}
+        className="mt-3 flex h-11 w-full items-center justify-center gap-2 rounded-full bg-brand text-sm font-bold text-white shadow-md shadow-brand/25 disabled:opacity-60"
+      >
+        <LocateFixed className="size-5" /> {busy ? t("Finding you…") : t("Use my location")}
+      </button>
+      {problem ? <p className="mt-2 text-sm text-bad">{problem}</p> : null}
+      <p className="mt-4 mb-2 text-xs font-medium tracking-wide text-muted uppercase">{t("Or choose your town")}</p>
+      <div className="flex flex-wrap gap-2">
+        {TOWNS.map((town) => (
+          <button
+            key={town.name}
+            type="button"
+            onClick={() => { setArea(townArea(town.name)); onDone(); }}
+            className={clsx(
+              "rounded-full border px-3.5 py-1.5 text-sm font-medium hover:bg-subtle",
+              current?.source === "town" && current.label === town.name ? "border-brand text-brand" : "border-line",
+            )}
+          >
+            {town.name}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function DishSearch({ q, area }: { q: string; area: Area }) {
   const t = useT();
   const [term, setTerm] = useState(q);
   useEffect(() => {
@@ -107,8 +167,8 @@ function DishSearch({ q }: { q: string }) {
     return () => clearTimeout(id);
   }, [q]);
   const hits = useQuery({
-    queryKey: ["search", term],
-    queryFn: () => api.get<SearchHit[]>(`/search?q=${encodeURIComponent(term)}`),
+    queryKey: ["search", term, area.lat, area.lng],
+    queryFn: () => api.get<SearchHit[]>(`/search?q=${encodeURIComponent(term)}&${areaQuery(area)}`),
     enabled: term.length > 0,
     placeholderData: (prev) => prev,
   });
@@ -143,8 +203,20 @@ function DishSearch({ q }: { q: string }) {
 
 export function HomePage() {
   const t = useT();
-  const hotels = useQuery({ queryKey: ["hotels"], queryFn: () => api.get<PublicHotel[]>("/hotels"), refetchInterval: 60_000 });
-  const offers = useQuery({ queryKey: ["offers"], queryFn: () => api.get<PublicOffer[]>("/offers") });
+  const area = useArea();
+  const [changing, setChanging] = useState(false);
+  // Nothing is fetched until we know where the customer is.
+  const hotels = useQuery({
+    queryKey: ["hotels", area?.lat, area?.lng],
+    queryFn: () => api.get<PublicHotel[]>(`/hotels?${areaQuery(area)}`),
+    enabled: !!area,
+    refetchInterval: 60_000,
+  });
+  const offers = useQuery({
+    queryKey: ["offers", area?.lat, area?.lng],
+    queryFn: () => api.get<PublicOffer[]>(`/offers?${areaQuery(area)}`),
+    enabled: !!area,
+  });
   const recent = useRecentOrders();
   const [searching, setSearching] = useState(false);
   const [q, setQ] = useState("");
@@ -177,7 +249,7 @@ export function HomePage() {
           </Link>
         ) : null}
 
-        {offers.data?.length ? (
+        {area && offers.data?.length ? (
           <section className="mt-6">
             <h2 className="mb-3 flex items-center gap-2 text-lg font-semibold">
               <Flame className="size-5 text-brand" /> {t("Today's deals")}
@@ -192,7 +264,18 @@ export function HomePage() {
 
         <section className="mt-6">
           <div className="mb-3 flex items-center justify-between gap-3">
-            <h2 className="text-lg font-semibold">{t("Hotels near you")}</h2>
+            <h2 className="min-w-0 text-lg font-semibold">
+              {t("Hotels near you")}
+              {area ? (
+                <button
+                  type="button"
+                  onClick={() => setChanging((v) => !v)}
+                  className="mt-0.5 flex items-center gap-1 text-xs font-medium text-muted underline-offset-2 hover:underline"
+                >
+                  <MapPin className="size-3.5" /> {area.label === "your location" ? t("Your location") : area.label} · {t("change")}
+                </button>
+              ) : null}
+            </h2>
             <button
               type="button"
               onClick={() => { setSearching((v) => !v); setQ(""); }}
@@ -216,10 +299,13 @@ export function HomePage() {
                   className="h-11 w-full rounded-full border border-line bg-surface pr-4 pl-10 text-sm outline-none focus:border-brand"
                 />
               </div>
-              <DishSearch q={q} />
+              {area ? <DishSearch q={q} area={area} /> : null}
             </div>
           ) : null}
-          {showSearch && q.trim() ? null : hotels.isLoading ? (
+          {!area || changing ? (
+            <div className="mb-4"><LocationPicker current={area} onDone={() => setChanging(false)} /></div>
+          ) : null}
+          {!area || (showSearch && q.trim()) ? null : hotels.isLoading ? (
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
               {[0, 1, 2].map((i) => (
                 <Skeleton key={i} className="aspect-[16/12] rounded-2xl" />
@@ -231,8 +317,9 @@ export function HomePage() {
             hotels.data!.length === 0 ? (
               <div className="flex flex-col items-center gap-2 rounded-2xl border border-dashed border-line bg-surface px-6 py-12 text-center">
                 <span className="text-5xl">🍽️</span>
-                <p className="text-lg font-semibold">{t("No hotels are open right now")}</p>
-                <p className="max-w-xs text-sm text-muted">{t("New hotels are joining soon. Check back in a little while.")}</p>
+                <p className="text-lg font-semibold">{t("No hotels near {place} yet", { place: area.label })}</p>
+                <p className="max-w-xs text-sm text-muted">{t("We're growing. Try another town, or check back soon.")}</p>
+                <button type="button" onClick={() => setChanging(true)} className="mt-1 text-sm font-semibold text-brand">{t("Change location")}</button>
               </div>
             ) : (
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">

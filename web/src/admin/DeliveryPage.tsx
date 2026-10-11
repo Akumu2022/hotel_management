@@ -22,6 +22,7 @@ type Pricing = {
   rider_fee_per_km: number;
   rider_fee_min: number;
   rider_fee_max_km: number;
+  nearby_radius_km: number;
   distance_method: "road" | "straight";
 };
 type AdminSettings = Pricing & { delivery_zone: LngLat[]; rider_fee_bands: Band[]; support_whatsapp: string; platform_mpesa_number: string };
@@ -189,6 +190,7 @@ export function DeliveryPage() {
         rider_fee_per_km: settings.data.rider_fee_per_km,
         rider_fee_min: settings.data.rider_fee_min,
         rider_fee_max_km: settings.data.rider_fee_max_km,
+        nearby_radius_km: settings.data.nearby_radius_km,
         distance_method: settings.data.distance_method,
       }
     : null;
@@ -411,6 +413,19 @@ export function DeliveryPage() {
                   ))}
                 </div>
 
+                <label className="flex flex-col gap-1">
+                  <span className="text-xs font-medium text-muted">Customers see hotels within (from where they are)</span>
+                  <span className="relative">
+                    <input
+                      inputMode="decimal"
+                      value={editPricing.nearby_radius_km}
+                      onChange={(e) => setPricing({ ...editPricing, nearby_radius_km: Number(e.target.value.replace(/[^\d.]/g, "")) || 0 })}
+                      className="money h-11 w-full rounded-xl border border-line bg-surface pr-11 pl-3 text-sm outline-none focus:border-brand"
+                    />
+                    <span className="absolute top-1/2 right-3 -translate-y-1/2 text-xs text-muted">km</span>
+                  </span>
+                </label>
+
                 {editPricing.rider_fee_mode === "per_km" ? (
                   <div className="grid grid-cols-2 gap-3">
                     {(
@@ -455,12 +470,12 @@ export function DeliveryPage() {
                 {/* Live preview: what customers pay at common distances */}
                 <div className="overflow-hidden rounded-xl border border-line">
                   <div className="grid grid-cols-6 bg-subtle text-center text-xs font-semibold text-muted">
-                    {[1, 2, 3, 5, 8, 12].map((km) => (
+                    {[2, 5, 10, 20, 30, 40].map((km) => (
                       <span key={km} className="py-1.5">{km} km</span>
                     ))}
                   </div>
                   <div className="grid grid-cols-6 text-center text-sm font-bold">
-                    {[1, 2, 3, 5, 8, 12].map((km) => {
+                    {[2, 5, 10, 20, 30, 40].map((km) => {
                       const f = previewFee(editPricing, editBands, km);
                       return (
                         <span key={km} className={clsx("money py-2", f == null && "text-muted")}>{f == null ? "—" : f}</span>
