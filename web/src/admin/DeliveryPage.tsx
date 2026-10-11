@@ -310,7 +310,7 @@ export function DeliveryPage() {
       <div className="grid gap-5 xl:grid-cols-[1fr_380px]">
         <Card
           title="Delivery area"
-          subtitle={saved.length >= 3 ? "Customers can only drop a delivery pin inside the green area." : `No map area: each hotel delivers up to ${settings.data?.rider_fee_mode === "bands" ? settings.data?.rider_fee_bands.at(-1)?.max_km : settings.data?.rider_fee_max_km} km from its location.`}
+          subtitle={saved.length >= 3 ? "Not enforced any more: customers can order from any hotel within its delivery distance. Clear this area to tidy up." : `No map area needed: each hotel delivers up to ${settings.data?.rider_fee_mode === "bands" ? settings.data?.rider_fee_bands.at(-1)?.max_km : settings.data?.rider_fee_max_km} km from its location.`}
           action={
             saved.length >= 3 && !draft ? (
               <span className="flex items-center gap-1.5 rounded-full bg-ok-soft px-2.5 py-1 text-xs font-semibold text-ok"><CheckCircle2 className="size-3.5" /> Active</span>

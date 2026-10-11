@@ -335,13 +335,10 @@ async def _check_can_order(session: AsyncSession, body: OrderIn, p: Priced, now:
             raise AppError(
                 422, "too_far", f"That's more than {km:g} km from {p.hotel.name}. Choose pickup."
             )
-        # With a drawn area, the pin must be inside it. Without one, the limit is the
-        # furthest delivery distance from the hotel, which needs the hotel's location.
-        zone = p.settings.delivery_zone
-        if zone:
-            if not point_in_zone(body.lat, body.lng, zone):
-                raise AppError(422, "outside_zone", "That pin is outside our delivery area")
-        elif p.hotel.lat is None:
+        # The only limit is the furthest delivery distance from the hotel (a customer never
+        # has to understand a map area), which needs the hotel's location. A delivery area
+        # drawn in the past is no longer enforced.
+        if p.hotel.lat is None:
             raise AppError(
                 409, "delivery_unavailable", f"{p.hotel.name} doesn't deliver yet. Choose pickup."
             )

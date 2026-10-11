@@ -32,6 +32,9 @@ def fixed_clock(monkeypatch):
 
 
 async def open_hotel(session, **kw):
+    # Delivery is limited by distance from the hotel, so a hotel needs a map location.
+    kw.setdefault("lat", -1.2864)
+    kw.setdefault("lng", 36.8172)
     hotel = await make_hotel(session, **kw)
     session.add_all(
         HotelHours(hotel_id=hotel.id, weekday=d, opens_at=time(7), closes_at=time(22))
@@ -242,12 +245,13 @@ async def test_product_from_another_hotel_is_unavailable(client, db, shop):
     assert r.json()["error"]["code"] == "item_unavailable"
 
 
-async def test_delivery_zone_rules(client, db, shop):
+async def test_a_drawn_zone_no_longer_limits_delivery(client, db, shop):
     hotel, product = shop
     r = await client.post(
         "/api/v1/orders", headers=key(), json=body(hotel, product, lat=-1.0, lng=37.0)
     )
-    assert r.json()["error"]["code"] == "outside_zone"
+    # Far from the hotel is refused by distance, never by a drawn area.
+    assert r.json()["error"]["code"] in ("too_far", "delivery_unavailable")
 
 
 @pytest.mark.parametrize(
@@ -441,7 +445,7 @@ async def test_public_config(client, db):
     assert cfg["delivery_mode"] == "distance" and cfg["max_delivery_km"] == 30
     await set_zone(db)
     cfg = (await client.get("/api/v1/config")).json()
-    assert cfg["delivery_mode"] == "area" and cfg["delivery_zone"] == ZONE
+    assert cfg["delivery_mode"] == "distance" and cfg["delivery_zone"] == []  # a saved area is ignored
 
 
 # --- Distance-based rider fee (DECISIONS D14) ---------------------------------------------------
@@ -556,7 +560,9 @@ async def test_without_area_hotels_deliver_by_distance(client, db, shop):
     hotel, product = shop
     await settings.update(db, {"delivery_zone": []}, None)
     await db.flush()
-    # No area and no hotel location: delivery refused with a clear reason.
+    hotel.lat = hotel.lng = None  # open_hotel gives a location; take it away
+    await db.flush()
+    # No hotel location: delivery refused with a clear reason.
     r = await client.post("/api/v1/orders", headers=key(), json=body(hotel, product))
     assert r.json()["error"]["code"] == "delivery_unavailable"
     # Give the hotel a location: anywhere within the max distance works, no area needed.

@@ -188,13 +188,13 @@ async def public_config(session: Session):
     """What the customer app needs before checkout: the delivery zone (drawn by the admin)."""
     values, _ = await settings.load(session)
     return {
-        "delivery_zone": values.delivery_zone,
+        "delivery_zone": [],  # no drawn area any more: delivery is by distance from the hotel
         # Without a drawn area, hotels with a location deliver up to max_delivery_km.
         "delivery_available": True,
         "rider_fee": values.base_rider_fee,  # "from" price before a pin is dropped
         "rider_fee_bands": [b.model_dump() for b in values.rider_fee_bands],
         "max_delivery_km": values.max_delivery_km,
         "nearby_radius_km": values.nearby_radius_km,
-        "delivery_mode": "area" if values.delivery_zone else "distance",
+        "delivery_mode": "distance",
         "support_whatsapp": values.support_whatsapp or None,
     }
