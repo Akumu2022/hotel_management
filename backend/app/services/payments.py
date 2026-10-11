@@ -58,10 +58,13 @@ class Outcome:
     message: str
 
 
-async def _lock_order(session: AsyncSession, order_id: uuid.UUID) -> Order:
-    order = (
-        await session.execute(select(Order).where(Order.id == order_id).with_for_update())
-    ).scalar_one_or_none()
+async def _lock_order(
+    session: AsyncSession, order_id: uuid.UUID, hotel_id: uuid.UUID | None = None
+) -> Order:
+    stmt = select(Order).where(Order.id == order_id).with_for_update()
+    if hotel_id is not None:
+        stmt = stmt.where(Order.hotel_id == hotel_id)  # hotel scoping: other hotels get 404
+    order = (await session.execute(stmt)).scalar_one_or_none()
     if order is None:
         raise AppError(404, "not_found", "Order not found")
     return order
@@ -295,12 +298,13 @@ async def confirm_manual(
     paid_at: datetime | None,
     cashier_id: uuid.UUID,
     now: datetime,
+    hotel_id: uuid.UUID | None = None,
 ) -> Outcome:
     """Cashier read the Till phone's SMS and typed the code and amount."""
     code = normalize_code(code)
     if amount <= 0:
         raise AppError(422, "bad_amount", "Enter the amount shown in the M-Pesa message")
-    order = await _lock_order(session, order_id)
+    order = await _lock_order(session, order_id, hotel_id)
     hotel = await session.get(Hotel, order.hotel_id)
     if order.payment_method != "mpesa":
         raise AppError(409, "not_mpesa", "This is a cash order. Use “Cash received”.")
@@ -570,9 +574,13 @@ async def record_reversal(session: AsyncSession, code: str, now: datetime) -> Pa
 
 
 async def cash_received(
-    session: AsyncSession, order_id: uuid.UUID, cashier_id: uuid.UUID, now: datetime
+    session: AsyncSession,
+    order_id: uuid.UUID,
+    cashier_id: uuid.UUID,
+    now: datetime,
+    hotel_id: uuid.UUID | None = None,
 ) -> Order:
-    order = await _lock_order(session, order_id)
+    order = await _lock_order(session, order_id, hotel_id)
     if order.payment_method != "cash":
         raise AppError(409, "not_cash", "This order is paid by M-Pesa")
     if order.status in ("cancelled", "rejected", "expired"):

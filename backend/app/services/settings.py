@@ -6,12 +6,13 @@ Every change is audit-logged and only affects orders placed afterwards (orders s
 """
 
 import math
+import time
 import uuid
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
-from sqlalchemy import func, select
+from sqlalchemy import event, func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -180,20 +181,40 @@ def bp_to_percent(bp: int) -> float:
     return bp / 100
 
 
+# Nearly every request reads the platform settings, and they change a few times a year. Each worker
+# keeps the last read for a few seconds; a change made through update() shows at once in that worker
+# and within CACHE_SECONDS in the others.
+CACHE_SECONDS = 10
+_cache: tuple[float, PlatformSettings, bool] | None = None
+
+
+def clear_cache() -> None:
+    global _cache
+    _cache = None
+
+
 async def load(session: AsyncSession) -> tuple[PlatformSettings, bool]:
     """Return (settings, reviewed). Missing keys fall back to the seeded defaults."""
+    global _cache
+    now = time.monotonic()
+    if _cache is not None and now < _cache[0]:
+        return _cache[1].model_copy(deep=True), _cache[2]
     rows = (await session.execute(select(Setting))).scalars().all()
     stored = {r.key: r.value for r in rows}
     reviewed = bool(stored.pop(REVIEWED_KEY, False))
     known = {k: v for k, v in stored.items() if k in PlatformSettings.model_fields}
-    return PlatformSettings(**{**DEFAULTS.model_dump(), **known}), reviewed
+    values = PlatformSettings(**{**DEFAULTS.model_dump(), **known})
+    _cache = (now + CACHE_SECONDS, values, reviewed)
+    return values.model_copy(deep=True), reviewed
 
 
 async def update(
     session: AsyncSession, changes: dict, actor_id: uuid.UUID | None
 ) -> PlatformSettings:
     """Validate and save changed keys, audit-logging old -> new. Caller commits."""
+    clear_cache()
     current, _ = await load(session)
+    clear_cache()
     merged = PlatformSettings(**{**current.model_dump(), **changes})  # raises ValidationError
     if merged.acceptance_alert_minutes >= merged.acceptance_timeout_minutes:
         raise ValueError("The duty alert must come before the acceptance timeout")
@@ -212,6 +233,9 @@ async def update(
             details={"old": old[key], "new": new[key]},
         )
     await _upsert(session, REVIEWED_KEY, True, actor_id)
+    clear_cache()
+    # A request that reads between this change and the commit would cache the old values.
+    event.listen(session.sync_session, "after_commit", lambda _s: clear_cache(), once=True)
     return merged
 
 

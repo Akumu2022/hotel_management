@@ -82,12 +82,20 @@ async def offer(
     now: datetime,
     placing: bool,
 ) -> tuple[Bonuses, StampCard]:
-    """What this customer may get on this order. When `placing`, takes a transaction-scoped
-    lock so two orders can't both take the last of the budget or the same stamp."""
-    if placing:
+    """What this customer may get on this order. When `placing` and a bonus could actually be taken,
+    a transaction-scoped lock is held so two orders can't both take the last of the budget or the
+    same stamp. Orders that can take nothing (a pickup, or no stamp due and no delivery fee to
+    waive) never touch the lock, so they don't queue behind each other."""
+
+    async def work() -> tuple[Bonuses, StampCard]:
+        card = await stamp_card(session, s, customer)
+        left = await budget_left(session, s, now)
+        stamp = s.stamp_reward if card.reward_ready and left >= s.stamp_reward else 0
+        free_min = s.free_delivery_min_food if left >= rider_fee else 0
+        return Bonuses(stamp_reward=stamp, free_delivery_min_food=free_min), card
+
+    bonuses, card = await work()
+    if placing and (bonuses.stamp_reward or (bonuses.free_delivery_min_food and rider_fee > 0)):
         await session.execute(text("SELECT pg_advisory_xact_lock(:k)"), {"k": LOCK_KEY})
-    card = await stamp_card(session, s, customer)
-    left = await budget_left(session, s, now)
-    stamp = s.stamp_reward if card.reward_ready and left >= s.stamp_reward else 0
-    free_min = s.free_delivery_min_food if left >= rider_fee else 0
-    return Bonuses(stamp_reward=stamp, free_delivery_min_food=free_min), card
+        bonuses, card = await work()  # re-read now that nobody else can be deciding
+    return bonuses, card

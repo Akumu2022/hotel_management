@@ -1,3 +1,4 @@
+import time
 import uuid
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -5,7 +6,7 @@ from typing import Annotated, TypeVar
 
 import jwt
 from fastapi import Depends, Header
-from sqlalchemy import Select, select
+from sqlalchemy import Select, event, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db import get_session
@@ -22,6 +23,23 @@ class CurrentUser:
     id: uuid.UUID
     role: str
     hotel_id: uuid.UUID | None
+
+
+# Every logged-in call re-checks that the account is still active. The answer is kept for a few
+# seconds per worker; any change to a user made in a worker drops its entry at once there, and the
+# other workers catch up within USER_CACHE_SECONDS.
+USER_CACHE_SECONDS = 5
+_users: dict[uuid.UUID, tuple[float, CurrentUser]] = {}
+
+
+def clear_user_cache() -> None:
+    _users.clear()
+
+
+@event.listens_for(User, "after_update")
+@event.listens_for(User, "after_delete")
+def _user_changed(_mapper, _conn, user) -> None:
+    _users.pop(user.id, None)
 
 
 async def current_user(
@@ -42,10 +60,16 @@ async def current_user(
     except jwt.InvalidTokenError:
         raise AppError(401, "unauthorized", "Log in to continue") from None
     # The account may have been deactivated since the token was issued.
-    user = await session.get(User, uuid.UUID(payload["sub"]))
+    uid = uuid.UUID(payload["sub"])
+    hit = _users.get(uid)
+    if hit is not None and time.monotonic() < hit[0]:
+        return hit[1]
+    user = await session.get(User, uid)
     if user is None or not user.is_active:
         raise AppError(401, "unauthorized", "Log in to continue")
-    return CurrentUser(id=user.id, role=user.role, hotel_id=user.hotel_id)
+    who = CurrentUser(id=user.id, role=user.role, hotel_id=user.hotel_id)
+    _users[uid] = (time.monotonic() + USER_CACHE_SECONDS, who)
+    return who
 
 
 def require_roles(*roles: str) -> Callable:

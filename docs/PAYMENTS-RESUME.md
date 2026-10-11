@@ -28,3 +28,9 @@ and code on `main`: the API crashes with "Can't locate revision identified by '0
 ## Never
 Do not merge `payments-module` into `main` unless the owner asks. Non-payments work goes on
 `main`, then `git merge main` into `payments-module`.
+
+## Migration heads (added with the speed work)
+`main` now ends at `0025` (orders.created_at index, down_revision `0023`). `payments-module` has its
+own `0024` merge revision. After merging `main` into `payments-module` there will be TWO heads
+(`0024` and `0025`): add a merge revision with `alembic merge 0024 0025` before running
+`alembic upgrade head`.

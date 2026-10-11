@@ -90,6 +90,7 @@ class Order(Base):
             name="customer_fee_answer",
         ),
         Index("ix_orders_hotel_status_created", "hotel_id", "status", "created_at"),
+        Index("ix_orders_created_at", "created_at"),
     )
 
     id: Mapped[uuid.UUID] = uuid_pk()

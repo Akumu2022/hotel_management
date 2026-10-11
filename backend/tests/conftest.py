@@ -113,6 +113,12 @@ async def committed(engine) -> AsyncIterator[async_sessionmaker[AsyncSession]]:
 @pytest.fixture(autouse=True)
 def _reset_rate_limits():
     limiter.reset()
+    # Short-lived caches in the app must not carry one test's data into the next.
+    from app.api.deps import clear_user_cache
+    from app.services.settings import clear_cache
+
+    clear_cache()
+    clear_user_cache()
 
 
 @pytest.fixture(autouse=True)

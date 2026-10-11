@@ -155,7 +155,6 @@ async def pending_payments(user: HotelStaff, session: Session):
 
 @hotel.post("/orders/{order_id}/confirm-payment", response_model=OutcomeOut)
 async def confirm_payment(order_id: uuid.UUID, body: ConfirmIn, user: HotelStaff, session: Session):
-    await get_scoped(session, Order, order_id, user.hotel_id)
     outcome = await payments.confirm_manual(
         session,
         order_id,
@@ -164,6 +163,7 @@ async def confirm_payment(order_id: uuid.UUID, body: ConfirmIn, user: HotelStaff
         paid_at=body.paid_at,
         cashier_id=user.id,
         now=utcnow(),
+        hotel_id=user.hotel_id,  # scoping happens in the locking query: one load, not two
     )
     await session.commit()
     return _outcome(outcome)
@@ -171,8 +171,7 @@ async def confirm_payment(order_id: uuid.UUID, body: ConfirmIn, user: HotelStaff
 
 @hotel.post("/orders/{order_id}/cash-received", response_model=OutcomeOut)
 async def cash_received(order_id: uuid.UUID, user: HotelStaff, session: Session):
-    await get_scoped(session, Order, order_id, user.hotel_id)
-    order = await payments.cash_received(session, order_id, user.id, utcnow())
+    order = await payments.cash_received(session, order_id, user.id, utcnow(), hotel_id=user.hotel_id)
     await session.commit()
     return OutcomeOut(result="paid", order_status=order.status, message="Cash recorded")
 
