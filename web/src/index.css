@@ -23,20 +23,20 @@
   --font-sans: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 }
 
-/* Dark theme: same tokens, darker values. Brand orange stays the same. */
+/* Dark theme: same tokens in soft grey (not black). Brand orange stays the same. */
 .dark {
   color-scheme: dark;
-  --color-page: #09090b;
-  --color-surface: #17171a;
-  --color-subtle: #222226;
-  --color-ink: #f4f4f5;
-  --color-muted: #a1a1aa;
-  --color-line: #2c2c31;
-  --color-brand-soft: #34190f;
-  --color-brand-tint: #4a2414;
-  --color-ok-soft: #0e2618;
-  --color-warn-soft: #2b1a0b;
-  --color-bad-soft: #2d1212;
+  --color-page: #2b2d31;
+  --color-surface: #36393f;
+  --color-subtle: #40444b;
+  --color-ink: #f0f1f3;
+  --color-muted: #b3b6bd;
+  --color-line: #4b4f57;
+  --color-brand-soft: #4a3228;
+  --color-brand-tint: #5c3b2c;
+  --color-ok-soft: #2f4a3a;
+  --color-warn-soft: #4d3e2b;
+  --color-bad-soft: #503438;
 }
 .dark .leaflet-container {
   filter: brightness(0.85) contrast(1.05);

@@ -29,7 +29,7 @@ class AppState extends ChangeNotifier {
   List<Map<String, dynamic>> places = []; // {label, lat, lng, landmark}: Home / Work / Other
   String mode = 'delivery'; // order type the checkout opens with
   Map<String, dynamic>? pending; // {sig, key, arrive}: checkout in flight, so a retry can't create a 2nd order
-  ThemeMode themeMode = ThemeMode.system;
+  ThemeMode themeMode = ThemeMode.light; // always opens light; dark lasts for the current session
 
   Future<void> load() async {
     _p = await SharedPreferences.getInstance();
@@ -50,7 +50,6 @@ class AppState extends ChangeNotifier {
       lang.value = _p.getString('lang') ?? 'en';
       final pd = _p.getString('pending');
       pending = pd == null ? null : Map<String, dynamic>.from(jsonDecode(pd) as Map);
-      themeMode = ThemeMode.values.firstWhere((m) => m.name == _p.getString('theme'), orElse: () => ThemeMode.system);
     } catch (_) {}
   }
 
@@ -61,7 +60,6 @@ class AppState extends ChangeNotifier {
     _p.setString('places', jsonEncode(places));
     _p.setString('mode', mode);
     pending == null ? _p.remove('pending') : _p.setString('pending', jsonEncode(pending));
-    _p.setString('theme', themeMode.name);
     notifyListeners();
   }
 

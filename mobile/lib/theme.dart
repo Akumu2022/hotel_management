@@ -8,14 +8,14 @@ OutlineInputBorder _border(Color c, [double w = 1]) =>
 ThemeData appTheme(Brightness b) {
   final dark = b == Brightness.dark;
   final scheme = ColorScheme.fromSeed(seedColor: brand, brightness: b, primary: brand).copyWith(
-    surface: dark ? const Color(0xFF121214) : Colors.white,
+    surface: dark ? const Color(0xFF2B2D31) : Colors.white,
   );
-  final card = dark ? const Color(0xFF1D1D20) : Colors.white;
+  final card = dark ? const Color(0xFF36393F) : Colors.white;
   final line = (dark ? Colors.white : Colors.black).withValues(alpha: dark ? .14 : .12);
   return ThemeData(
     colorScheme: scheme,
     useMaterial3: true,
-    scaffoldBackgroundColor: dark ? const Color(0xFF121214) : const Color(0xFFFAF8F7),
+    scaffoldBackgroundColor: dark ? const Color(0xFF2B2D31) : const Color(0xFFFAF8F7),
     appBarTheme: AppBarTheme(backgroundColor: Colors.transparent, scrolledUnderElevation: 0, centerTitle: false, foregroundColor: scheme.onSurface),
     cardTheme: CardThemeData(
       color: card,
@@ -42,7 +42,7 @@ ThemeData appTheme(Brightness b) {
     ),
     navigationBarTheme: NavigationBarThemeData(
       backgroundColor: card,
-      indicatorColor: dark ? const Color(0xFF4A2112) : const Color(0xFFFFE4D6),
+      indicatorColor: dark ? const Color(0xFF5C3B2C) : const Color(0xFFFFE4D6),
     ),
     bottomSheetTheme: BottomSheetThemeData(
       backgroundColor: card,
