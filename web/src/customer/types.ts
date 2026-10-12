@@ -177,6 +177,7 @@ export type PublicConfig = {
   rider_fee: number;
   rider_fee_bands: { max_km: number; fee: number }[];
   support_whatsapp: string | null;
+  banner?: { greeting: string; title: string; note: string; emoji: string; bg_color?: string; text_color?: string; image_url: string | null };
   max_delivery_km: number;
   delivery_mode: "area" | "distance";
 };

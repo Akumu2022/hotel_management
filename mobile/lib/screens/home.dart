@@ -18,6 +18,16 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   late Future<List> _hotels = _get('/hotels');
   late Future<List> _offers = _offersOrEmpty();
+  late Future<Json?> _banner = _bannerOrNull();
+  Future<Json?> _bannerOrNull() async {
+    try {
+      final b = ((await apiGet('/config')) as Map)['banner'];
+      return b is Map ? Map<String, dynamic>.from(b) : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<List> _get(String path) async => (await apiGet(path)) as List;
   Future<List> _offersOrEmpty() async {
     try {
@@ -31,6 +41,7 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() {
       _hotels = _get('/hotels');
       _offers = _offersOrEmpty();
+      _banner = _bannerOrNull();
     });
     try {
       await _hotels;
@@ -86,7 +97,9 @@ class _HomeScreenState extends State<HomeScreen> {
                   : const SizedBox.shrink(),
             ),
           ),
-          const SliverToBoxAdapter(child: _Hero()),
+          SliverToBoxAdapter(
+            child: FutureBuilder<Json?>(future: _banner, builder: (_, snap) => _Hero(snap.data)),
+          ),
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
@@ -200,30 +213,72 @@ class _LangToggle extends StatelessWidget {
 }
 
 class _Hero extends StatelessWidget {
-  const _Hero();
+  final Json? banner;
+  const _Hero(this.banner);
   @override
   Widget build(BuildContext context) {
     // A const widget would keep the old language when the toggle flips, so listen to it here.
     return ValueListenableBuilder<String>(valueListenable: lang, builder: (_, __, ___) => _body());
   }
 
-  Widget _body() => Container(
-        margin: const EdgeInsets.fromLTRB(16, 4, 16, 0),
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(color: brand, borderRadius: BorderRadius.circular(24)),
-        child: Row(children: [
-          Expanded(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(tr('Karibu!'), style: TextStyle(color: Colors.white70, fontWeight: FontWeight.w600)),
-              SizedBox(height: 4),
-              Text(tr('Hot food from local hotels, delivered or ready for pickup.'),
-                  style: TextStyle(color: Colors.white, fontSize: 19, height: 1.2, fontWeight: FontWeight.w800)),
-            ]),
+  String _pick(String key, String fallback) {
+    final v = '${banner?[key] ?? ''}'.trim();
+    return v.isEmpty ? fallback : v;
+  }
+
+  Color _color(String key, Color fallback) {
+    final v = '${banner?[key] ?? ''}'.trim();
+    if (!RegExp(r'^#[0-9a-fA-F]{6}$').hasMatch(v)) return fallback;
+    return Color(int.parse('FF${v.substring(1)}', radix: 16));
+  }
+
+  Widget _body() {
+    final img = banner?['image_url'] as String?;
+    final fg = _color('text_color', Colors.white);
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+      constraints: const BoxConstraints(minHeight: 150),
+      decoration: BoxDecoration(color: _color('bg_color', brand), borderRadius: BorderRadius.circular(24)),
+      clipBehavior: Clip.antiAlias,
+      child: Stack(children: [
+        // Banner colour holds the left half, then melts away so the photo takes over on the right.
+        if (img != null)
+          Positioned.fill(
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: FractionallySizedBox(
+                widthFactor: .62,
+                heightFactor: 1,
+                child: ShaderMask(
+                  blendMode: BlendMode.dstIn,
+                  shaderCallback: (r) => const LinearGradient(colors: [Colors.transparent, Colors.transparent, Colors.black], stops: [0, .18, .6]).createShader(r),
+                  child: NetImage(img, width: 400, fit: BoxFit.cover),
+                ),
+              ),
+            ),
           ),
-          SizedBox(width: 8),
-          Text('🍲', style: TextStyle(fontSize: 54)),
-        ]),
-      );
+        Padding(
+          padding: const EdgeInsets.all(20),
+          child: Row(children: [
+            Expanded(
+              flex: 11,
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(_pick('greeting', tr('Karibu!')), style: TextStyle(color: fg.withValues(alpha: .9), fontSize: 20, fontWeight: FontWeight.w700)),
+                const SizedBox(height: 4),
+                Text(_pick('title', tr('Hot food from local hotels, delivered or ready for pickup.')),
+                    style: TextStyle(color: fg, fontSize: 19, height: 1.2, fontWeight: FontWeight.w800)),
+                if (_pick('note', '').isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  Text(_pick('note', ''), style: TextStyle(color: fg.withValues(alpha: .9), fontSize: 13, fontWeight: FontWeight.w600)),
+                ],
+              ]),
+            ),
+            Expanded(flex: 9, child: img == null ? Center(child: Text(_pick('emoji', '🍲'), style: const TextStyle(fontSize: 54))) : const SizedBox()),
+          ]),
+        ),
+      ]),
+    );
+  }
 }
 
 class _Deals extends StatelessWidget {

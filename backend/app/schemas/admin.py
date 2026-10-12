@@ -68,6 +68,13 @@ class SettingsOut(Schema):
     delivery_zone: list[list[float]]
     support_whatsapp: str
     platform_mpesa_number: str
+    banner_greeting: str
+    banner_title: str
+    banner_note: str
+    banner_emoji: str
+    banner_image_key: str
+    banner_bg_color: str
+    banner_text_color: str
     stamp_every: int
     stamp_reward: int
     free_delivery_min_food: int
@@ -113,6 +120,13 @@ class SettingsIn(Schema):
     support_whatsapp: str | None = Field(None, max_length=20)  # blank removes it
     platform_mpesa_number: str | None = Field(None, max_length=20)
     delivery_zone: list[list[float]] | None = None
+    banner_greeting: str | None = Field(None, max_length=40)
+    banner_title: str | None = Field(None, max_length=120)
+    banner_note: str | None = Field(None, max_length=80)
+    banner_emoji: str | None = Field(None, max_length=8)
+    banner_image_key: str | None = Field(None, max_length=200)  # blank removes the photo
+    banner_bg_color: str | None = Field(None, pattern=r"^(|#[0-9a-fA-F]{6})$")
+    banner_text_color: str | None = Field(None, pattern=r"^(|#[0-9a-fA-F]{6})$")
     stamp_every: int | None = Field(None, strict=True)
     stamp_reward: int | None = Field(None, strict=True)
     free_delivery_min_food: int | None = Field(None, strict=True)
@@ -138,6 +152,11 @@ class SettingsIn(Schema):
         if v is None or v.strip() == "":
             return v if v is None else ""
         return normalize_phone(v)
+
+    @field_validator("banner_greeting", "banner_title", "banner_note", "banner_emoji")
+    @classmethod
+    def _banner_text(cls, v):
+        return v if v is None else v.strip()
 
     def to_changes(self) -> dict:
         changes = self.model_dump(exclude_unset=True, exclude_none=True)

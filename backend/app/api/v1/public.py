@@ -184,7 +184,7 @@ async def list_offers(
 
 
 @router.get("/config")
-async def public_config(session: Session):
+async def public_config(session: Session, storage: StorageDep):
     """What the customer app needs before checkout: the delivery zone (drawn by the admin)."""
     values, _ = await settings.load(session)
     return {
@@ -197,4 +197,13 @@ async def public_config(session: Session):
         "nearby_radius_km": values.nearby_radius_km,
         "delivery_mode": "distance",
         "support_whatsapp": values.support_whatsapp or None,
+        "banner": {
+            "greeting": values.banner_greeting,
+            "title": values.banner_title,
+            "note": values.banner_note,
+            "emoji": values.banner_emoji,
+            "bg_color": values.banner_bg_color,
+            "text_color": values.banner_text_color,
+            "image_url": storage.url(values.banner_image_key) if values.banner_image_key else None,
+        },
     }

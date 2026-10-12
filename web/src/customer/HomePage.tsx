@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import clsx from "clsx";
-import { ArrowRight, Bike, Clock, Flame, LocateFixed, MapPin, Search, Star, Store, Timer, UtensilsCrossed, X } from "lucide-react";
+import { ArrowRight, Bike, Flame, LocateFixed, MapPin, Search, Star, Store, Timer, UtensilsCrossed, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
@@ -14,9 +14,12 @@ import { useOrderMode } from "./store";
 import { InstallBanner } from "./InstallBanner";
 import { StatusChip } from "./HotelPage";
 import { OfferCarousel } from "./OfferCarousel";
+import { useConfig } from "./OrderPanel";
 import { useRecentOrders } from "./store";
 import { money } from "../lib/format";
 import type { PublicHotel, PublicOffer, SearchHit } from "./types";
+
+const FEATHER = "linear-gradient(to right, transparent 0%, transparent 18%, black 60%)";
 
 function HotelCard({ hotel }: { hotel: PublicHotel }) {
   const t = useT();
@@ -175,6 +178,7 @@ export function HomePage() {
     enabled: !!area,
   });
   const recent = useRecentOrders();
+  const banner = useConfig().data?.banner;
   const [searching, setSearching] = useState(false);
   const [q, setQ] = useState("");
   const showSearch = searching || q.length > 0;
@@ -183,13 +187,26 @@ export function HomePage() {
     <>
       <TopBar />
       <div className="flex-1 px-4 py-5 pb-28 sm:px-6 lg:pb-6">
-        <section className="relative overflow-hidden rounded-2xl bg-brand px-6 py-7 text-white sm:px-8">
-          <div className="relative z-10 max-w-md">
-            <p className="text-sm font-medium text-white/80">{t("Karibu!")}</p>
-            <h1 className="mt-1 text-2xl leading-tight font-bold sm:text-3xl">{t("Hot food from local hotels, delivered or ready for pickup.")}</h1>
-            <p className="mt-2 flex items-center gap-1.5 text-sm text-white/85"><Clock className="size-4" /> {t("Pay by M-Pesa straight to the hotel")}</p>
+        <section
+          className="relative flex min-h-44 items-center overflow-hidden rounded-2xl bg-brand px-6 py-7 text-white sm:min-h-56 sm:px-8"
+          style={{ background: banner?.bg_color || undefined, color: banner?.text_color || undefined }}
+        >
+          {banner?.image_url ? (
+            // Banner colour holds the left half, then melts away so the photo takes over on the right.
+            <img
+              src={banner.image_url}
+              alt=""
+              className="pointer-events-none absolute inset-y-0 right-0 h-full w-[62%] object-cover"
+              style={{ WebkitMaskImage: FEATHER, maskImage: FEATHER }}
+            />
+          ) : (
+            <span className="pointer-events-none absolute right-6 text-6xl select-none sm:text-[8rem]">{banner?.emoji || "🍲"}</span>
+          )}
+          <div className="relative z-10 w-[56%] max-w-md min-w-0 sm:w-1/2">
+            <p className="text-lg font-semibold opacity-90 sm:text-xl">{banner?.greeting || t("Karibu!")}</p>
+            <h1 className="mt-1 text-2xl leading-tight font-bold sm:text-3xl">{banner?.title || t("Hot food from local hotels, delivered or ready for pickup.")}</h1>
+            <p className="mt-2 text-sm opacity-90">{banner?.note || t("Pay by M-Pesa straight to the hotel")}</p>
           </div>
-          <span className="pointer-events-none absolute -bottom-6 hidden text-[8.75rem] opacity-90 select-none sm:right-6 sm:block">🍲</span>
         </section>
 
         <div className="mt-4">

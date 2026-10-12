@@ -12,7 +12,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { ErrorNote, Skeleton } from "../components/ui";
 import { api } from "../lib/api";
-import { money } from "../lib/format";
+import { compressImage, money } from "../lib/format";
 import { type LngLat, circleZone } from "../lib/geo";
 
 type Band = { max_km: number; fee: number };
@@ -25,7 +25,7 @@ type Pricing = {
   nearby_radius_km: number;
   distance_method: "road" | "straight";
 };
-type AdminSettings = Pricing & { delivery_zone: LngLat[]; rider_fee_bands: Band[]; support_whatsapp: string; platform_mpesa_number: string };
+type AdminSettings = Pricing & { delivery_zone: LngLat[]; rider_fee_bands: Band[]; support_whatsapp: string; platform_mpesa_number: string; banner_greeting: string; banner_title: string; banner_note: string; banner_emoji: string; banner_image_key: string; banner_bg_color: string; banner_text_color: string };
 type CalcResult = { distance_km: number; method: string; straight_km: number; rider_fee: number | null; too_far: boolean; max_delivery_km: number };
 
 /** Same formula as the server (services/settings.rider_fee_at), for the live preview only. */
@@ -132,6 +132,91 @@ function SupportCard({ current }: { current: string }) {
       </div>
       <p className="mt-2 text-xs text-muted">{current ? "Live: customers can message you." : "Not set: the help button is hidden."} Leave empty to hide it.</p>
       <ErrorNote error={save.error} />
+    </Card>
+  );
+}
+
+const SWATCHES = ["#f97316", "#dc2626", "#16a34a", "#2563eb", "#7c3aed", "#db2777", "#18181b", "#ffffff", "#facc15"];
+
+function ColorRow({ label, value, fallback, onChange }: { label: string; value: string; fallback: string; onChange: (c: string) => void }) {
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <span className="w-24 text-sm font-semibold">{label}</span>
+      {SWATCHES.map((c) => (
+        <button
+          key={c}
+          type="button"
+          aria-label={`${label} ${c}`}
+          onClick={() => onChange(c)}
+          style={{ background: c }}
+          className={clsx("size-7 rounded-full border border-line", (value || fallback).toLowerCase() === c && "ring-2 ring-brand ring-offset-2")}
+        />
+      ))}
+      <input type="color" aria-label={`${label} custom`} value={value || fallback} onChange={(e) => onChange(e.target.value)} className="size-7 cursor-pointer rounded border border-line bg-transparent p-0" />
+      {value ? <button type="button" onClick={() => onChange("")} className="text-xs font-semibold text-muted underline">Reset</button> : null}
+    </div>
+  );
+}
+
+/** The big banner at the top of the customer home screen: words, an emoji or a photo. */
+function BannerCard({ s }: { s: AdminSettings }) {
+  const qc = useQueryClient();
+  const [draft, setDraft] = useState<Partial<AdminSettings>>({});
+  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
+  const file = useRef<HTMLInputElement>(null);
+  const v = { ...s, ...draft };
+  const set = (k: keyof AdminSettings, val: string) => setDraft((d) => ({ ...d, [k]: val }));
+  const upload = useMutation({
+    mutationFn: async (f: File) => api.upload<{ image_key: string; image_url: string }>("/admin/uploads/image", await compressImage(f), "banner.jpg"),
+    onSuccess: (u) => {
+      setPhotoUrl(u.image_url);
+      set("banner_image_key", u.image_key);
+    },
+  });
+  const save = useMutation({
+    mutationFn: () =>
+      api.put("/admin/settings", {
+        banner_greeting: v.banner_greeting,
+        banner_title: v.banner_title,
+        banner_note: v.banner_note,
+        banner_emoji: v.banner_emoji,
+        banner_image_key: v.banner_image_key,
+        banner_bg_color: v.banner_bg_color,
+        banner_text_color: v.banner_text_color,
+      }),
+    onSuccess: () => {
+      setDraft({});
+      qc.invalidateQueries({ queryKey: ["config"] });
+      return qc.invalidateQueries({ queryKey: ["admin", "settings"] });
+    },
+  });
+  const field = "h-11 w-full rounded-xl border border-line px-3.5 text-sm outline-none focus:border-brand";
+  return (
+    <Card title="Home banner" subtitle="The big orange banner customers see first. Change it for a holiday, a promo, or just for fun. Leave a box empty to use the normal wording.">
+      <div className="grid gap-3">
+        <input aria-label="Greeting" maxLength={40} placeholder="Karibu!" value={v.banner_greeting} onChange={(e) => set("banner_greeting", e.target.value)} className={field} />
+        <input aria-label="Headline" maxLength={120} placeholder="Hot food from local hotels, delivered or ready for pickup." value={v.banner_title} onChange={(e) => set("banner_title", e.target.value)} className={field} />
+        <input aria-label="Small line" maxLength={80} placeholder="Pay by M-Pesa straight to the hotel" value={v.banner_note} onChange={(e) => set("banner_note", e.target.value)} className={field} />
+        <div className="flex gap-2">
+          <input aria-label="Emoji" maxLength={8} placeholder="🍲" value={v.banner_emoji} onChange={(e) => set("banner_emoji", e.target.value)} className={clsx(field, "w-24 text-center text-lg")} />
+          <button type="button" onClick={() => file.current?.click()} className="h-11 flex-1 rounded-xl border border-line px-3.5 text-sm font-semibold hover:bg-subtle">
+            {upload.isPending ? "Uploading…" : v.banner_image_key ? "Change photo" : "Add a photo instead of the emoji"}
+          </button>
+          {v.banner_image_key ? (
+            <button type="button" onClick={() => { set("banner_image_key", ""); setPhotoUrl(null); }} className="h-11 rounded-xl border border-line px-3.5 text-sm font-semibold text-bad hover:bg-subtle">
+              Remove
+            </button>
+          ) : null}
+          <input ref={file} type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) upload.mutate(f); e.target.value = ""; }} />
+        </div>
+        <ColorRow label="Background" value={v.banner_bg_color} fallback="#f97316" onChange={(c) => set("banner_bg_color", c)} />
+        <ColorRow label="Text" value={v.banner_text_color} fallback="#ffffff" onChange={(c) => set("banner_text_color", c)} />
+        {photoUrl ? <img src={photoUrl} alt="" className="h-28 w-full rounded-xl object-cover" /> : null}
+        <button onClick={() => save.mutate()} disabled={!Object.keys(draft).length || save.isPending} className="h-11 rounded-xl bg-brand px-4 text-sm font-semibold text-white disabled:opacity-40">
+          Save banner
+        </button>
+      </div>
+      <ErrorNote error={save.error ?? upload.error} />
     </Card>
   );
 }
@@ -609,6 +694,7 @@ export function DeliveryPage() {
             </div>
           </Card>
 
+          {settings.data ? <BannerCard key={settings.data.banner_image_key + settings.data.banner_title} s={settings.data} /> : null}
           <SupportCard current={settings.data?.support_whatsapp ?? ""} />
           <PlatformNumberCard current={settings.data?.platform_mpesa_number ?? ""} />
 

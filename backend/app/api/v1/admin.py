@@ -1,6 +1,7 @@
 import uuid
+from typing import Annotated
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends, File, UploadFile
 from pydantic import ValidationError
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -24,7 +25,8 @@ from app.schemas.admin import (
 )
 from app.schemas.auth import TempPasswordOut
 from app.schemas.common import Page
-from app.services import audit, hotel_watch, ratings, routing, settings
+from app.schemas.catalogue import UploadOut
+from app.services import audit, hotel_watch, media, ratings, routing, settings
 from app.services.auth import reset_password, revoke_all
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -49,6 +51,23 @@ async def put_settings(body: SettingsIn, admin: SuperAdmin, session: Session):
         raise AppError(422, "validation_error", str(e)) from None
     await session.commit()
     return SettingsOut.build(values, reviewed=True)
+
+
+@router.post("/uploads/image", response_model=UploadOut, status_code=201)
+async def upload_site_image(
+    _: SuperAdmin,
+    storage: Annotated[media.Storage, Depends(media.get_storage)],
+    file: Annotated[UploadFile, File()],
+):
+    """A platform-level photo (the home banner). Kept under hotels/site/ with the others."""
+    data = await file.read(media.MAX_UPLOAD_BYTES + 1)
+    image_key, thumb_key = media.save_image(storage, "site", data)
+    return UploadOut(
+        image_key=image_key,
+        thumb_key=thumb_key,
+        image_url=storage.url(image_key),
+        thumb_url=storage.url(thumb_key),
+    )
 
 
 @router.get("/distance")

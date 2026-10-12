@@ -116,6 +116,14 @@ class PlatformSettings(BaseModel):
     rider_payout_default: str = Field("instant", pattern="^(instant|weekly)$")
     # WhatsApp number customers can message for help (2547XXXXXXXX); empty = not shown.
     support_whatsapp: str = Field("", pattern=r"^(|254[17]\d{8})$")
+    # The customer home banner. Empty text = the built-in wording; the owner can change it any time.
+    banner_greeting: str = Field("", max_length=40)
+    banner_title: str = Field("", max_length=120)
+    banner_note: str = Field("", max_length=80)
+    banner_emoji: str = Field("", max_length=8)
+    banner_bg_color: str = Field("", pattern=r"^(|#[0-9a-fA-F]{6})$")  # empty = brand orange
+    banner_text_color: str = Field("", pattern=r"^(|#[0-9a-fA-F]{6})$")  # empty = white
+    banner_image_key: str = Field("", max_length=200, pattern=r"^(|hotels/site/[\w-]+\.webp)$")
     # Where hotels send what they owe the platform: M-Pesa Send Money.
     platform_mpesa_number: str = Field("254742554713", pattern=r"^254[17]\d{8}$")
     # Bonuses, platform-funded. 0 turns each off.
