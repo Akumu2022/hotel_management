@@ -274,6 +274,7 @@ class HotelSettingsOut(Schema):
     verified: bool = False
     cash_pickup_enabled: bool
     accepting_orders: bool
+    busy_extra_minutes: int = 0
     status: str
     accent_color: str | None
     cover_url: str | None
@@ -289,6 +290,7 @@ class HotelSettingsIn(Input):
     till_number: str | None = Field(None, pattern=r"^\d{5,10}$")
     cash_pickup_enabled: bool | None = None
     accepting_orders: bool | None = None
+    busy_extra_minutes: int | None = Field(None, ge=0, le=90)
     accent_color: str | None = Field(None, pattern=r"^#[0-9a-fA-F]{6}$")
     cover_image_key: str | None = Field(None, max_length=200)
     hours: list[DayHours] | None = Field(None, max_length=7)  # replaces all days; missing = closed
@@ -327,6 +329,7 @@ class PublicHotel(Schema):
     till_name: str | None = None  # the name M-Pesa shows for the Till
     lat: float | None = None
     lng: float | None = None
+    busy_extra_minutes: int = 0  # already included in prep_minutes; lets the app show a "busy" badge
     prep_minutes: int = 15  # typical (median) prep time of its dishes, for time estimates
     rating: float | None = None  # average stars; None until rated
     rating_count: int = 0

@@ -432,6 +432,7 @@ async def _settings_out(session, hotel: Hotel, storage: Storage) -> HotelSetting
         verified=hotel.verified_at is not None,
         cash_pickup_enabled=hotel.cash_pickup_enabled,
         accepting_orders=hotel.accepting_orders,
+        busy_extra_minutes=hotel.busy_extra_minutes,
         status=hotel.status,
         accent_color=hotel.accent_color,
         cover_url=storage.url(hotel.cover_image_key) if hotel.cover_image_key else None,
@@ -449,7 +450,7 @@ async def get_settings(user: HotelStaff, session: Session, storage: StorageDep):
     return await _settings_out(session, hotel, storage)
 
 
-_CASHIER_SETTINGS_FIELDS = {"accepting_orders"}
+_CASHIER_SETTINGS_FIELDS = {"accepting_orders", "busy_extra_minutes"}
 IDENTITY = ("name", "phone", "till_number")
 
 
@@ -466,7 +467,7 @@ async def put_settings(
         _own_image_key(hotel.id, data["cover_image_key"])
     identity = {}
     for key, value in data.items():
-        if value is None and key in ("cash_pickup_enabled", "accepting_orders", *IDENTITY):
+        if value is None and key in ("cash_pickup_enabled", "accepting_orders", "busy_extra_minutes", *IDENTITY):
             raise AppError(422, "validation_error", f"{key} cannot be empty")
         if key in IDENTITY and getattr(hotel, key) != value:
             identity[key] = {"old": getattr(hotel, key), "new": value}

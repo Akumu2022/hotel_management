@@ -45,6 +45,8 @@ class Hotel(Base):
     service_fee: Mapped[int | None] = mapped_column(Integer)
     cash_pickup_enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
     accepting_orders: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
+    # "Busy" mode: still taking orders, but every quoted prep time is this many minutes longer.
+    busy_extra_minutes: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     status: Mapped[str] = mapped_column(String(16), default="active", server_default="active")
     pause_reason: Mapped[str | None] = mapped_column(String(200))
     cover_image_key: Mapped[str | None] = mapped_column(String(200))

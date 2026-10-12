@@ -36,3 +36,14 @@ async def test_hotel_without_dishes_defaults_to_15(client, db):
     await make_hotel(db, slug="empty-hotel")
     hotels = {h["slug"]: h for h in (await client.get("/api/v1/hotels")).json()}
     assert hotels["empty-hotel"]["prep_minutes"] == 15
+
+
+async def test_busy_mode_adds_minutes_to_the_quoted_prep_time(client, db):
+    hotel = await make_hotel(db, slug="busy-hotel")
+    hotel.busy_extra_minutes = 20
+    await db.flush()
+    hotels = {h["slug"]: h for h in (await client.get("/api/v1/hotels")).json()}
+    assert hotels["busy-hotel"]["prep_minutes"] == 35
+    assert hotels["busy-hotel"]["busy_extra_minutes"] == 20
+    menu = (await client.get("/api/v1/hotels/busy-hotel/menu")).json()
+    assert menu["hotel"]["prep_minutes"] == 35

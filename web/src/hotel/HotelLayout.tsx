@@ -41,11 +41,34 @@ function AcceptingToggle() {
   if (!data) return null;
   const on = save.isPending ? !!save.variables : data.accepting_orders;
   return (
+    <>
+    <BusySelect />
     <label className={clsx("flex h-11 items-center gap-3 rounded-xl border px-3.5 text-sm font-semibold", on ? "border-ok/30 bg-ok-soft text-ok" : "border-bad/30 bg-bad-soft text-bad")}>
       <span className={clsx("size-2 rounded-full", on ? "animate-pulse bg-ok" : "bg-bad")} />
       <span className="hidden sm:inline">{on ? "Accepting orders" : "Not accepting"}</span>
       <Switch label="Accepting orders" checked={on} onChange={(v) => save.mutate(v)} disabled={save.isPending} />
     </label>
+    </>
+  );
+}
+
+/** Busy mode: keep taking orders, but tell customers everything will take this much longer. */
+function BusySelect() {
+  const { data } = useHotelSettings();
+  const save = useSave((busy_extra_minutes: number) => api.put("/hotel/settings", { busy_extra_minutes }), [keys.settings]);
+  if (!data) return null;
+  const value = save.isPending ? (save.variables ?? 0) : data.busy_extra_minutes;
+  return (
+    <select
+      aria-label="Busy mode"
+      value={value}
+      disabled={save.isPending}
+      onChange={(e) => save.mutate(Number(e.target.value))}
+      className={clsx("h-11 rounded-xl border px-2.5 text-sm font-semibold", value ? "border-warn/40 bg-warn-soft text-warn" : "border-line bg-surface text-ink")}
+    >
+      <option value={0}>Not busy</option>
+      {[10, 15, 20, 30, 45, 60].map((m) => <option key={m} value={m}>Busy: +{m} min</option>)}
+    </select>
   );
 }
 

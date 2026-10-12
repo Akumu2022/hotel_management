@@ -75,6 +75,8 @@ services:
       context: ./web
       dockerfile: Dockerfile.prod
     restart: unless-stopped
+    volumes:
+      - media:/usr/share/nginx/media:ro # menu photos, served directly and cached for a year
     depends_on:
       api:
         condition: service_healthy

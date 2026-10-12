@@ -100,7 +100,8 @@ def public_hotel(
         till_name=hotel.till_name,
         lat=hotel.lat,
         lng=hotel.lng,
-        prep_minutes=prep_minutes,
+        busy_extra_minutes=hotel.busy_extra_minutes,
+        prep_minutes=prep_minutes + hotel.busy_extra_minutes,
     )
 
 

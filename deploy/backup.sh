@@ -17,6 +17,11 @@ STAMP="$(date +%Y-%m-%d_%H%M%S)"
 mkdir -p "$DIR"
 umask 077
 
+# Optional dead-man's switch (healthchecks.io or similar): set BACKUP_PING_URL in .env and you get
+# an email when a night is missed or fails. Pinging never breaks the backup itself.
+ping_url() { [ -n "${BACKUP_PING_URL:-}" ] && curl -fsS -m 10 --retry 2 -o /dev/null "$BACKUP_PING_URL$1" || true; }
+trap 'ping_url /fail' ERR
+
 # 1. The database (orders, payments, ledger, users). A consistent snapshot while the app runs.
 $COMPOSE exec -T db pg_dump -U "${POSTGRES_USER:-hotel}" -d "${POSTGRES_DB:-hotel}" \
   --no-owner | gzip > "$DIR/db_$STAMP.sql.gz"
@@ -30,6 +35,7 @@ done
 # A backup that is empty or tiny means something went wrong: say so loudly.
 if [ "$(stat -c %s "$DIR/db_$STAMP.sql.gz")" -lt 2000 ]; then
   echo "WARNING: the database backup looks empty: $DIR/db_$STAMP.sql.gz" >&2
+  ping_url /fail
   exit 1
 fi
 
@@ -41,4 +47,5 @@ fi
 # 4. Delete local backups older than KEEP days.
 find "$DIR" -type f \( -name 'db_*.sql.gz' -o -name '*_*.tar.gz' \) -mtime +"$KEEP" -delete
 
+ping_url ""
 echo "Backup done: $DIR (*_$STAMP)"

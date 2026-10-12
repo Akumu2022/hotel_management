@@ -154,7 +154,8 @@ Add this line to run it every night at 02:30:
 Backups go to `/var/backups/chakula` and the last 14 days are kept. A backup that stays on the
 same server does not survive that server dying, so also copy them elsewhere: install `rclone`,
 set up a destination (Google Drive, S3, another server), and put its name in `BACKUP_REMOTE` in
-`.env`. Every few weeks, **test a restore** on a spare machine. A backup you have never
+`.env`. To be told when a night fails or is missed, make a free check at healthchecks.io (period 1 day,
+grace 2 hours) and put its ping URL in `BACKUP_PING_URL` in `.env`. Every few weeks, **test a restore** on a spare machine. A backup you have never
 restored is a hope, not a backup.
 
 **Restoring the database** (this replaces everything currently in it; use your `POSTGRES_USER`

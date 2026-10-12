@@ -73,6 +73,7 @@ export type HotelSettings = {
   verified: boolean;
   cash_pickup_enabled: boolean;
   accepting_orders: boolean;
+  busy_extra_minutes: number;
   status: "active" | "paused";
   accent_color: string | null;
   cover_url: string | null;

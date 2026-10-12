@@ -16,6 +16,7 @@ export type PublicHotel = {
   lat: number | null;
   lng: number | null;
   prep_minutes: number;
+  busy_extra_minutes?: number; // already included in prep_minutes
   rating: number | null; // average stars
   rating_count: number;
   distance_km?: number | null; // only when the customer's location was sent
