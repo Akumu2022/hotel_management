@@ -290,6 +290,7 @@ class JobOut(Schema):
     fee_rider_confirmed: bool = False
     fee_not_paid: bool = False
     code_attempts_left: int | None = None
+    pickup_pin: str | None = None  # show to the hotel to get the food
 
 
 async def _jobs_out(session, orders: list[Order], rider_id: uuid.UUID) -> list[JobOut]:
@@ -317,7 +318,15 @@ async def _jobs_out(session, orders: list[Order], rider_id: uuid.UUID) -> list[J
         private = (
             {
                 "customer_name": o.customer_name,
-                "customer_phone": o.customer_phone,
+                # The customer's number only opens once the rider has the food.
+                "customer_phone": (
+                    o.customer_phone if o.status in ("picked_up", "on_the_way") else None
+                ),
+                "pickup_pin": (
+                    delivery.pickup_pin(o)
+                    if o.status in ("accepted", "preparing", "ready")
+                    else None
+                ),
                 "lat": o.lat,
                 "lng": o.lng,
                 "landmark": o.landmark,

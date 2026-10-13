@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 
 import { useAlarm } from "../lib/alarm";
 
+import { OrderTag } from "../components/OrderTag";
 import { ErrorNote, Skeleton } from "../components/ui";
 import { api } from "../lib/api";
 import { money } from "../lib/format";
@@ -40,6 +41,7 @@ type Job = {
   fee_rider_confirmed: boolean;
   fee_not_paid: boolean;
   code_attempts_left: number | null;
+  pickup_pin?: string | null;
 };
 
 const FAIL_REASONS: [string, string][] = [
@@ -104,7 +106,13 @@ function MyJob({ j, act }: { j: Job; act: (path: string, body?: unknown) => Prom
   return (
     <article className="overflow-hidden rounded-3xl border-2 border-brand bg-surface shadow-lg shadow-brand/10">
       <header className="flex items-center justify-between bg-brand px-5 py-3 text-white">
-        <span className="text-lg font-extrabold">#{j.code}</span>
+        <span className="flex items-center gap-3">
+          <OrderTag code={j.code} name={j.customer_name} className="ring-2 ring-white/70" />
+          <span className="flex flex-col leading-tight">
+            <span className="text-2xl font-extrabold tracking-wide">#{j.code}</span>
+            {j.customer_name ? <span className="text-sm font-semibold text-white/90">{j.customer_name}</span> : null}
+          </span>
+        </span>
         <span className="rounded-full bg-white/20 px-3 py-1 text-sm font-semibold">
           {goingToHotel ? "Go to the hotel" : j.status === "picked_up" ? "Food collected" : "On the way"}
         </span>
@@ -165,9 +173,13 @@ function MyJob({ j, act }: { j: Job; act: (path: string, body?: unknown) => Prom
         {/* The next step */}
         {goingToHotel ? (
           <>
-            <BigButton tone="ok" disabled={j.status !== "ready"} onClick={() => (j.fee_with_food ? setAsk("pickup_fee") : void run(`/rider/jobs/${j.id}/picked-up`, {}))}>
-              <CheckCircle2 className="size-5" /> {j.status === "ready" ? "I have the food" : "Wait for the food"}
-            </BigButton>
+            <div className="rounded-2xl border-2 border-brand/40 bg-brand-soft/40 p-4 text-center">
+              <p className="text-sm font-semibold text-muted">Your pickup PIN for #{j.code}</p>
+              <p className="money mt-1 text-5xl font-extrabold tracking-[0.35em] text-brand">{j.pickup_pin ?? "····"}</p>
+              <p className="mt-2 text-sm font-semibold">
+                {j.status === "ready" ? "Show this PIN to the hotel. They hand you the food once it matches." : "Wait for the food, then show this PIN to the hotel."}
+              </p>
+            </div>
             <button onClick={() => void run(`/rider/jobs/${j.id}/release`)} className="text-sm font-semibold text-muted hover:text-bad">Drop this job</button>
           </>
         ) : j.status === "picked_up" ? (

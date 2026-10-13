@@ -6,7 +6,7 @@ from sqlalchemy import func, select
 
 from app.core.time import utcnow
 from app.models import RiderPing, RiderProfile
-from app.services import tracking
+from app.services import delivery, tracking
 from tests.factories import auth_header, make_user
 from tests.test_delivery import API, _hotel, make_rider, ready_delivery
 
@@ -15,7 +15,12 @@ async def deliver(client, db, order, rider):
     h = auth_header(rider)
     staff = auth_header(await make_user(db, "cashier", await _hotel(db, order)))
     await client.post(f"{API}/rider/jobs/{order.id}/claim", headers=h)
-    await client.post(f"{API}/hotel/orders/{order.id}/handed-to-rider", headers=staff)
+    await db.refresh(order)
+    await client.post(
+        f"{API}/hotel/orders/{order.id}/handed-to-rider",
+        headers=staff,
+        json={"pin": delivery.pickup_pin(order)},
+    )
     await client.post(
         f"{API}/rider/jobs/{order.id}/picked-up", headers=h, json={"fee_received": True}
     )
@@ -147,7 +152,12 @@ async def test_customer_sees_rider_only_while_food_is_on_the_road(client, db, mo
     assert (await client.get(track)).json()["live"] is None
 
     staff = auth_header(await make_user(db, "cashier", await _hotel(db, order)))
-    await client.post(f"{API}/hotel/orders/{order.id}/handed-to-rider", headers=staff)
+    await db.refresh(order)
+    await client.post(
+        f"{API}/hotel/orders/{order.id}/handed-to-rider",
+        headers=staff,
+        json={"pin": delivery.pickup_pin(order)},
+    )
     await client.post(
         f"{API}/rider/jobs/{order.id}/picked-up", headers=h, json={"fee_received": True}
     )

@@ -61,6 +61,19 @@ async def ready_delivery(db, hotel=None, *, mode="included", accept_only=False) 
     return order
 
 
+async def pick_up(client, db, order, rider_headers):
+    """Hotel hands the food over with the rider's pickup PIN (the rider can't self-confirm)."""
+    await db.refresh(order)
+    staff = auth_header(await make_user(db, "cashier", await _hotel(db, order)))
+    r = await client.post(
+        f"{API}/hotel/orders/{order.id}/handed-to-rider",
+        headers=staff,
+        json={"pin": delivery.pickup_pin(order)},
+    )
+    assert r.status_code == 200, r.text
+    return r.json()
+
+
 async def entries(db, order_id) -> dict[str, int]:
     rows = (await db.execute(select(LedgerEntry).where(LedgerEntry.order_id == order_id))).scalars()
     out: dict[str, int] = {}
@@ -83,7 +96,8 @@ async def test_open_jobs_hide_customer_until_claimed(client, db):
 
     r = await client.post(f"{API}/rider/jobs/{order.id}/claim", headers=h)
     assert r.status_code == 200 and r.json()["mine"] is True
-    assert r.json()["customer_phone"] == order.customer_phone and r.json()["landmark"] is None
+    phone, name, land = (r.json()[k] for k in ("customer_phone", "customer_name", "landmark"))
+    assert phone is None and name and land is None
 
 
 async def test_second_rider_cannot_take_a_taken_job(client, db):
@@ -153,8 +167,13 @@ async def test_option_a_instant_full_delivery(client, db):
     staff = auth_header(await make_user(db, "cashier", await _hotel(db, order)))
     await client.post(f"{API}/rider/jobs/{order.id}/claim", headers=h)
 
+    await db.refresh(order)
     card = (
-        await client.post(f"{API}/hotel/orders/{order.id}/handed-to-rider", headers=staff)
+        await client.post(
+            f"{API}/hotel/orders/{order.id}/handed-to-rider",
+            headers=staff,
+            json={"pin": delivery.pickup_pin(order)},
+        )
     ).json()
     assert (card["status"], card["fee_with_food"], card["fee_handed"]) == ("picked_up", True, True)
     assert "rider_fee_instant" not in await entries(db, order.id)  # rider hasn't confirmed yet
@@ -193,6 +212,7 @@ async def test_rider_says_fee_not_handed_over_goes_to_admin(client, db):
     order = await ready_delivery(db)
     h = auth_header(await make_rider(db))
     await client.post(f"{API}/rider/jobs/{order.id}/claim", headers=h)
+    await pick_up(client, db, order, h)
     await client.post(
         f"{API}/rider/jobs/{order.id}/picked-up", headers=h, json={"fee_received": False}
     )
@@ -217,6 +237,7 @@ async def test_option_a_weekly_rider(client, db):
     order = await ready_delivery(db)
     h = auth_header(await make_rider(db, payout="weekly"))
     await client.post(f"{API}/rider/jobs/{order.id}/claim", headers=h)
+    await pick_up(client, db, order, h)
     job = (await client.post(f"{API}/rider/jobs/{order.id}/picked-up", headers=h, json={})).json()
     assert job["fee_with_food"] is False
     await client.post(
@@ -230,7 +251,7 @@ async def test_code_locks_after_five_wrong_tries(client, db):
     order = await ready_delivery(db)
     h = auth_header(await make_rider(db))
     await client.post(f"{API}/rider/jobs/{order.id}/claim", headers=h)
-    await client.post(f"{API}/rider/jobs/{order.id}/picked-up", headers=h, json={})
+    await pick_up(client, db, order, h)
     wrong = "0000" if order.delivery_code != "0000" else "1111"
     for _ in range(5):
         await client.post(f"{API}/rider/jobs/{order.id}/delivered", headers=h, json={"code": wrong})
@@ -251,7 +272,7 @@ async def deliver_cash(client, db, **kw):
     rider = await make_rider(db)
     h = auth_header(rider)
     await client.post(f"{API}/rider/jobs/{order.id}/claim", headers=h)
-    await client.post(f"{API}/rider/jobs/{order.id}/picked-up", headers=h, json={})
+    await pick_up(client, db, order, h)
     r = await client.post(
         f"{API}/rider/jobs/{order.id}/delivered",
         headers=h,
@@ -312,7 +333,7 @@ async def failed(client, db, rider=None):
     rider = rider or await make_rider(db)
     h = auth_header(rider)
     await client.post(f"{API}/rider/jobs/{order.id}/claim", headers=h)
-    await client.post(f"{API}/rider/jobs/{order.id}/picked-up", headers=h, json={})
+    await pick_up(client, db, order, h)
     r = await client.post(
         f"{API}/rider/jobs/{order.id}/failed",
         headers=h,
@@ -358,3 +379,59 @@ async def test_customer_fault_no_refund_rider_paid(client, db):
     e = await entries(db, order.id)
     assert "refund" not in e and e["rider_fee_held"] == 100  # fee never handed over -> weekly
     assert (await db.get(Customer, order.customer_phone)).option_b_blocked is True
+
+
+# --- Pickup PIN: ten riders at one hotel -----------------------------------------------------------
+
+
+async def test_pickup_pin_gates_the_handover(client, db):
+    order = await ready_delivery(db)
+    rider = await make_rider(db)
+    h = auth_header(rider)
+    staff = auth_header(await make_user(db, "cashier", await _hotel(db, order)))
+    other = auth_header(await make_rider(db))
+    await client.post(f"{API}/rider/jobs/{order.id}/claim", headers=h)
+    await db.refresh(order)
+    pin = delivery.pickup_pin(order)
+
+    # The assigned rider sees the PIN and not the customer's number; other riders see neither.
+    mine = next(j for j in (await client.get(f"{API}/rider/jobs", headers=h)).json() if j["mine"])
+    assert mine["pickup_pin"] == pin and mine["customer_phone"] is None
+    others = (await client.get(f"{API}/rider/jobs", headers=other)).json()
+    assert all(j["pickup_pin"] is None for j in others)
+
+    # The rider can't confirm the pickup themselves.
+    r = await client.post(f"{API}/rider/jobs/{order.id}/picked-up", headers=h, json={})
+    assert (r.status_code, r.json()["error"]["code"]) == (409, "pin_required")
+
+    # The hotel needs the right PIN.
+    url = f"{API}/hotel/orders/{order.id}/handed-to-rider"
+    no_pin = await client.post(url, headers=staff)
+    assert no_pin.status_code == 403
+    wrong = "0000" if pin != "0000" else "1111"
+    bad = await client.post(url, headers=staff, json={"pin": wrong})
+    assert (bad.status_code, bad.json()["error"]["code"]) == (403, "wrong_pin")
+    await db.refresh(order)
+    assert order.status == "ready"
+
+    ok = await client.post(url, headers=staff, json={"pin": pin})
+    assert ok.status_code == 200 and ok.json()["status"] == "picked_up"
+    again = await client.post(url, headers=staff)  # a retry after success is harmless
+    assert again.status_code == 200
+
+    # Once the food is collected the customer's number opens and the PIN is gone.
+    mine = next(j for j in (await client.get(f"{API}/rider/jobs", headers=h)).json() if j["mine"])
+    assert mine["customer_phone"] and mine["pickup_pin"] is None
+
+
+async def test_pickup_pin_is_per_rider_and_per_order(client, db):
+    a, b = await ready_delivery(db), await ready_delivery(db)
+    r1 = await make_rider(db)
+    for o in (a, b):
+        await client.post(f"{API}/rider/jobs/{o.id}/claim", headers=auth_header(r1))
+    await db.refresh(a)
+    await db.refresh(b)
+    assert delivery.pickup_pin(a) and delivery.pickup_pin(b)  # one PIN per order and rider
+    # An order nobody has taken has no PIN.
+    c = await ready_delivery(db)
+    assert delivery.pickup_pin(c) is None

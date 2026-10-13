@@ -14,12 +14,15 @@ Rider fee, as the spec's table:
                (weekly payout, capped per week), the customer's number loses option B.
 """
 
+import hashlib
+import hmac
 import uuid
 from datetime import datetime, timedelta
 
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import get_config
 from app.core.errors import AppError
 from app.core.time import utcnow
 from app.models import (
@@ -54,6 +57,21 @@ async def _lock(session: AsyncSession, order_id: uuid.UUID) -> Order:
     if order is None or order.type != "delivery":
         raise AppError(404, "not_found", "Delivery not found")
     return order
+
+
+def pickup_pin(order: Order) -> str | None:
+    """The rider's 4-digit pickup PIN for this order: the rider shows it at the hotel counter and
+    staff type it in before handing the food over, so ten riders waiting at one hotel can't
+    collect each other's orders. Derived (not stored) and tied to the assigned rider, so a
+    reassigned order gets a new PIN."""
+    if order.rider_id is None:
+        return None
+    mac = hmac.new(
+        get_config().jwt_secret.encode(),
+        f"pickup:{order.id}:{order.rider_id}".encode(),
+        hashlib.sha256,
+    ).digest()
+    return f"{int.from_bytes(mac[:4], 'big') % 10_000:04d}"
 
 
 def _wrong(order: Order, action: str) -> AppError:
@@ -247,8 +265,10 @@ async def hotel_handover(
     hotel_id: uuid.UUID,
     user_id: uuid.UUID,
     now: datetime,
+    pin: str | None = None,
 ) -> Order:
-    """Hotel: "Handed to rider" (with the fee, for option A instant)."""
+    """Hotel: "Handed to rider" (with the fee, for option A instant). Handing the food over
+    needs the rider's pickup PIN."""
     order = await _lock(session, order_id)
     if order.hotel_id != hotel_id:
         raise AppError(404, "not_found", "Order not found")
@@ -257,6 +277,11 @@ async def hotel_handover(
     if order.status in ("picked_up", "on_the_way", "delivered") and order.fee_hotel_confirmed_at:
         return order
     if order.status == "ready":
+        expected = pickup_pin(order)
+        if pin is None or not hmac.compare_digest(pin.strip(), expected or ""):
+            raise AppError(
+                403, "wrong_pin", "That isn't this rider's pickup PIN. Ask the rider to show it."
+            )
         await _move(
             session, order, "picked_up", actor_type="staff", actor_id=user_id, picked_up_at=now
         )
@@ -281,8 +306,8 @@ async def rider_picked_up(
     order = await _lock(session, order_id)
     _mine(order, rider_id)
     if order.status == "ready":
-        await _move(
-            session, order, "picked_up", actor_type="rider", actor_id=rider_id, picked_up_at=now
+        raise AppError(
+            409, "pin_required", "Show your pickup PIN to the hotel. They confirm the handover."
         )
     elif order.status not in ("picked_up", "on_the_way", "delivered"):
         raise _wrong(order, "pick up")

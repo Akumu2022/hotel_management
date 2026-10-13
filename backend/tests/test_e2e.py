@@ -138,6 +138,12 @@ async def order_id(db, code: str) -> uuid.UUID:
 
 async def hotel_step(client, w, code, step, body=None, who=None):
     oid = await order_id_from_board(client, w, code)
+    if step == "handed-to-rider" and body is None:
+        # The rider shows their pickup PIN; the hotel types it in.
+        for rider in (w.r1, w.r2):
+            for j in (await client.get(f"{API}/rider/jobs", headers=rider)).json():
+                if j["id"] == oid and j.get("pickup_pin"):
+                    body = {"pin": j["pickup_pin"]}
     r = await client.post(f"{API}/hotel/orders/{oid}/{step}", headers=who or w.cashier, json=body)
     assert r.status_code == 200, r.text
     return r.json()
@@ -314,6 +320,7 @@ async def test_admin_assignment_rings_rider_until_seen_and_swaps(client, db, w):
     # Acting on the job counts as seen: no separate tap needed.
     await hotel_step(client, w, o["code"], "preparing")
     await hotel_step(client, w, o["code"], "ready")
+    await hotel_step(client, w, o["code"], "handed-to-rider")
     await client.post(
         f"{API}/rider/jobs/{oid}/picked-up", headers=w.r2, json={"fee_received": True}
     )

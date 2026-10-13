@@ -4,16 +4,17 @@ the admin duty board."""
 import uuid
 from datetime import timedelta
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 
 from app.api.deps import HotelAdmin, HotelStaff, Session, SuperAdmin, scoped_select
 from app.api.v1.payments import _orders_out
 from app.core.errors import AppError, not_found
+from app.core.ratelimit import limit
 from app.core.time import utcnow
 from app.models import Hotel, Order
-from app.schemas.payments import AcceptIn, CancelIn, CollectIn, HotelOrderOut, RejectIn
+from app.schemas.payments import AcceptIn, CancelIn, CollectIn, HandoverIn, HotelOrderOut, RejectIn
 from app.services import delivery, events, order_flow
 
 hotel = APIRouter(prefix="/hotel", tags=["hotel orders"])
@@ -146,11 +147,22 @@ async def admin_cancel(order_id: uuid.UUID, body: CancelIn, user: SuperAdmin, se
     return (await _orders_out(session, [order]))[0]
 
 
-@hotel.post("/orders/{order_id}/handed-to-rider", response_model=HotelOrderOut)
-async def handed_to_rider(order_id: uuid.UUID, user: HotelStaff, session: Session):
-    """The rider has the food (and, for option A instant, the fee)."""
+@hotel.post(
+    "/orders/{order_id}/handed-to-rider",
+    response_model=HotelOrderOut,
+    dependencies=[Depends(limit("handover_pin", 20))],
+)
+async def handed_to_rider(
+    order_id: uuid.UUID, user: HotelStaff, session: Session, body: HandoverIn | None = None
+):
+    """The rider has the food (and, for option A instant, the fee). Needs the rider's PIN."""
     order = await delivery.hotel_handover(
-        session, order_id, hotel_id=user.hotel_id, user_id=user.id, now=utcnow()
+        session,
+        order_id,
+        hotel_id=user.hotel_id,
+        user_id=user.id,
+        now=utcnow(),
+        pin=body.pin if body else None,
     )
     await session.commit()
     return (await _orders_out(session, [order]))[0]

@@ -227,14 +227,21 @@ class _JobCardState extends State<_JobCard> {
     await launchUrl(directionsTo(lat, lng), mode: LaunchMode.externalApplication);
   }
 
-  Future<void> _pickedUp() async {
-    if (j['fee_with_food'] == true && j['fee_rider_confirmed'] != true) {
-      final got = await _ask(tr('Delivery fee'), tr('Did the hotel give you the delivery fee {amount} with the food?', {'amount': kes(j['rider_fee'])}), yes: 'Yes, I got it', no: 'No');
-      if (got == null) return;
-      await widget.run('picked-up', body: {'fee_received': got});
-    } else {
-      await widget.run('picked-up');
+  /// A coloured tile with the customer's initial, derived from the order code, so the rider and
+  /// the hotel can spot the same order when many are waiting at the counter.
+  Widget _orderTag() {
+    var h = 0;
+    for (final c in '${j['code']}'.codeUnits) {
+      h = (h * 31 + c) % 360;
     }
+    final name = '${j['customer_name'] ?? ''}'.trim();
+    return Container(
+      width: 44,
+      height: 44,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(color: HSLColor.fromAHSL(1, h.toDouble(), 0.62, 0.38).toColor(), borderRadius: BorderRadius.circular(12)),
+      child: Text(name.isEmpty ? '#' : name[0].toUpperCase(), style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w900)),
+    );
   }
 
   Future<void> _delivered() async {
@@ -287,6 +294,19 @@ class _JobCardState extends State<_JobCard> {
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          if (mine) ...[
+            Row(children: [
+              _orderTag(),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text('#${j['code']}', style: kTitle.copyWith(fontSize: 24, fontWeight: FontWeight.w900, letterSpacing: 1)),
+                  if (j['customer_name'] != null) Text('${j['customer_name']}', style: kItem),
+                ]),
+              ),
+            ]),
+            const SizedBox(height: 10),
+          ],
           Row(children: [
             Expanded(child: Text('${j['hotel_name']}', style: kTitle)),
             Text(kes(j['rider_fee']), style: kTitle.copyWith(color: brand)),
@@ -328,10 +348,21 @@ class _JobCardState extends State<_JobCard> {
             const SizedBox(height: 8),
             ContactRow(j['hotel_phone'] as String?, message: "Hello ${j['hotel_name']}, I'm the Chakula rider for order #${j['code']}."),
             const SizedBox(height: 12),
-            FilledButton(
-              style: fullWidthFilled,
-              onPressed: busy || stage != JobStage.readyAtHotel ? null : _pickedUp,
-              child: busy ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : Text(stage == JobStage.readyAtHotel ? tr('I have the food') : tr('Wait for the food')),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(color: brand.withValues(alpha: 0.08), border: Border.all(color: brand.withValues(alpha: 0.4), width: 2), borderRadius: BorderRadius.circular(16)),
+              child: Column(children: [
+                Text(tr('Your pickup PIN for #{code}', {'code': j['code']}), style: labelOf(context)),
+                const SizedBox(height: 4),
+                Text('${j['pickup_pin'] ?? '····'}', style: TextStyle(fontSize: 44, fontWeight: FontWeight.w900, letterSpacing: 12, color: brand)),
+                const SizedBox(height: 6),
+                Text(
+                  stage == JobStage.readyAtHotel ? tr('Show this PIN to the hotel. They hand you the food once it matches.') : tr('Wait for the food, then show this PIN to the hotel.'),
+                  textAlign: TextAlign.center,
+                  style: kBody,
+                ),
+              ]),
             ),
             TextButton(
               onPressed: busy

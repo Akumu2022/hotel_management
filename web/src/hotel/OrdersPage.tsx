@@ -7,6 +7,7 @@ import clsx from "clsx";
 import { Bell, BellOff, Bike, Check, ChefHat, Clock, PackageCheck, Phone, Store, UtensilsCrossed, X } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
+import { OrderTag } from "../components/OrderTag";
 import { Badge, ErrorNote, Skeleton } from "../components/ui";
 import { api } from "../lib/api";
 import { money } from "../lib/format";
@@ -99,9 +100,12 @@ function OrderCard({ o, onAction, canCancel }: { o: BoardOrder; onAction: (o: Bo
   return (
     <li className={clsx("rounded-2xl border bg-surface p-4 transition-shadow", isNew ? "border-brand shadow-lg shadow-brand/15 ring-2 ring-brand/20" : "border-line")}>
       <div className="flex items-start justify-between gap-2">
-        <div>
-          <p className="text-lg font-extrabold">#{o.code}</p>
-          <p className="text-sm font-medium">{o.customer_name}</p>
+        <div className="flex items-center gap-3">
+          <OrderTag code={o.code} name={o.customer_name} />
+          <div>
+            <p className="text-lg font-extrabold">#{o.code}</p>
+            <p className="text-sm font-medium">{o.customer_name}</p>
+          </div>
         </div>
         <div className="flex flex-col items-end gap-1">
           {o.type === "eat_in" ? (
@@ -236,6 +240,8 @@ export function OrdersPage() {
   const [rejecting, setRejecting] = useState<BoardOrder | null>(null);
   const [handing, setHanding] = useState<BoardOrder | null>(null); // pickup / eat in: waiting for the customer's PIN
   const [pin, setPin] = useState("");
+  const [handingRider, setHandingRider] = useState<BoardOrder | null>(null); // delivery: waiting for the rider's pickup PIN
+  const [riderPin, setRiderPin] = useState("");
   const [note, setNote] = useState("");
 
   const refresh = useCallback(() => {
@@ -261,8 +267,21 @@ export function OrdersPage() {
       refresh();
     },
   });
+  // The rider shows their 4-digit pickup PIN: only then is the food handed to them.
+  const handover = useMutation({
+    mutationFn: ({ o, pin }: { o: BoardOrder; pin: string }) => api.post(`/hotel/orders/${o.id}/handed-to-rider`, { pin }),
+    onSuccess: () => {
+      setHandingRider(null);
+      setRiderPin("");
+      refresh();
+    },
+  });
   const onAction = (o: BoardOrder, a: string) => {
-    if (a === "collected") {
+    if (a === "handed-to-rider") {
+      setRiderPin("");
+      handover.reset();
+      setHandingRider(o);
+    } else if (a === "collected") {
       setPin("");
       collect.reset();
       setHanding(o);
@@ -356,6 +375,50 @@ export function OrdersPage() {
               className="mt-4 flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-ok font-semibold text-white disabled:opacity-50"
             >
               <PackageCheck className="size-4" /> {collect.isPending ? "Checking…" : handing.payment_method === "cash" && !handing.paid_at ? "Cash received & hand over" : handing.type === "eat_in" ? "Serve to customer" : "Hand over"}
+            </button>
+          </form>
+        </div>
+      ) : null}
+
+      {/* Handover to a rider: the rider shows their pickup PIN */}
+      {handingRider ? (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-4 sm:items-center" onClick={() => setHandingRider(null)}>
+          <form
+            role="dialog"
+            aria-modal="true"
+            aria-label="Rider pickup PIN"
+            onClick={(e) => e.stopPropagation()}
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (/^\d{4}$/.test(riderPin)) handover.mutate({ o: handingRider, pin: riderPin });
+            }}
+            className="w-full max-w-sm rounded-3xl bg-surface p-6"
+          >
+            <div className="flex items-center justify-between">
+              <h2 className="text-xl font-bold">Hand #{handingRider.code} to the rider</h2>
+              <button type="button" onClick={() => setHandingRider(null)} aria-label="Close" className="rounded-full p-1 text-muted"><X className="size-5" /></button>
+            </div>
+            <p className="mt-1 text-sm text-muted">
+              Ask {handingRider.rider_name ?? "the rider"} for the 4-digit pickup PIN on their phone for order #{handingRider.code}. Only hand over the food once it matches.
+            </p>
+            <input
+              autoFocus
+              inputMode="numeric"
+              autoComplete="off"
+              maxLength={4}
+              value={riderPin}
+              onChange={(e) => setRiderPin(e.target.value.replace(/\D/g, "").slice(0, 4))}
+              placeholder="0000"
+              aria-label="Rider's 4-digit pickup PIN"
+              className="money mt-4 h-16 w-full rounded-2xl border-2 border-line bg-surface text-center text-4xl font-extrabold tracking-[0.5em] outline-none focus:border-brand"
+            />
+            <ErrorNote error={handover.error} />
+            <button
+              type="submit"
+              disabled={riderPin.length !== 4 || handover.isPending}
+              className="mt-4 flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-ok font-semibold text-white disabled:opacity-50"
+            >
+              <PackageCheck className="size-4" /> {handover.isPending ? "Checking…" : handingRider.fee_with_food ? `Hand food + ${money(handingRider.rider_fee)} fee` : "Hand over"}
             </button>
           </form>
         </div>

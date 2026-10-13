@@ -134,6 +134,12 @@ class AcceptIn(Input):
     prep_minutes: int = Field(ge=1, le=180, strict=True)
 
 
+class HandoverIn(Input):
+    """The rider's 4-digit pickup PIN, typed by the hotel before handing the food to the rider."""
+
+    pin: str = Field(pattern=r"^\d{4}$")
+
+
 class CollectIn(Input):
     """The customer's 4-digit PIN, asked for at the counter (pickup and eat in)."""
 
