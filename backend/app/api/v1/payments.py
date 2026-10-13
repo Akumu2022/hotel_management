@@ -51,7 +51,14 @@ async def submit_code(token: str, body: CodeIn, session: Session):
     ).scalar_one_or_none()
     if order is None:
         raise not_found("Order not found")
-    outcome = await payments.submit_customer_code(session, order.id, body.code, utcnow())
+    outcome = await payments.submit_customer_code(
+        session,
+        order.id,
+        body.code,
+        utcnow(),
+        mpesa_name=body.mpesa_name,
+        mpesa_phone=body.mpesa_phone,
+    )
     await session.commit()
     return _outcome(outcome)
 
@@ -98,6 +105,8 @@ async def _orders_out(session, orders: list[Order]) -> list[HotelOrderOut]:
             rider_fee=o.rider_fee,
             distance_km=o.distance_km,
             customer_trans_code=o.customer_trans_code,
+            mpesa_name=o.mpesa_name,
+            mpesa_phone=o.mpesa_phone,
             items=items[o.id],
             created_at=o.created_at,
             expires_at=o.expires_at,

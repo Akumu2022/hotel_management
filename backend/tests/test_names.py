@@ -94,6 +94,36 @@ async def test_code_wins_over_a_different_name(db):
     assert outcome.result == "paid" and payment.name_match == 0
 
 
+async def test_mpesa_name_typed_with_the_code_counts_as_a_match(db):
+    """Someone else paid and the customer said who: the hotel sees a name match, not a warning."""
+    hotel = await make_hotel(db)
+    order = await _waiting(db, hotel, "James Kamau")
+    await payments.submit_customer_code(
+        db,
+        order.id,
+        "UJ2H08M4N1",
+        utcnow(),
+        mpesa_name="  Peter  Otieno ",
+        mpesa_phone="0712 345 678",
+    )
+    assert (order.mpesa_name, order.mpesa_phone) == ("Peter Otieno", "254712345678")
+    payment, outcome = await _sms(db, hotel, order.till_amount, "PETER OTIENO", "UJ2H08M4N1")
+    assert outcome.result == "paid" and payment.name_match == 2
+
+
+async def test_bad_mpesa_number_is_rejected(db):
+    import pytest
+
+    from app.core.errors import AppError
+
+    hotel = await make_hotel(db)
+    order = await _waiting(db, hotel, "James Kamau")
+    with pytest.raises(AppError):
+        await payments.submit_customer_code(
+            db, order.id, "UJ2H08M4N2", utcnow(), mpesa_phone="12345"
+        )
+
+
 async def test_message_without_name_still_matches_by_amount_and_phone(db):
     hotel = await make_hotel(db)
     order = await _waiting(db, hotel, "James Kamau")

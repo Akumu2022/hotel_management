@@ -49,6 +49,8 @@ type BoardOrder = {
   reason: string | null;
   platform_bonus: number;
   payer_name: string | null;
+  mpesa_name?: string | null;
+  mpesa_phone?: string | null;
   name_match: number | null;
   rider_name: string | null;
   rider_phone: string | null;
@@ -135,6 +137,9 @@ function OrderCard({ o, onAction, canCancel }: { o: BoardOrder; onAction: (o: Bo
       </div>
       {o.landmark ? <p className="mt-1 text-xs text-muted">📍 {o.landmark}</p> : null}
       {o.payer_name ? <PayerName name={o.payer_name} match={o.name_match} /> : null}
+      {o.mpesa_name || o.mpesa_phone ? (
+        <p className="mt-1 text-xs text-muted">Customer says M-Pesa is from {[o.mpesa_name, o.mpesa_phone ? `0${o.mpesa_phone.slice(3)}` : null].filter(Boolean).join(" · ")}</p>
+      ) : null}
 
       {isNew ? (
         <>

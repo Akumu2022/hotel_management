@@ -349,7 +349,13 @@ async def confirm_manual(
 
 
 async def submit_customer_code(
-    session: AsyncSession, order_id: uuid.UUID, raw_code: str, now: datetime
+    session: AsyncSession,
+    order_id: uuid.UUID,
+    raw_code: str,
+    now: datetime,
+    *,
+    mpesa_name: str | None = None,
+    mpesa_phone: str | None = None,
 ) -> Outcome:
     """Customer typed their M-Pesa code (this pauses expiry). If the payment is already
     known (from an SMS), it is matched straight away."""
@@ -367,6 +373,14 @@ async def submit_customer_code(
         raise AppError(409, "code_used", "That M-Pesa code was already used for another order")
 
     order.customer_trans_code = code
+    # Optional: the M-Pesa payer, when it isn't the person who ordered.
+    order.mpesa_name = " ".join(mpesa_name.split())[:120] or None if mpesa_name else None
+    order.mpesa_phone = None
+    if mpesa_phone and mpesa_phone.strip():
+        try:
+            order.mpesa_phone = normalize_phone(mpesa_phone)
+        except ValueError:
+            raise AppError(422, "bad_phone", "Enter the M-Pesa number as 0712 345 678") from None
     if order.status == "awaiting_payment":
         order.status = "checking_payment"
         await _event(session, order, "awaiting_payment", "customer", None, "code entered")
@@ -536,7 +550,10 @@ async def record_incoming(
         return payment, None
 
     payment.order_id = order.id
-    payment.name_match = names.match(order.customer_name, payment.payer_name)
+    payment.name_match = max(
+        names.match(order.customer_name, payment.payer_name) or 0,
+        names.match(order.mpesa_name, payment.payer_name) or 0 if order.mpesa_name else 0,
+    ) if payment.payer_name else None
     await session.flush()
     outcome = await apply_payment(
         session,

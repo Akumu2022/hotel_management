@@ -130,6 +130,9 @@ class Order(Base):
     bonus_kind: Mapped[str | None] = mapped_column(String(16))
 
     customer_trans_code: Mapped[str | None] = mapped_column(String(12))
+    # Who paid on M-Pesa, when it is not the person who ordered (typed with the code).
+    mpesa_name: Mapped[str | None] = mapped_column(String(120))
+    mpesa_phone: Mapped[str | None] = mapped_column(String(12))
     delivery_code: Mapped[str | None] = mapped_column(String(4))
     rider_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"), index=True)
     # Delivery. Option A instant: hotel hands the fee over with the food and

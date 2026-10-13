@@ -85,9 +85,16 @@ function CopyButton({ text }: { text: string }) {
 function CodeEntry({ token, onDone }: { token: string; onDone: () => void }) {
   const tt = useT();
   const [code, setCode] = useState("");
+  const [someoneElse, setSomeoneElse] = useState(false);
+  const [payerName, setPayerName] = useState("");
+  const [payerPhone, setPayerPhone] = useState("");
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const submit = useMutation({
-    mutationFn: () => api.post<{ result: string; message: string }>(`/track/${token}/payment-code`, { code }),
+    mutationFn: () => api.post<{ result: string; message: string }>(`/track/${token}/payment-code`, {
+      code,
+      mpesa_name: someoneElse && payerName.trim() ? payerName.trim() : null,
+      mpesa_phone: someoneElse && payerPhone.trim() ? payerPhone.trim() : null,
+    }),
     onSuccess: (r) => {
       setMsg({ ok: r.result === "paid" || r.result === "pending" || r.result === "overpaid", text: r.message });
       onDone();
@@ -124,6 +131,33 @@ function CodeEntry({ token, onDone }: { token: string; onDone: () => void }) {
         </button>
       </div>
       {code && !valid ? <p className="mt-2 text-xs text-muted">{tt("M-Pesa codes have 10 letters and numbers.")}</p> : null}
+      <label className="mt-3 flex items-center gap-2 text-xs text-muted">
+        <input type="checkbox" checked={someoneElse} onChange={(e) => setSomeoneElse(e.target.checked)} />
+        {tt("Someone else paid, or I paid from another name or number")}
+      </label>
+      {someoneElse ? (
+        <div className="mt-2 grid gap-2">
+          <input
+            value={payerName}
+            onChange={(e) => setPayerName(e.target.value)}
+            maxLength={120}
+            autoComplete="off"
+            placeholder={tt("Name on the M-Pesa message")}
+            aria-label={tt("Name on the M-Pesa message")}
+            className="h-11 min-w-0 rounded-xl border border-line bg-surface px-4 text-sm outline-none focus:border-brand focus:ring-4 focus:ring-brand/10"
+          />
+          <input
+            value={payerPhone}
+            onChange={(e) => setPayerPhone(e.target.value)}
+            maxLength={20}
+            inputMode="tel"
+            autoComplete="off"
+            placeholder={tt("M-Pesa number, e.g. 0712 345 678")}
+            aria-label={tt("M-Pesa number")}
+            className="h-11 min-w-0 rounded-xl border border-line bg-surface px-4 text-sm outline-none focus:border-brand focus:ring-4 focus:ring-brand/10"
+          />
+        </div>
+      ) : null}
       {msg ? <p className={clsx("mt-2 text-sm font-medium", msg.ok ? "text-ok" : "text-bad")}>{msg.text}</p> : null}
     </div>
   );

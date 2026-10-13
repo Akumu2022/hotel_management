@@ -10,6 +10,8 @@ from app.schemas.common import Schema
 
 class CodeIn(Input):
     code: str = Field(min_length=8, max_length=20)
+    mpesa_name: str | None = Field(default=None, max_length=120)  # only if someone else paid
+    mpesa_phone: str | None = Field(default=None, max_length=20)
 
 
 class ConfirmIn(Input):
@@ -43,6 +45,8 @@ class HotelOrderOut(Schema):
     rider_fee: int
     distance_km: float | None
     customer_trans_code: str | None
+    mpesa_name: str | None = None
+    mpesa_phone: str | None = None
     items: list[str]
     created_at: datetime
     expires_at: datetime | None
