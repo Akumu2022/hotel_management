@@ -42,6 +42,9 @@ class _TrackScreenState extends State<TrackScreen> {
   String? error;
   Timer? _timer;
   final _code = TextEditingController();
+  final _payerName = TextEditingController();
+  final _payerPhone = TextEditingController();
+  bool _someoneElse = false;
   bool busy = false;
 
   @override
@@ -405,10 +408,36 @@ class _TrackScreenState extends State<TrackScreen> {
               textCapitalization: TextCapitalization.characters,
               decoration: InputDecoration(hintText: tr('e.g. SJK3ABC123')),
             ),
+            CheckboxListTile(
+              contentPadding: EdgeInsets.zero,
+              controlAffinity: ListTileControlAffinity.leading,
+              dense: true,
+              value: _someoneElse,
+              onChanged: (v) => setState(() => _someoneElse = v ?? false),
+              title: Text(tr('Someone else paid, or I paid from another name or number'), style: labelOf(context)),
+            ),
+            if (_someoneElse) ...[
+              TextField(
+                controller: _payerName,
+                maxLength: 120,
+                decoration: InputDecoration(hintText: tr('Name on the M-Pesa message'), counterText: ''),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _payerPhone,
+                maxLength: 20,
+                keyboardType: TextInputType.phone,
+                decoration: InputDecoration(hintText: tr('M-Pesa number, e.g. 0712 345 678'), counterText: ''),
+              ),
+            ],
             const SizedBox(height: 10),
             FilledButton(
               style: fullWidthFilled,
-              onPressed: busy ? null : () => _act(() => apiPost('/track/${widget.token}/payment-code', {'code': _code.text.trim().toUpperCase()})),
+              onPressed: busy ? null : () => _act(() => apiPost('/track/${widget.token}/payment-code', {
+                    'code': _code.text.trim().toUpperCase(),
+                    'mpesa_name': _someoneElse && _payerName.text.trim().isNotEmpty ? _payerName.text.trim() : null,
+                    'mpesa_phone': _someoneElse && _payerPhone.text.trim().isNotEmpty ? _payerPhone.text.trim() : null,
+                  })),
               child: busy ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : Text(tr('Submit code')),
             ),
             const SizedBox(height: 10),
