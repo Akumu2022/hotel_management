@@ -4,9 +4,9 @@ import csv
 import io
 import uuid
 from datetime import date, timedelta
-from typing import Literal
+from typing import Annotated, Literal
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 from fastapi.responses import Response
 
 from app.api.deps import HotelAdmin, Session, SuperAdmin
@@ -51,6 +51,15 @@ async def hotel_summary(
     return await reports.summary(session, _range(start, end), hotel_id=user.hotel_id, group=group)
 
 
+async def _payment_rows(session, r, hotel_id, method, format, limit, offset):
+    """The screen shows a page at a time; a CSV download is the whole period (up to 50,000)."""
+    if format == "csv":
+        return await reports.payments(session, r, hotel_id=hotel_id, method=method, limit=50_000)
+    return await reports.payments(
+        session, r, hotel_id=hotel_id, method=method, limit=limit, offset=offset
+    )
+
+
 @hotel.get("/payments")
 async def hotel_payments(
     user: HotelAdmin,
@@ -59,9 +68,11 @@ async def hotel_payments(
     end: date | None = None,
     method: Method | None = None,
     format: Literal["json", "csv"] = "json",
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+    offset: Annotated[int, Query(ge=0)] = 0,
 ):
     r = _range(start, end)
-    rows = await reports.payments(session, r, hotel_id=user.hotel_id, method=method)
+    rows = await _payment_rows(session, r, user.hotel_id, method, format, limit, offset)
     return _csv(rows, f"payments-{(r.start + reports.EAT).date()}") if format == "csv" else rows
 
 
@@ -86,7 +97,9 @@ async def admin_payments(
     method: Method | None = None,
     hotel_id: uuid.UUID | None = None,
     format: Literal["json", "csv"] = "json",
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+    offset: Annotated[int, Query(ge=0)] = 0,
 ):
     r = _range(start, end)
-    rows = await reports.payments(session, r, hotel_id=hotel_id, method=method)
+    rows = await _payment_rows(session, r, hotel_id, method, format, limit, offset)
     return _csv(rows, f"payments-{(r.start + reports.EAT).date()}") if format == "csv" else rows

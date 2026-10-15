@@ -7,13 +7,13 @@ import { useState } from "react";
 
 import { PairingBox, PhoneCard, type TillPhone, useUnpair } from "../components/TillPhones";
 import { ErrorNote, Skeleton } from "../components/ui";
-import { api } from "../lib/api";
+import { api, getAllPages } from "../lib/api";
 
 type Hotel = { id: string; name: string; till_number: string };
 
 function Simulator() {
   const qc = useQueryClient();
-  const hotels = useQuery({ queryKey: ["admin", "hotels"], queryFn: () => api.get<{ items: Hotel[] }>("/admin/hotels?limit=100") });
+  const hotels = useQuery({ queryKey: ["admin", "hotels"], queryFn: () => getAllPages<Hotel>("/admin/hotels") });
   const [till, setTill] = useState("");
   const [code, setCode] = useState("");
   const [amount, setAmount] = useState("");

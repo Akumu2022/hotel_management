@@ -437,21 +437,30 @@ async def test_pickup_pin_is_per_rider_and_per_order(client, db):
     assert delivery.pickup_pin(c) is None
 
 
-async def test_rider_summary_groups_their_orders(client, db):
+async def test_rider_summary_groups_and_pages_their_orders(client, db):
     order = await ready_delivery(db)
     rider = await make_rider(db)
     h = auth_header(rider)
     first = (await client.get(f"{API}/rider/summary", headers=h)).json()
-    assert first["orders"] == [] and first["open_now"] >= 1
+    assert first["orders"] == [] and first["open_now"] >= 1 and first["has_more"] is False
+    assert first["counts"]["waiting"] == 0
 
     assert (await client.post(f"{API}/rider/jobs/{order.id}/claim", headers=h)).status_code == 200
-    mine = (await client.get(f"{API}/rider/summary", headers=h)).json()["orders"]
-    assert [(o["code"], o["group"]) for o in mine] == [(order.code, "waiting")]
+    got = (await client.get(f"{API}/rider/summary?period=today", headers=h)).json()
+    assert [(o["code"], o["group"]) for o in got["orders"]] == [(order.code, "waiting")]
+    assert got["counts"]["waiting"] == 1
 
     row = await db.get(Order, order.id)
     row.status = "failed_delivery"
+    row.closed_at = utcnow()
     await db.commit()
-    mine = (await client.get(f"{API}/rider/summary", headers=h)).json()["orders"]
-    assert mine[0]["group"] == "failed"
+    got = (await client.get(f"{API}/rider/summary?period=all", headers=h)).json()
+    assert got["orders"][0]["group"] == "failed" and got["counts"]["failed"] == 1
+    only = (await client.get(f"{API}/rider/summary?period=all&group=delivered", headers=h)).json()
+    assert only["orders"] == [] and only["counts"]["failed"] == 1
+    old = row.closed_at = utcnow() - timedelta(days=40)
+    await db.commit()
+    month = (await client.get(f"{API}/rider/summary?period=month", headers=h)).json()
+    assert month["counts"]["failed"] == 0 and old
     other = auth_header(await make_rider(db))
     assert (await client.get(f"{API}/rider/summary", headers=other)).json()["orders"] == []

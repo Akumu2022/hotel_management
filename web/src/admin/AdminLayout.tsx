@@ -64,8 +64,8 @@ function usePendingSettlements() {
 
 /** Rider applications waiting for review. */
 function usePendingRiders() {
-  const q = useQuery({ queryKey: ["admin", "riders"], queryFn: () => api.get<{ kyc_status: string }[]>("/admin/riders?status=all"), refetchInterval: 60_000 });
-  return (q.data ?? []).filter((r) => r.kyc_status === "pending").length;
+  const q = useQuery({ queryKey: ["admin", "riders", "counts"], queryFn: () => api.get<Record<string, number>>("/admin/riders/counts"), refetchInterval: 60_000 });
+  return q.data?.pending ?? 0;
 }
 
 const BELL_LINKS = {

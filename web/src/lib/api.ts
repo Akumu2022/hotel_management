@@ -178,6 +178,21 @@ export async function request<T = unknown>(
   return data as T;
 }
 
+/** Every page of a cursor-paginated admin list, joined (follows `next_cursor`). For dropdowns and
+ * lists that need all rows, so nothing past the first page is silently missing. */
+export async function getAllPages<T>(path: string, maxPages = 50): Promise<{ items: T[] }> {
+  const items: T[] = [];
+  let cursor: string | null = null;
+  for (let i = 0; i < maxPages; i++) {
+    const sep = path.includes("?") ? "&" : "?";
+    const page: { items: T[]; next_cursor: string | null } = await request("GET", `${path}${sep}limit=100${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`);
+    items.push(...page.items);
+    cursor = page.next_cursor;
+    if (!cursor) break;
+  }
+  return { items };
+}
+
 export const api = {
   get: <T>(path: string) => request<T>("GET", path),
   post: <T>(path: string, body?: unknown) => request<T>("POST", path, body),

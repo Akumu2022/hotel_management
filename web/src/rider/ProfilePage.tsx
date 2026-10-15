@@ -1,5 +1,5 @@
 /** The rider's own profile: who they are, their bike, how they are doing and what they are owed. */
-import { useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import clsx from "clsx";
 import { Bike, Star } from "lucide-react";
 import { useState } from "react";
@@ -12,7 +12,7 @@ import type { RiderMe } from "./RiderHome";
 
 type Group = "waiting" | "on_the_way" | "delivered" | "failed" | "cancelled";
 type SummaryOrder = { code: string; hotel_name: string; status: string; group: Group; rider_fee: number; at: string };
-type Summary = { orders: SummaryOrder[]; open_now: number };
+type Summary = { counts: Record<Group, number>; earned: number; open_now: number; orders: SummaryOrder[]; has_more: boolean };
 type Earnings = { owed: number; payouts: { id: string; amount: number; mpesa_code: string; paid_at: string }[] };
 
 const STATUS: Record<RiderMe["kyc_status"], { text: string; tone: string }> = {
@@ -58,29 +58,29 @@ const GROUPS: { id: Group; label: string; tone: string }[] = [
   { id: "failed", label: "Failed", tone: "bg-bad-soft text-bad" },
 ];
 
-/** Start of today / this week (Monday) / this month in Kenya time, as a comparable "YYYY-MM-DD". */
-function since(period: Period): string {
-  const now = new Date(Date.now() + 3 * 3600_000); // Kenya clock read as UTC
-  const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-  if (period === "week") d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7));
-  if (period === "month") d.setUTCDate(1);
-  return period === "all" ? "" : d.toISOString().slice(0, 10);
-}
-const kenyaDay = (iso: string) => new Date(new Date(iso).getTime() + 3 * 3600_000).toISOString().slice(0, 10);
 const when = new Intl.DateTimeFormat("en-KE", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit", timeZone: "Africa/Nairobi" });
 
 /** How the rider's orders went: counts by outcome and a filterable list, by day, week or month. */
-function Breakdown({ summary, owed }: { summary: Summary | undefined; owed: number | undefined }) {
+function Breakdown({ owed }: { owed: number | undefined }) {
   const [period, setPeriod] = useState<Period>("today");
   const [only, setOnly] = useState<Group | null>(null);
-  if (!summary) return <p className="rounded-3xl bg-surface p-5 text-sm text-muted shadow-sm">Loading your orders…</p>;
-
-  const from = since(period);
-  // Jobs still open count whatever the period; finished ones by the day they closed.
-  const inPeriod = summary.orders.filter((o) => o.group === "waiting" || o.group === "on_the_way" || !from || kenyaDay(o.at) >= from);
-  const count = (g: Group) => inPeriod.filter((o) => o.group === g).length;
-  const earned = inPeriod.filter((o) => o.group === "delivered").reduce((n, o) => n + o.rider_fee, 0);
-  const shown = only ? inPeriod.filter((o) => o.group === only) : inPeriod;
+  const PAGE = 30;
+  // Counts and earnings come from the server for the whole period; the list loads a page at a time.
+  const q = useInfiniteQuery({
+    queryKey: ["rider", "summary", period, only],
+    initialPageParam: 0,
+    queryFn: ({ pageParam }) =>
+      api.get<Summary>(`/rider/summary?period=${period}&limit=${PAGE}&offset=${pageParam}${only ? `&group=${only}` : ""}`),
+    getNextPageParam: (last, pages) => (last.has_more ? pages.length * PAGE : undefined),
+    refetchInterval: 30_000,
+    placeholderData: (prev) => prev,
+  });
+  const first = q.data?.pages[0];
+  if (!first) return <p className="rounded-3xl bg-surface p-5 text-sm text-muted shadow-sm">Loading your orders…</p>;
+  const count = (g: Group) => first.counts[g];
+  const earned = first.earned;
+  const shown = q.data!.pages.flatMap((p) => p.orders);
+  const summary = first;
 
   return (
     <section className="rounded-3xl bg-surface p-5 shadow-sm">
@@ -129,7 +129,7 @@ function Breakdown({ summary, owed }: { summary: Summary | undefined; owed: numb
       </div>
 
       <ul className="mt-4 divide-y divide-line text-sm">
-        {shown.slice(0, 30).map((o) => {
+        {shown.map((o) => {
           const g = GROUPS.find((x) => x.id === o.group)!;
           return (
             <li key={o.code} className="flex items-center justify-between gap-3 py-2.5">
@@ -146,6 +146,11 @@ function Breakdown({ summary, owed }: { summary: Summary | undefined; owed: numb
         })}
         {shown.length === 0 ? <li className="py-6 text-center text-muted">No orders here for this time.</li> : null}
       </ul>
+      {q.hasNextPage ? (
+        <button onClick={() => void q.fetchNextPage()} disabled={q.isFetchingNextPage} className="mt-3 h-10 w-full rounded-xl border border-line text-sm font-semibold hover:bg-subtle disabled:opacity-60">
+          {q.isFetchingNextPage ? "Loading…" : "Show more"}
+        </button>
+      ) : null}
     </section>
   );
 }
@@ -153,7 +158,6 @@ function Breakdown({ summary, owed }: { summary: Summary | undefined; owed: numb
 export function ProfileView({ me }: { me: RiderMe }) {
   const config = useConfig();
   const approved = me.kyc_status === "approved";
-  const summary = useQuery({ queryKey: ["rider", "summary"], queryFn: () => api.get<Summary>("/rider/summary"), enabled: approved, refetchInterval: 30_000 });
   const earnings = useQuery({ queryKey: ["rider", "earnings"], queryFn: () => api.get<Earnings>("/rider/earnings"), enabled: approved });
 
   const status = STATUS[me.kyc_status];
@@ -190,7 +194,7 @@ export function ProfileView({ me }: { me: RiderMe }) {
         <p className="rounded-2xl bg-bad-soft p-4 text-sm text-bad">{me.kyc_note}</p>
       ) : null}
 
-      {approved ? <Breakdown summary={summary.data} owed={earnings.data?.owed} /> : null}
+      {approved ? <Breakdown owed={earnings.data?.owed} /> : null}
 
       <section className="rounded-3xl bg-surface p-5 shadow-sm">
         <h2 className="mb-1 text-sm font-bold">My bike</h2>

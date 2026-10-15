@@ -213,6 +213,7 @@ async def payments(
     hotel_id: uuid.UUID | None,
     method: str | None,
     limit: int = 1000,
+    offset: int = 0,
 ) -> list[dict]:
     """Money in (M-Pesa and cash) and refunds sent, newest first."""
     types = {"mpesa": ("till_received",), "cash": ("cash_received",), "refund": ("refund",)}
@@ -226,8 +227,9 @@ async def payments(
             LedgerEntry.created_at < r.end,
             LedgerEntry.entry_type.in_(wanted),
         )
-        .order_by(LedgerEntry.created_at.desc())
+        .order_by(LedgerEntry.created_at.desc(), LedgerEntry.id.desc())
         .limit(limit)
+        .offset(offset)
     )
     if hotel_id is not None:
         stmt = stmt.where(Order.hotel_id == hotel_id)

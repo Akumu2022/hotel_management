@@ -1,6 +1,6 @@
 /** Super admin: review rider applications. ID photos load through the admin-only
  * endpoint with the login token; they are never cached or linked publicly. */
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import clsx from "clsx";
 import { CheckCircle2, IdCard, Phone, ShieldAlert, ShieldCheck, UserRound } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -175,10 +175,19 @@ function Detail({ r }: { r: Rider }) {
 export function RidersPage() {
   const [tab, setTab] = useState<(typeof TABS)[number]["id"]>("pending");
   const [selected, setSelected] = useState<string | null>(null);
-  const all = useQuery({ queryKey: ["admin", "riders"], queryFn: () => api.get<Rider[]>("/admin/riders?status=all"), refetchInterval: 30_000 });
-  const list = (all.data ?? []).filter((r) => r.kyc_status === tab);
-  const current = (all.data ?? []).find((r) => r.id === selected) ?? list[0];
-  const count = (s: string) => (all.data ?? []).filter((r) => r.kyc_status === s).length;
+  // One page of the chosen tab at a time; the tab badges come from a cheap counts call.
+  const PAGE = 30;
+  const all = useInfiniteQuery({
+    queryKey: ["admin", "riders", "list", tab],
+    initialPageParam: 0,
+    queryFn: ({ pageParam }) => api.get<Rider[]>(`/admin/riders?status=${tab}&limit=${PAGE}&offset=${pageParam}`),
+    getNextPageParam: (last, pages) => (last.length === PAGE ? pages.length * PAGE : undefined),
+    refetchInterval: 30_000,
+  });
+  const counts = useQuery({ queryKey: ["admin", "riders", "counts"], queryFn: () => api.get<Record<string, number>>("/admin/riders/counts"), refetchInterval: 30_000 });
+  const list = all.data?.pages.flat() ?? [];
+  const current = list.find((r) => r.id === selected) ?? list[0];
+  const count = (s: string) => counts.data?.[s] ?? 0;
 
   return (
     <div className="flex flex-col gap-5 p-4 sm:p-6">
@@ -212,6 +221,13 @@ export function RidersPage() {
                 </button>
               </li>
             ))}
+            {all.hasNextPage ? (
+              <li>
+                <button onClick={() => void all.fetchNextPage()} disabled={all.isFetchingNextPage} className="h-10 w-full rounded-xl border border-line text-sm font-semibold hover:bg-subtle disabled:opacity-60">
+                  {all.isFetchingNextPage ? "Loading…" : "Show more riders"}
+                </button>
+              </li>
+            ) : null}
           </ul>
           {current ? <Detail r={current} /> : null}
         </div>

@@ -4,11 +4,11 @@ import uuid
 from datetime import datetime, timedelta
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, File, Form, UploadFile
+from fastapi import APIRouter, Depends, File, Form, Query, UploadFile
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import Response, StreamingResponse
 from pydantic import Field, ValidationError
-from sqlalchemy import and_, or_, select
+from sqlalchemy import and_, func, or_, select
 
 from app.api.deps import CurrentUser, Session, SuperAdmin, require_roles
 from app.api.v1.auth import _out as token_out
@@ -169,17 +169,33 @@ async def submit(body: SubmitIn, user: Rider, session: Session, storage: Storage
 # --- Super admin: review ----------------------------------------------------------------------
 
 
+@admin.get("/counts")
+async def rider_counts(_: SuperAdmin, session: Session):
+    """How many riders are in each application state (for the tab badges)."""
+    rows = (
+        await session.execute(
+            select(RiderProfile.kyc_status, func.count()).group_by(RiderProfile.kyc_status)
+        )
+    ).all()
+    return {status: n for status, n in rows}
+
+
 @admin.get("", response_model=list[RiderOut])
 async def list_riders(
     _: SuperAdmin,
     session: Session,
     storage: StorageDep,
     status: Literal["pending", "approved", "rejected", "suspended", "draft", "all"] = "all",
+    limit: Annotated[int, Query(ge=1, le=100)] = 50,
+    offset: Annotated[int, Query(ge=0)] = 0,
 ):
     stmt = select(RiderProfile).join(User, User.id == RiderProfile.user_id)
     if status != "all":
         stmt = stmt.where(RiderProfile.kyc_status == status)
-    stmt = stmt.order_by(RiderProfile.submitted_at.desc().nulls_last(), User.created_at.desc())
+    stmt = stmt.order_by(
+        RiderProfile.submitted_at.desc().nulls_last(), User.created_at.desc(), User.id
+    )
+    stmt = stmt.limit(limit).offset(offset)
     out = [await _out(session, p, storage) for p in (await session.execute(stmt)).scalars()]
     stars = await ratings.rider_stars(session, [r.id for r in out])
     for r in out:
@@ -422,10 +438,14 @@ class SummaryOrder(Schema):
 
 
 class SummaryOut(Schema):
-    orders: list[SummaryOrder]  # newest first, up to 200
+    counts: dict[str, int]  # per group, for the chosen period
+    earned: int  # rider fees of the delivered ones in the period
     open_now: int  # unassigned deliveries any rider can take right now
+    orders: list[SummaryOrder]  # newest first, one page
+    has_more: bool
 
 
+_EAT = timedelta(hours=3)
 _GROUPS = {
     "delivered": "delivered",
     "failed_delivery": "failed",
@@ -437,43 +457,95 @@ _GROUPS = {
 }
 
 
+def _group_of(status: str) -> str:
+    return _GROUPS.get(status, "waiting")
+
+
+def _period_start(period: str, now: datetime) -> datetime | None:
+    """Start of today / this week (Monday) / this month in Kenya time, as UTC."""
+    if period == "all":
+        return None
+    local = now + _EAT
+    day = local.replace(hour=0, minute=0, second=0, microsecond=0)
+    if period == "week":
+        day -= timedelta(days=day.weekday())
+    elif period == "month":
+        day = day.replace(day=1)
+    return day - _EAT
+
+
 @rider.get("/summary", response_model=SummaryOut)
-async def summary(user: Rider, session: Session):
-    """Every order this rider was given, with a plain group for each (waiting, on the way,
-    delivered, failed, cancelled), so the profile can count them by day, week or month."""
+async def summary(
+    user: Rider,
+    session: Session,
+    period: Literal["today", "week", "month", "all"] = "today",
+    group: Literal["waiting", "on_the_way", "delivered", "failed", "cancelled"] | None = None,
+    limit: Annotated[int, Query(ge=1, le=100)] = 30,
+    offset: Annotated[int, Query(ge=0)] = 0,
+):
+    """Counts of this rider's deliveries by outcome for a period, plus one page of the orders.
+    Jobs still open (waiting, on the way) count whatever the period; finished ones count by the
+    day they closed."""
+    start = _period_start(period, utcnow())
+    at = func.coalesce(Order.closed_at, Order.created_at)
+    base = (
+        select(Order.status, Order.rider_fee, func.count())
+        .where(Order.rider_id == user.id, Order.type == "delivery")
+        .group_by(Order.status, Order.rider_fee)
+    )
+    if start is not None:
+        base = base.where(or_(Order.status.in_(list(delivery.ON_JOB)), at >= start))
+    counts = {"waiting": 0, "on_the_way": 0, "delivered": 0, "failed": 0, "cancelled": 0}
+    earned = 0
+    for st, fee, n in (await session.execute(base)).all():
+        g = _group_of(st)
+        if g in counts:
+            counts[g] += n
+        if g == "delivered":
+            earned += fee * n
+
+    stmt = (
+        select(Order, Hotel.name)
+        .join(Hotel, Hotel.id == Order.hotel_id)
+        .where(Order.rider_id == user.id, Order.type == "delivery")
+    )
+    if start is not None:
+        stmt = stmt.where(or_(Order.status.in_(list(delivery.ON_JOB)), at >= start))
+    if group is not None:
+        statuses = [st for st, g in _GROUPS.items() if g == group]
+        if group == "waiting":
+            statuses = ["accepted", "preparing", "ready"]
+        stmt = stmt.where(Order.status.in_(statuses))
     rows = (
-        await session.execute(
-            select(Order, Hotel.name)
-            .join(Hotel, Hotel.id == Order.hotel_id)
-            .where(Order.rider_id == user.id, Order.type == "delivery")
-            .order_by(Order.created_at.desc())
-            .limit(200)
-        )
+        await session.execute(stmt.order_by(at.desc(), Order.id).limit(limit + 1).offset(offset))
     ).all()
     orders = [
         SummaryOrder(
             code=o.code,
             hotel_name=name,
             status=o.status,
-            group=_GROUPS.get(o.status, "waiting"),
+            group=_group_of(o.status),
             rider_fee=o.rider_fee,
             at=o.closed_at or o.created_at,
         )
-        for o, name in rows
+        for o, name in rows[:limit]
     ]
-    orders.sort(key=lambda x: x.at, reverse=True)
-    open_now = len(
-        (
-            await session.execute(
-                select(Order.id).where(
-                    Order.type == "delivery",
-                    Order.rider_id.is_(None),
-                    Order.status.in_(delivery.CLAIMABLE),
-                )
-            )
-        ).all()
+    open_now = await session.scalar(
+        select(func.count())
+        .select_from(Order)
+        .where(
+            Order.type == "delivery",
+            Order.rider_id.is_(None),
+            Order.status.in_(delivery.CLAIMABLE),
+        )
     )
-    return SummaryOut(orders=orders, open_now=open_now)
+    return SummaryOut(
+        counts=counts,
+        earned=earned,
+        open_now=open_now or 0,
+        orders=orders,
+        has_more=len(rows) > limit,
+    )
 
 
 @rider.post("/jobs/{order_id}/claim", response_model=JobOut)

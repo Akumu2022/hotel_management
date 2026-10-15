@@ -96,3 +96,15 @@ async def test_an_older_draft_without_bike_details_cannot_be_submitted(client, d
     r = await client.post(f"{API}/rider/submit", headers=auth_header(rider), json={"consent": True})
     assert r.status_code == 422
     assert r.json()["error"]["code"] == "bike_missing"
+
+
+async def test_the_rider_list_is_paged_and_counted(client, db, stores):
+    for i in range(3):
+        await applied(client, phone=f"07120000{i:02d}", national_id=f"3000000{i}")
+    admin = auth_header(await make_user(db, "super_admin"))
+    first = (await client.get(f"{API}/admin/riders?status=all&limit=2", headers=admin)).json()
+    rest = (await client.get(f"{API}/admin/riders?status=all&limit=2&offset=2", headers=admin)).json()
+    assert len(first) == 2 and len(rest) >= 1
+    assert not {r["id"] for r in first} & {r["id"] for r in rest}
+    counts = (await client.get(f"{API}/admin/riders/counts", headers=admin)).json()
+    assert counts.get("pending", 0) + counts.get("draft", 0) >= 3

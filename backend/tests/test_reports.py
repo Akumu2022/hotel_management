@@ -63,6 +63,10 @@ async def test_hotel_dashboard_totals_and_scoping(client, db):
 
     rows = (await client.get("/api/v1/hotel/reports/payments", headers=admin)).json()
     assert sorted(r["kind"] for r in rows) == ["mpesa", "mpesa", "refund"]
+    page = (await client.get("/api/v1/hotel/reports/payments?limit=2&offset=0", headers=admin)).json()
+    rest = (await client.get("/api/v1/hotel/reports/payments?limit=2&offset=2", headers=admin)).json()
+    assert len(page) == 2 and len(rest) == 1
+    assert sorted(r["kind"] for r in page + rest) == ["mpesa", "mpesa", "refund"]
     csv = await client.get("/api/v1/hotel/reports/payments?format=csv", headers=admin)
     assert csv.headers["content-type"].startswith("text/csv")
     assert csv.text.splitlines()[0].startswith("at,kind,amount")

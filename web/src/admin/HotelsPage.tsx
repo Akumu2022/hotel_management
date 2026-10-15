@@ -7,7 +7,7 @@ import { type FormEvent, useState } from "react";
 
 import { Badge, Button, ErrorNote, Field, Input, PasswordInput, Sheet, Skeleton } from "../components/ui";
 import { ResetPassword, Stars } from "../components/accounts";
-import { api } from "../lib/api";
+import { api, getAllPages } from "../lib/api";
 
 export type Hotel = {
   id: string;
@@ -28,7 +28,7 @@ type Staff = { id: string; role: string; name: string; phone: string; is_active:
 const slugify = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 80);
 
 export function StaffList({ hotel }: { hotel: Hotel }) {
-  const staff = useQuery({ queryKey: ["admin", "users", hotel.id], queryFn: () => api.get<{ items: Staff[] }>(`/admin/users?hotel_id=${hotel.id}&limit=100`) });
+  const staff = useQuery({ queryKey: ["admin", "users", hotel.id], queryFn: () => getAllPages<Staff>(`/admin/users?hotel_id=${hotel.id}`) });
   if (staff.isLoading) return <Skeleton className="h-10" />;
   return (
     <ul className="flex flex-col gap-2">
@@ -126,7 +126,7 @@ function NewHotel({ onDone }: { onDone: () => void }) {
 }
 
 export function HotelsPage() {
-  const hotels = useQuery({ queryKey: ["admin", "hotels"], queryFn: () => api.get<{ items: Hotel[] }>("/admin/hotels?limit=100") });
+  const hotels = useQuery({ queryKey: ["admin", "hotels"], queryFn: () => getAllPages<Hotel>("/admin/hotels") });
   const [adding, setAdding] = useState(false);
   const [open, setOpen] = useState<string | null>(null);
 

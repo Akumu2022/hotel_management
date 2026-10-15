@@ -11,7 +11,7 @@ import { CheckCircle2, Circle, MapPin, Plus, Spline, Trash2, Undo2 } from "lucid
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { ErrorNote, Skeleton } from "../components/ui";
-import { api } from "../lib/api";
+import { api, getAllPages } from "../lib/api";
 import { compressImage, money } from "../lib/format";
 import { type LngLat, circleZone } from "../lib/geo";
 
@@ -38,7 +38,6 @@ function previewFee(p: Pricing, bands: Band[], km: number): number | null {
   return Math.max(p.rider_fee_min, Math.ceil((p.rider_fee_base + p.rider_fee_per_km * km) / 10) * 10);
 }
 type AdminHotel = { id: string; name: string; lat: number | null; lng: number | null };
-type Page<T> = { items: T[]; next_cursor: string | null };
 type Mode = "circle" | "outline" | { hotel: AdminHotel } | { calc: AdminHotel };
 
 const hotelIcon = (placed: boolean) =>
@@ -224,7 +223,7 @@ function BannerCard({ s }: { s: AdminSettings }) {
 export function DeliveryPage() {
   const qc = useQueryClient();
   const settings = useQuery({ queryKey: ["admin", "settings"], queryFn: () => api.get<AdminSettings>("/admin/settings") });
-  const hotels = useQuery({ queryKey: ["admin", "hotels"], queryFn: () => api.get<Page<AdminHotel>>("/admin/hotels?limit=100") });
+  const hotels = useQuery({ queryKey: ["admin", "hotels"], queryFn: () => getAllPages<AdminHotel>("/admin/hotels") });
 
   const [mode, setMode] = useState<Mode>("circle");
   const [centre, setCentre] = useState<{ lat: number; lng: number } | null>(null);

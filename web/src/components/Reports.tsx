@@ -3,12 +3,12 @@
  * admin (all hotels, commission). Numbers come from the ledger, so they match statements.
  * Charts are plain SVG/CSS bars: readable on a phone, nothing to download.
  */
-import { useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import clsx from "clsx";
 import { Banknote, Download, Gift, HandCoins, Percent, ReceiptText, ShoppingBag, Smartphone, TrendingUp } from "lucide-react";
 import { useMemo, useState, type ReactNode } from "react";
 
-import { api, auth, request } from "../lib/api";
+import { api, auth, getAllPages, request } from "../lib/api";
 import { money } from "../lib/format";
 import { ErrorNote, Skeleton } from "./ui";
 
@@ -188,7 +188,7 @@ export function Reports({ scope }: { scope: "hotel" | "admin" }) {
 
   const hotels = useQuery({
     queryKey: ["admin", "hotels"],
-    queryFn: () => api.get<{ items: { id: string; name: string }[] }>("/admin/hotels?limit=100"),
+    queryFn: () => getAllPages<{ id: string; name: string }>("/admin/hotels"),
     enabled: scope === "admin",
   });
   const qs = useMemo(() => {
@@ -202,7 +202,14 @@ export function Reports({ scope }: { scope: "hotel" | "admin" }) {
     refetchInterval: 60_000,
   });
   const payQs = `${qs}${method ? `&method=${method}` : ""}`;
-  const rows = useQuery({ queryKey: [scope, "reports", "payments", payQs], queryFn: () => api.get<PaymentRow[]>(`${base}/payments?${payQs}`) });
+  const PAY_PAGE = 50;
+  const rows = useInfiniteQuery({
+    queryKey: [scope, "reports", "payments", payQs],
+    initialPageParam: 0,
+    queryFn: ({ pageParam }) => api.get<PaymentRow[]>(`${base}/payments?${payQs}&limit=${PAY_PAGE}&offset=${pageParam}`),
+    getNextPageParam: (last, all) => (last.length === PAY_PAGE ? all.length * PAY_PAGE : undefined),
+  });
+  const payRows = rows.data?.pages.flat() ?? [];
   const [downloading, setDownloading] = useState(false);
 
   const downloadCsv = async () => {
@@ -374,7 +381,7 @@ export function Reports({ scope }: { scope: "hotel" | "admin" }) {
       >
         {rows.isLoading ? (
           <Skeleton className="h-40" />
-        ) : rows.data?.length ? (
+        ) : payRows.length ? (
           <div className="-mx-1 max-h-[30rem] overflow-auto">
             <table className="w-full min-w-[35rem] text-sm">
               <thead className="sticky top-0 bg-surface text-left text-xs text-muted uppercase">
@@ -388,7 +395,7 @@ export function Reports({ scope }: { scope: "hotel" | "admin" }) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-line">
-                {rows.data.map((r, i) => (
+                {payRows.map((r, i) => (
                   <tr key={i}>
                     <td className="px-1 py-2.5 whitespace-nowrap text-muted">{new Date(r.at).toLocaleString("en-KE", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</td>
                     <td className="px-1 py-2.5"><span className={clsx("rounded-full px-2 py-0.5 text-xs font-semibold whitespace-nowrap", KIND[r.kind].cls)}>{KIND[r.kind].label}</span></td>
@@ -400,6 +407,11 @@ export function Reports({ scope }: { scope: "hotel" | "admin" }) {
                 ))}
               </tbody>
             </table>
+            {rows.hasNextPage ? (
+              <button onClick={() => void rows.fetchNextPage()} disabled={rows.isFetchingNextPage} className="mx-auto my-3 flex h-10 items-center rounded-xl border border-line px-4 text-sm font-semibold hover:bg-subtle disabled:opacity-60">
+                {rows.isFetchingNextPage ? "Loading…" : "Show more"}
+              </button>
+            ) : null}
           </div>
         ) : (
           <p className="py-8 text-center text-sm text-muted">No payments in this period.</p>
