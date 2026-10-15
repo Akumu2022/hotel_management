@@ -435,3 +435,23 @@ async def test_pickup_pin_is_per_rider_and_per_order(client, db):
     # An order nobody has taken has no PIN.
     c = await ready_delivery(db)
     assert delivery.pickup_pin(c) is None
+
+
+async def test_rider_summary_groups_their_orders(client, db):
+    order = await ready_delivery(db)
+    rider = await make_rider(db)
+    h = auth_header(rider)
+    first = (await client.get(f"{API}/rider/summary", headers=h)).json()
+    assert first["orders"] == [] and first["open_now"] >= 1
+
+    assert (await client.post(f"{API}/rider/jobs/{order.id}/claim", headers=h)).status_code == 200
+    mine = (await client.get(f"{API}/rider/summary", headers=h)).json()["orders"]
+    assert [(o["code"], o["group"]) for o in mine] == [(order.code, "waiting")]
+
+    row = await db.get(Order, order.id)
+    row.status = "failed_delivery"
+    await db.commit()
+    mine = (await client.get(f"{API}/rider/summary", headers=h)).json()["orders"]
+    assert mine[0]["group"] == "failed"
+    other = auth_header(await make_rider(db))
+    assert (await client.get(f"{API}/rider/summary", headers=other)).json()["orders"] == []

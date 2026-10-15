@@ -1,7 +1,7 @@
 /** Rider app shell: KYC steps until the Chakula team approves, then jobs. */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import clsx from "clsx";
-import { Bike, Camera, CheckCircle2, Clock, IdCard, KeyRound, LogOut, ShieldAlert, ShieldCheck, UserRound } from "lucide-react";
+import { ArrowLeft, Bike, Camera, CheckCircle2, Clock, IdCard, KeyRound, LogOut, ShieldAlert, ShieldCheck, UserRound } from "lucide-react";
 import { type ReactNode, useRef, useState, useSyncExternalStore } from "react";
 import { Link, Navigate } from "react-router-dom";
 
@@ -42,25 +42,41 @@ const PHOTOS: { kind: "id_front" | "id_back" | "selfie"; title: string; hint: st
   { kind: "selfie", title: "Selfie", hint: "Your face, clear and well lit. Customers will see a small copy.", icon: <UserRound className="size-6" />, capture: "user" },
 ];
 
-function Shell({ me, children }: { me?: RiderMe; children: ReactNode }) {
+function Shell({ me, onProfile = false, children }: { me?: RiderMe; onProfile?: boolean; children: ReactNode }) {
   return (
     <div className="min-h-dvh bg-page">
       <header className="sticky top-0 z-30 border-b border-line bg-surface/95 backdrop-blur">
         {me?.kyc_status === "approved" ? <AlarmBanner /> : null}
         <div className="mx-auto flex max-w-2xl items-center justify-between gap-3 px-4 py-3">
-          <Link to={me ? "/rider/profile" : "/rider"} aria-label="My profile" className="flex items-center gap-2.5">
-            {me?.photo_url ? (
-              <img src={me.photo_url} alt="" className="size-10 rounded-full object-cover ring-2 ring-brand/30" />
-            ) : (
+          {onProfile ? (
+            <Link to="/rider" className="flex h-10 items-center gap-2 rounded-xl border border-line pl-2.5 pr-3.5 text-sm font-bold hover:bg-subtle">
+              <ArrowLeft className="size-5" /> Back
+            </Link>
+          ) : (
+            <span className="flex items-center gap-2.5">
               <span className="flex size-10 items-center justify-center rounded-xl bg-brand text-white"><Bike className="size-5" /></span>
-            )}
-            <span>
-              <span className="block text-[0.9375rem] font-bold leading-tight">{me ? me.name.split(" ")[0] : "Chakula Riders"}</span>
-              <span className="block text-xs text-muted">Chakula rider · My profile</span>
+              <span>
+                <span className="block text-[0.9375rem] font-bold leading-tight">{me ? `Hi ${me.name.split(" ")[0]}` : "Chakula Riders"}</span>
+                <span className="block text-xs text-muted">Chakula rider</span>
+              </span>
             </span>
-          </Link>
+          )}
           <div className="flex items-center gap-2">
             <NotificationBell links={{ "rider-assigned": "/rider", "rider-open": "/rider" }} />
+            {me ? (
+              <Link
+                to={onProfile ? "/rider" : "/rider/profile"}
+                aria-label="My profile"
+                title="My profile"
+                className={clsx("flex size-10 items-center justify-center overflow-hidden rounded-full ring-2 transition", onProfile ? "ring-brand" : "ring-brand/30 hover:ring-brand")}
+              >
+                {me.photo_url ? (
+                  <img src={me.photo_url} alt="" className="size-full object-cover" />
+                ) : (
+                  <span className="flex size-full items-center justify-center bg-brand-soft text-brand"><UserRound className="size-5" /></span>
+                )}
+              </Link>
+            ) : null}
             <ThemeToggle />
             <Link to="/password" aria-label="Change password" className="flex size-10 items-center justify-center rounded-xl border border-line text-muted hover:bg-subtle">
               <KeyRound className="size-4" />
@@ -194,7 +210,7 @@ export function RiderHome({ view }: { view?: "profile" }) {
 
   const d = me.data;
   return (
-    <Shell me={d}>
+    <Shell me={d} onProfile={view === "profile"}>
       {view === "profile" ? (
         <ProfileView me={d} />
       ) : d.kyc_status === "draft" || d.kyc_status === "rejected" ? (

@@ -412,6 +412,70 @@ async def job_history(user: Rider, session: Session):
     return await _jobs_out(session, list((await session.execute(stmt)).scalars()), user.id)
 
 
+class SummaryOrder(Schema):
+    code: str
+    hotel_name: str
+    status: str
+    group: str
+    rider_fee: int
+    at: datetime
+
+
+class SummaryOut(Schema):
+    orders: list[SummaryOrder]  # newest first, up to 200
+    open_now: int  # unassigned deliveries any rider can take right now
+
+
+_GROUPS = {
+    "delivered": "delivered",
+    "failed_delivery": "failed",
+    "cancelled": "cancelled",
+    "rejected": "cancelled",
+    "expired": "cancelled",
+    "picked_up": "on_the_way",
+    "on_the_way": "on_the_way",
+}
+
+
+@rider.get("/summary", response_model=SummaryOut)
+async def summary(user: Rider, session: Session):
+    """Every order this rider was given, with a plain group for each (waiting, on the way,
+    delivered, failed, cancelled), so the profile can count them by day, week or month."""
+    rows = (
+        await session.execute(
+            select(Order, Hotel.name)
+            .join(Hotel, Hotel.id == Order.hotel_id)
+            .where(Order.rider_id == user.id, Order.type == "delivery")
+            .order_by(Order.created_at.desc())
+            .limit(200)
+        )
+    ).all()
+    orders = [
+        SummaryOrder(
+            code=o.code,
+            hotel_name=name,
+            status=o.status,
+            group=_GROUPS.get(o.status, "waiting"),
+            rider_fee=o.rider_fee,
+            at=o.closed_at or o.created_at,
+        )
+        for o, name in rows
+    ]
+    orders.sort(key=lambda x: x.at, reverse=True)
+    open_now = len(
+        (
+            await session.execute(
+                select(Order.id).where(
+                    Order.type == "delivery",
+                    Order.rider_id.is_(None),
+                    Order.status.in_(delivery.CLAIMABLE),
+                )
+            )
+        ).all()
+    )
+    return SummaryOut(orders=orders, open_now=open_now)
+
+
 @rider.post("/jobs/{order_id}/claim", response_model=JobOut)
 async def claim_job(order_id: uuid.UUID, user: Rider, session: Session):
     return await _job(session, await delivery.claim(session, order_id, user.id, utcnow()), user.id)

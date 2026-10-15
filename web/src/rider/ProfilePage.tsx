@@ -1,8 +1,8 @@
 /** The rider's own profile: who they are, their bike, how they are doing and what they are owed. */
 import { useQuery } from "@tanstack/react-query";
 import clsx from "clsx";
-import { ArrowLeft, Bike, Star } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Bike, Star } from "lucide-react";
+import { useState } from "react";
 
 import { HelpButton } from "../customer/bits";
 import { useConfig } from "../customer/OrderPanel";
@@ -10,7 +10,9 @@ import { api } from "../lib/api";
 import { money } from "../lib/format";
 import type { RiderMe } from "./RiderHome";
 
-type HistoryJob = { id: string; status: string; rider_fee: number; closed_at: string | null };
+type Group = "waiting" | "on_the_way" | "delivered" | "failed" | "cancelled";
+type SummaryOrder = { code: string; hotel_name: string; status: string; group: Group; rider_fee: number; at: string };
+type Summary = { orders: SummaryOrder[]; open_now: number };
 type Earnings = { owed: number; payouts: { id: string; amount: number; mpesa_code: string; paid_at: string }[] };
 
 const STATUS: Record<RiderMe["kyc_status"], { text: string; tone: string }> = {
@@ -23,7 +25,6 @@ const STATUS: Record<RiderMe["kyc_status"], { text: string; tone: string }> = {
 
 const day = new Intl.DateTimeFormat("en-KE", { day: "numeric", month: "short", year: "numeric", timeZone: "Africa/Nairobi" });
 const paidOn = new Intl.DateTimeFormat("en-KE", { weekday: "short", day: "numeric", month: "short", timeZone: "Africa/Nairobi" });
-const dayKey = (d: Date) => d.toLocaleDateString("en-CA", { timeZone: "Africa/Nairobi" });
 
 /** 0712 345 678 style from +2547… / 2547… */
 function localPhone(p: string | null | undefined) {
@@ -41,34 +42,125 @@ function Row({ k, v }: { k: string; v: string | null | undefined }) {
   );
 }
 
-function Stat({ label, value, tone }: { label: string; value: string; tone?: string }) {
+const PERIODS = [
+  { id: "today", label: "Today" },
+  { id: "week", label: "This week" },
+  { id: "month", label: "This month" },
+  { id: "all", label: "All time" },
+] as const;
+type Period = (typeof PERIODS)[number]["id"];
+
+const GROUPS: { id: Group; label: string; tone: string }[] = [
+  { id: "delivered", label: "Delivered", tone: "bg-ok-soft text-ok" },
+  { id: "waiting", label: "Pending pickup", tone: "bg-warn-soft text-warn" },
+  { id: "on_the_way", label: "On the way", tone: "bg-brand-soft text-brand" },
+  { id: "cancelled", label: "Cancelled", tone: "bg-subtle text-muted" },
+  { id: "failed", label: "Failed", tone: "bg-bad-soft text-bad" },
+];
+
+/** Start of today / this week (Monday) / this month in Kenya time, as a comparable "YYYY-MM-DD". */
+function since(period: Period): string {
+  const now = new Date(Date.now() + 3 * 3600_000); // Kenya clock read as UTC
+  const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  if (period === "week") d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7));
+  if (period === "month") d.setUTCDate(1);
+  return period === "all" ? "" : d.toISOString().slice(0, 10);
+}
+const kenyaDay = (iso: string) => new Date(new Date(iso).getTime() + 3 * 3600_000).toISOString().slice(0, 10);
+const when = new Intl.DateTimeFormat("en-KE", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit", timeZone: "Africa/Nairobi" });
+
+/** How the rider's orders went: counts by outcome and a filterable list, by day, week or month. */
+function Breakdown({ summary, owed }: { summary: Summary | undefined; owed: number | undefined }) {
+  const [period, setPeriod] = useState<Period>("today");
+  const [only, setOnly] = useState<Group | null>(null);
+  if (!summary) return <p className="rounded-3xl bg-surface p-5 text-sm text-muted shadow-sm">Loading your orders…</p>;
+
+  const from = since(period);
+  // Jobs still open count whatever the period; finished ones by the day they closed.
+  const inPeriod = summary.orders.filter((o) => o.group === "waiting" || o.group === "on_the_way" || !from || kenyaDay(o.at) >= from);
+  const count = (g: Group) => inPeriod.filter((o) => o.group === g).length;
+  const earned = inPeriod.filter((o) => o.group === "delivered").reduce((n, o) => n + o.rider_fee, 0);
+  const shown = only ? inPeriod.filter((o) => o.group === only) : inPeriod;
+
   return (
-    <div className="rounded-2xl bg-surface p-4 shadow-sm">
-      <p className="text-xs text-muted">{label}</p>
-      <p className={clsx("money mt-0.5 text-xl font-extrabold", tone)}>{value}</p>
-    </div>
+    <section className="rounded-3xl bg-surface p-5 shadow-sm">
+      <h2 className="mb-3 text-sm font-bold">My orders</h2>
+      <div role="tablist" className="mb-4 grid grid-cols-4 gap-1 rounded-xl bg-subtle p-1">
+        {PERIODS.map((p) => (
+          <button
+            key={p.id}
+            role="tab"
+            aria-selected={period === p.id}
+            onClick={() => setPeriod(p.id)}
+            className={clsx("h-9 rounded-lg text-xs font-semibold sm:text-sm", period === p.id ? "bg-surface shadow-sm" : "text-muted")}
+          >
+            {p.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="mb-3 grid grid-cols-2 gap-3">
+        <div className="rounded-2xl bg-ok-soft/60 p-4">
+          <p className="text-xs text-muted">Earned from deliveries</p>
+          <p className="money text-xl font-extrabold text-ok">{money(earned)}</p>
+        </div>
+        <div className="rounded-2xl bg-subtle p-4">
+          <p className="text-xs text-muted">Owed to you</p>
+          <p className="money text-xl font-extrabold">{owed == null ? "…" : money(owed)}</p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+        {GROUPS.map((g) => (
+          <button
+            key={g.id}
+            onClick={() => setOnly(only === g.id ? null : g.id)}
+            aria-pressed={only === g.id}
+            className={clsx("rounded-2xl p-3 text-left ring-2 transition", g.tone, only === g.id ? "ring-current" : "ring-transparent")}
+          >
+            <span className="money block text-2xl font-extrabold">{count(g.id)}</span>
+            <span className="block text-xs font-semibold">{g.label}</span>
+          </button>
+        ))}
+        <div className="rounded-2xl bg-subtle p-3 text-muted">
+          <span className="money block text-2xl font-extrabold">{summary.open_now}</span>
+          <span className="block text-xs font-semibold">Open to take now</span>
+        </div>
+      </div>
+
+      <ul className="mt-4 divide-y divide-line text-sm">
+        {shown.slice(0, 30).map((o) => {
+          const g = GROUPS.find((x) => x.id === o.group)!;
+          return (
+            <li key={o.code} className="flex items-center justify-between gap-3 py-2.5">
+              <span className="min-w-0">
+                <span className="money block font-bold">#{o.code} <span className="font-normal text-muted">· {o.hotel_name}</span></span>
+                <span className="block text-xs text-muted">{when.format(new Date(o.at))}</span>
+              </span>
+              <span className="flex shrink-0 flex-col items-end gap-1">
+                <span className={clsx("rounded-full px-2.5 py-0.5 text-xs font-semibold", g.tone)}>{g.label}</span>
+                {o.group === "delivered" ? <span className="money text-xs font-bold text-ok">{money(o.rider_fee)}</span> : null}
+              </span>
+            </li>
+          );
+        })}
+        {shown.length === 0 ? <li className="py-6 text-center text-muted">No orders here for this time.</li> : null}
+      </ul>
+    </section>
   );
 }
 
 export function ProfileView({ me }: { me: RiderMe }) {
   const config = useConfig();
   const approved = me.kyc_status === "approved";
-  const history = useQuery({ queryKey: ["rider", "history"], queryFn: () => api.get<HistoryJob[]>("/rider/jobs/history"), enabled: approved });
+  const summary = useQuery({ queryKey: ["rider", "summary"], queryFn: () => api.get<Summary>("/rider/summary"), enabled: approved, refetchInterval: 30_000 });
   const earnings = useQuery({ queryKey: ["rider", "earnings"], queryFn: () => api.get<Earnings>("/rider/earnings"), enabled: approved });
 
-  const done = (history.data ?? []).filter((j) => j.status === "delivered");
-  const today = dayKey(new Date());
-  const earnedToday = done.filter((j) => j.closed_at && dayKey(new Date(j.closed_at)) === today).reduce((n, j) => n + j.rider_fee, 0);
-  const failed = (history.data ?? []).filter((j) => j.status === "failed").length;
   const status = STATUS[me.kyc_status];
   const idShown = me.national_id ? `${"•".repeat(Math.max(me.national_id.length - 3, 0))}${me.national_id.slice(-3)}` : "";
 
   return (
     <div className="flex flex-col gap-4">
-      <Link to="/rider" className="flex w-fit items-center gap-1.5 text-sm font-semibold text-brand">
-        <ArrowLeft className="size-4" /> {approved ? "Back to jobs" : "Back"}
-      </Link>
-
       <section className="flex items-center gap-4 rounded-3xl bg-surface p-5 shadow-sm">
         {me.photo_url ? (
           <img src={me.photo_url} alt="" className="size-20 shrink-0 rounded-full object-cover ring-2 ring-brand/30" />
@@ -98,14 +190,7 @@ export function ProfileView({ me }: { me: RiderMe }) {
         <p className="rounded-2xl bg-bad-soft p-4 text-sm text-bad">{me.kyc_note}</p>
       ) : null}
 
-      {approved ? (
-        <section className="grid grid-cols-2 gap-3">
-          <Stat label="Deliveries done" value={history.data ? String(done.length) : "…"} />
-          <Stat label="Earned today" value={history.data ? money(earnedToday) : "…"} tone="text-ok" />
-          <Stat label="Owed to you" value={earnings.data ? money(earnings.data.owed) : "…"} tone="text-ok" />
-          <Stat label="Failed deliveries" value={history.data ? String(failed) : "…"} />
-        </section>
-      ) : null}
+      {approved ? <Breakdown summary={summary.data} owed={earnings.data?.owed} /> : null}
 
       <section className="rounded-3xl bg-surface p-5 shadow-sm">
         <h2 className="mb-1 text-sm font-bold">My bike</h2>
