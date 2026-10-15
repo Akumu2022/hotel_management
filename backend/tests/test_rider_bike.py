@@ -19,6 +19,8 @@ async def test_the_plate_is_tidied_up_and_saved_with_the_description(client, db,
     me = (await client.get(f"{API}/rider/me", headers=h)).json()
     assert me["bike_plate"] == "KMFB123C"
     assert me["bike_description"] == DETAILS["bike_description"]
+    assert me["rating"] is None and me["rating_count"] == 0  # the rider's own profile shows stars
+    assert me["created_at"]
 
 
 async def test_a_missing_plate_or_description_is_refused(client, db, stores):

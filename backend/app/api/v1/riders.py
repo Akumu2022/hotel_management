@@ -130,7 +130,10 @@ async def apply(
 
 @rider.get("/me", response_model=RiderOut)
 async def me(user: Rider, session: Session, storage: StorageDep):
-    return await _out(session, await riders.profile(session, user.id), storage)
+    out = await _out(session, await riders.profile(session, user.id), storage)
+    stars = await ratings.rider_stars(session, [out.id])
+    out.rating, out.rating_count = stars[out.id].average, stars[out.id].count
+    return out
 
 
 @rider.patch("/me", response_model=RiderOut)

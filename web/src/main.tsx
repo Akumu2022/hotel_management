@@ -82,6 +82,7 @@ createRoot(document.getElementById("root")!).render(
               <Route path="/login" element={<LoginPage />} />
               <Route path="/password" element={<PasswordPage />} />
               <Route path="/rider" element={<RiderHome />} />
+              <Route path="/rider/profile" element={<RiderHome view="profile" />} />
               <Route path="/rider/join" element={<JoinPage />} />
               <Route path="/hotel" element={<HotelLayout />}>
                 <Route index element={<HotelHome />} />

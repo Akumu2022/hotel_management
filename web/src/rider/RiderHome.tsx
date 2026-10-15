@@ -12,6 +12,7 @@ import { ThemeToggle } from "../customer/CustomerLayout";
 import { api, auth } from "../lib/api";
 import { compressImage } from "../lib/format";
 import { JobsPage } from "./JobsPage";
+import { ProfileView } from "./ProfilePage";
 import { RiderSteps } from "./JoinPage";
 
 export type RiderMe = {
@@ -22,6 +23,11 @@ export type RiderMe = {
   next_of_kin: string;
   next_of_kin_phone: string | null;
   residence_area: string | null;
+  bike_plate: string | null;
+  bike_description: string | null;
+  rating: number | null;
+  rating_count: number;
+  created_at: string;
   photos: Record<"id_front" | "id_back" | "selfie", boolean>;
   photo_url: string | null;
   kyc_status: "draft" | "pending" | "approved" | "rejected" | "suspended";
@@ -42,7 +48,7 @@ function Shell({ me, children }: { me?: RiderMe; children: ReactNode }) {
       <header className="sticky top-0 z-30 border-b border-line bg-surface/95 backdrop-blur">
         {me?.kyc_status === "approved" ? <AlarmBanner /> : null}
         <div className="mx-auto flex max-w-2xl items-center justify-between gap-3 px-4 py-3">
-          <span className="flex items-center gap-2.5">
+          <Link to={me ? "/rider/profile" : "/rider"} aria-label="My profile" className="flex items-center gap-2.5">
             {me?.photo_url ? (
               <img src={me.photo_url} alt="" className="size-10 rounded-full object-cover ring-2 ring-brand/30" />
             ) : (
@@ -50,9 +56,9 @@ function Shell({ me, children }: { me?: RiderMe; children: ReactNode }) {
             )}
             <span>
               <span className="block text-[0.9375rem] font-bold leading-tight">{me ? me.name.split(" ")[0] : "Chakula Riders"}</span>
-              <span className="block text-xs text-muted">Chakula rider</span>
+              <span className="block text-xs text-muted">Chakula rider · My profile</span>
             </span>
-          </span>
+          </Link>
           <div className="flex items-center gap-2">
             <NotificationBell links={{ "rider-assigned": "/rider", "rider-open": "/rider" }} />
             <ThemeToggle />
@@ -178,7 +184,7 @@ function StatusCard({ icon, title, body, tone }: { icon: ReactNode; title: strin
   );
 }
 
-export function RiderHome() {
+export function RiderHome({ view }: { view?: "profile" }) {
   const user = useSyncExternalStore(auth.subscribe, auth.user);
   const me = useQuery({ queryKey: ["rider", "me"], queryFn: () => api.get<RiderMe>("/rider/me"), enabled: user?.role === "rider", refetchInterval: (q) => (q.state.data?.kyc_status === "pending" ? 30_000 : false) });
   if (!user) return <Navigate to="/rider/join" replace />;
@@ -189,7 +195,9 @@ export function RiderHome() {
   const d = me.data;
   return (
     <Shell me={d}>
-      {d.kyc_status === "draft" || d.kyc_status === "rejected" ? (
+      {view === "profile" ? (
+        <ProfileView me={d} />
+      ) : d.kyc_status === "draft" || d.kyc_status === "rejected" ? (
         <KycScreen me={d} />
       ) : d.kyc_status === "pending" ? (
         <>
