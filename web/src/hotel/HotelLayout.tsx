@@ -13,6 +13,7 @@ import { api, auth } from "../lib/api";
 import { useLive } from "../lib/live";
 import { money } from "../lib/format";
 import type { HotelBilling } from "./BillingPage";
+import { type TillPhone, phoneHealth } from "../components/TillPhones";
 import { keys, useHotelSettings, useMe, useSave } from "./hooks";
 
 const MAIN = [
@@ -119,6 +120,24 @@ function BillStrip() {
         {money(b.due_now)} to pay Chakula{b.due_date && !b.overdue ? ` by ${new Intl.DateTimeFormat("en-KE", { weekday: "long", timeZone: "UTC" }).format(new Date(`${b.due_date}T00:00:00Z`))}` : ""}
       </span>
       <span className="underline">Pay now</span>
+    </Link>
+  );
+}
+
+/** Shown to all staff while a paired Till phone has a problem, so payments are confirmed by hand
+ * instead of waiting for an SMS that is not coming. Hotels without a Till phone see nothing. */
+function TillStrip() {
+  const q = useQuery({ queryKey: ["hotel", "forwarder"], queryFn: () => api.get<{ devices: TillPhone[] }>("/hotel/forwarder"), refetchInterval: 60_000 });
+  const { pathname } = useLocation();
+  const phone = q.data?.devices[0];
+  if (!phone || pathname.endsWith("/payments")) return null;
+  const h = phoneHealth(phone);
+  if (h.ok) return null;
+  return (
+    <Link to="payments" className="flex items-center gap-3 rounded-2xl bg-bad px-4 py-3 text-sm font-semibold text-white">
+      <AlertTriangle className="size-5 shrink-0" />
+      <span className="flex-1">Till phone problem: {h.text} Until it is fixed, confirm payments by hand.</span>
+      <span className="underline">Payments</span>
     </Link>
   );
 }
@@ -236,6 +255,7 @@ export function HotelLayout() {
                 <AlertTriangle className="size-4 shrink-0" /> Pin your hotel on the map so customers can order delivery. Tap to set it now.
               </Link>
             ) : null}
+            <div className="mb-5 empty:hidden"><TillStrip /></div>
             {isAdmin ? <div className="mb-5 empty:hidden"><BillStrip /></div> : null}
             <Outlet />
           </main>

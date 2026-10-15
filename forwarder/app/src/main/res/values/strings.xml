@@ -38,7 +38,7 @@
     <string name="restricted_help">If Android says \"Restricted setting\": tap Open app settings, then the ⋮ menu at the top right, tap \"Allow restricted settings\", confirm, come back here and tap Allow SMS again.</string>
     <string name="app_settings">Open app settings</string>
     <string name="battery_step">2. Keep running in the background</string>
-    <string name="battery_step_help">Stops Android from pausing the app to save battery.</string>
+    <string name="battery_step_help">Stops Android from pausing the app to save battery. On Tecno, Infinix, Xiaomi, Samsung and similar phones, also turn on "Auto-start" or "Never sleeping apps" for Chakula Till in the phone Settings.</string>
     <string name="battery_button">Allow background running</string>
     <string name="tips">3. Keep this phone charged, with mobile data or Wi-Fi on.</string>
     <string name="done">✓ Done</string>
