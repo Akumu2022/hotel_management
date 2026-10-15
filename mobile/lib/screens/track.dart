@@ -406,7 +406,14 @@ class _TrackScreenState extends State<TrackScreen> {
             TextField(
               controller: _code,
               textCapitalization: TextCapitalization.characters,
-              decoration: InputDecoration(hintText: tr('e.g. SJK3ABC123')),
+              maxLength: 800,
+              // A whole pasted M-Pesa message is fine: the code is read out of it (the server checks too).
+              onChanged: (v) {
+                if (v.length <= 14) return;
+                final m = RegExp(r'(?<![A-Z0-9])([A-Z0-9]{10})\s*CONFIRMED').firstMatch(v.toUpperCase());
+                if (m != null) _code.value = TextEditingValue(text: m.group(1)!, selection: TextSelection.collapsed(offset: 10));
+              },
+              decoration: InputDecoration(hintText: tr('e.g. SJK3ABC123'), counterText: '', helperText: tr('You can also paste the whole M-Pesa message')),
             ),
             CheckboxListTile(
               contentPadding: EdgeInsets.zero,

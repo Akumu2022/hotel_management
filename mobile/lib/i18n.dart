@@ -187,6 +187,7 @@ const Map<String, String> _sw = {
   'Tell the hotel this PIN when you get there. They only hand over your food once you give it.': 'Waambie hoteli PIN hii ukifika. Wanakupa chakula tu ukiitoa.',
   'Your rider': 'Msafirishaji wako',
   'e.g. SJK3ABC123': 'mf. SJK3ABC123',
+  'You can also paste the whole M-Pesa message': 'Unaweza pia kubandika ujumbe mzima wa M-Pesa',
   'Someone else paid, or I paid from another name or number': 'Mtu mwingine alilipa, au nililipa kwa jina au namba nyingine',
   'Name on the M-Pesa message': 'Jina kwenye ujumbe wa M-Pesa',
   'M-Pesa number, e.g. 0712 345 678': 'Namba ya M-Pesa, mf. 0712 345 678',

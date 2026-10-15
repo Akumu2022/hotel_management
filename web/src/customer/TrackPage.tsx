@@ -102,20 +102,23 @@ function CodeEntry({ token, onDone }: { token: string; onDone: () => void }) {
     onError: (e) => setMsg({ ok: false, text: e instanceof Error ? e.message : "Something went wrong" }),
   });
   const clean = code.replace(/\s+/g, "").toUpperCase();
-  const valid = /^[A-Z0-9]{10}$/.test(clean);
+  // A whole pasted M-Pesa message is fine too: the code is read out of it (the server also checks).
+  const valid = /^[A-Z0-9]{10}$/.test(clean) || code.length > 14;
   return (
     <div className="mt-5 rounded-2xl border-2 border-dashed border-brand/40 bg-brand-soft/40 p-4">
       <label htmlFor="mpesa-code" className="text-sm font-semibold">{tt("Paid? Enter the M-Pesa code")}</label>
-      <p className="mb-2.5 text-xs text-muted">{tt("It's at the start of your M-Pesa message, e.g. SJK3ABC12D")}</p>
+      <p className="mb-2.5 text-xs text-muted">{tt("It's at the start of your M-Pesa message, e.g. SJK3ABC12D. You can also paste the whole message.")}</p>
       <div className="flex gap-2">
         <input
           id="mpesa-code"
           value={code}
           onChange={(e) => {
-            setCode(e.target.value.toUpperCase());
+            const v = e.target.value.toUpperCase();
+            const pasted = v.length > 14 ? v.match(/(?<![A-Z0-9])([A-Z0-9]{10})\s*CONFIRMED/) : null;
+            setCode(pasted ? pasted[1] : v);
             setMsg(null);
           }}
-          maxLength={14}
+          maxLength={800}
           autoCapitalize="characters"
           autoComplete="off"
           spellCheck={false}

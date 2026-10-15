@@ -165,3 +165,28 @@ async def test_code_after_unmatched_sms_closes_the_unmatched_item(db):
     assert out.result == "underpaid"
     items = {i.type: i.status for i in await payments_reviews(db, hotel)}
     assert items == {"unmatched_sms": "resolved", "underpaid": "open"}
+
+
+@pytest.mark.parametrize(
+    ("typed", "code"),
+    [
+        ("SJK3ABC12D", "SJK3ABC12D"),
+        ("sjk3 abc12d", "SJK3ABC12D"),
+        (
+            "SJK3ABC12D Confirmed. Ksh40.00 paid to CHAKULA CAFE. on 2/10/26 at 7:37 PM. "
+            "New M-PESA balance is Ksh1,090.05. Transaction cost, Ksh0.00.",
+            "SJK3ABC12D",
+        ),
+        ("sjk3abc12d confirmed.\nKsh40.00 paid to CAFE", "SJK3ABC12D"),
+        ("my code is SJK3ABC12D thanks", "SJK3ABC12D"),
+    ],
+)
+def test_extract_code(typed, code):
+    assert payments.extract_code(typed) == code
+
+
+@pytest.mark.parametrize("typed", ["hello there, I paid", "SJK3ABC12D and QWE4RTY56U"])
+def test_extract_code_refuses_unclear(typed):
+    with pytest.raises(Exception) as e:
+        payments.extract_code(typed)
+    assert getattr(e.value, "code", "bad_code") == "bad_code"

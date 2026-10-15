@@ -9,7 +9,7 @@ from app.schemas.common import Schema
 
 
 class CodeIn(Input):
-    code: str = Field(min_length=8, max_length=20)
+    code: str = Field(min_length=8, max_length=800)  # a code, or the whole M-Pesa message
     mpesa_name: str | None = Field(default=None, max_length=120)  # only if someone else paid
     mpesa_phone: str | None = Field(default=None, max_length=20)
 

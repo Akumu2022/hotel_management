@@ -41,6 +41,28 @@ def normalize_code(raw: str) -> str:
     return code
 
 
+_MSG_CODE = re.compile(r"(?<![A-Z0-9])([A-Z0-9]{10})(?![A-Z0-9])")
+
+
+def extract_code(raw: str) -> str:
+    """The code from what the customer typed, or from their whole pasted M-Pesa message.
+    A plain code works as before. In a longer message the code is the 10-character token
+    before "Confirmed", else the only 10-character token that mixes letters and digits."""
+    compact = re.sub(r"\s+", "", raw or "").upper()
+    if CODE_RE.match(compact):
+        return compact
+    text = " ".join((raw or "").split())
+    m = re.search(r"(?<![A-Z0-9])([A-Z0-9]{10})\s*Confirmed", text, re.IGNORECASE)
+    if m:
+        return normalize_code(m.group(1))
+    found = {
+        c for c in _MSG_CODE.findall(text) if re.search(r"\d", c) and re.search(r"[A-Z]", c)
+    }
+    if len(found) == 1:
+        return normalize_code(found.pop())
+    raise AppError(422, "bad_code", "We could not find one M-Pesa code in that. Paste the code or the whole message.")
+
+
 def _full_phone(digits: str | None) -> str | None:
     """The payer's number when the SMS shows all of it (no stars), else None."""
     if not digits or "*" in digits:
@@ -359,7 +381,7 @@ async def submit_customer_code(
 ) -> Outcome:
     """Customer typed their M-Pesa code (this pauses expiry). If the payment is already
     known (from an SMS), it is matched straight away."""
-    code = normalize_code(raw_code)
+    code = extract_code(raw_code)
     order = await _lock_order(session, order_id)
     if order.payment_method != "mpesa":
         raise AppError(409, "not_mpesa", "Pay cash at the counter for this order")

@@ -268,6 +268,7 @@ const SW: Record<string, string> = {
 
   "Paid? Enter the M-Pesa code": "Umelipa? Weka nambari ya M-Pesa",
   "It's at the start of your M-Pesa message, e.g. SJK3ABC12D": "Iko mwanzoni mwa ujumbe wako wa M-Pesa, mfano SJK3ABC12D",
+  "It's at the start of your M-Pesa message, e.g. SJK3ABC12D. You can also paste the whole message.": "Iko mwanzoni mwa ujumbe wako wa M-Pesa, mfano SJK3ABC12D. Unaweza pia kubandika ujumbe mzima.",
   Send: "Tuma",
   "M-Pesa codes have 10 letters and numbers.": "Nambari za M-Pesa zina herufi na tarakimu 10.",
   "Checking your payment": "Tunakagua malipo yako",
