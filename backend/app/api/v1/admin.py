@@ -1,4 +1,5 @@
 import uuid
+from datetime import date
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, File, UploadFile
@@ -182,7 +183,11 @@ async def patch_hotel(hotel_id: uuid.UUID, body: HotelPatch, admin: SuperAdmin, 
     for key, value in values.items():
         old = getattr(hotel, key)
         if old != value:
-            changes[key] = {"old": old, "new": value}
+            # The audit log stores JSON: a licence date goes in as text.
+            changes[key] = {
+                "old": old.isoformat() if isinstance(old, date) else old,
+                "new": value.isoformat() if isinstance(value, date) else value,
+            }
             setattr(hotel, key, value)
     # A changed Till (number or name) is no longer what was checked: it needs checking again.
     if verified is None and ("till_number" in changes or "till_name" in changes) and hotel.verified_at:

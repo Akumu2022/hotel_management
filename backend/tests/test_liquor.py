@@ -145,3 +145,14 @@ async def test_track_and_store_settings_say_what_kind_of_store_it_is(client, db)
     assert (await client.get(f"/api/v1/track/{token}")).json()["hotel_kind"] == "liquor"
     staff = auth_header(await make_user(db, "hotel_admin", store))
     assert (await client.get("/api/v1/hotel/settings", headers=staff)).json()["kind"] == "liquor"
+
+
+async def test_owner_can_renew_a_licence_date(client, db, headers):  # noqa: F811
+    store, _ = await liquor(db)
+    r = await client.patch(
+        f"/api/v1/admin/hotels/{store.id}",
+        headers=headers,
+        json={"liquor_licence_expires": "2032-06-30"},
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["liquor_licence_expires"] == "2032-06-30"
