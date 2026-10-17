@@ -66,6 +66,7 @@ export type Offer = {
 export type DayHours = { weekday: number; opens_at: string; closes_at: string };
 
 export type HotelSettings = {
+  kind?: "hotel" | "liquor";
   name: string;
   phone: string;
   till_number: string;

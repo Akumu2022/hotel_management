@@ -13,7 +13,7 @@ import { HotelCover } from "../customer/bits";
 import { api } from "../lib/api";
 import { WEEKDAYS, compressImage, hhmm } from "../lib/format";
 import type { DayHours, Upload } from "../lib/types";
-import { keys, useHotelSettings, useIsAdmin, useSave } from "./hooks";
+import { keys, useHotelSettings, useIsAdmin, useSave, useW } from "./hooks";
 
 const MapPicker = lazy(() => import("../customer/MapPicker"));
 const SHORT = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -318,6 +318,7 @@ function StaffPanel() {
 }
 
 export function SettingsPage() {
+  const w = useW();
   const isAdmin = useIsAdmin();
   const { data, isLoading, error } = useHotelSettings();
   const file = useRef<HTMLInputElement>(null);
@@ -404,7 +405,7 @@ export function SettingsPage() {
               <span className="text-3xl">📱</span>
               <span>
                 <span className="block text-[0.9375rem] font-bold">Everything is paid first</span>
-                <span className="block text-sm text-muted">Every order, pickup, eat in and delivery, is paid by M-Pesa to your Till before you start cooking. Customers give you a 4-digit PIN when they collect.</span>
+                <span className="block text-sm text-muted">{w("Every order, pickup, eat in and delivery, is paid by M-Pesa to your Till before you start cooking. Customers give you a 4-digit PIN when they collect.")}</span>
               </span>
             </div>
             <div className="flex flex-col gap-3 rounded-2xl border-2 border-line p-4">

@@ -5,9 +5,10 @@ import { Badge, Button, Card, EmptyState, ErrorNote, Field, Input, Select, Sheet
 import { api } from "../lib/api";
 import { compressImage, isoToLocal, localToIso, when } from "../lib/format";
 import type { Offer, Product, Upload } from "../lib/types";
-import { keys, useIsAdmin, useOffers, useProducts, useSave } from "./hooks";
+import { keys, useIsAdmin, useOffers, useProducts, useSave, useW } from "./hooks";
 
 function OfferSheet({ offer, products, onClose }: { offer: Offer | null; products: Product[]; onClose: () => void }) {
+  const w = useW();
   const [headline, setHeadline] = useState(offer?.title.split("\n")[0] ?? "");
   const [subline, setSubline] = useState(offer?.title.split("\n").slice(1).join(" ") ?? "");
   const title = subline.trim() ? `${headline.trim()}\n${subline.trim()}` : headline.trim();
@@ -58,7 +59,7 @@ function OfferSheet({ offer, products, onClose }: { offer: Offer | null; product
       }
     >
       <form id="offer-form" onSubmit={submit} className="flex flex-col gap-4">
-        <p className="text-sm text-muted">Offers appear as banners on the customer home screen: the headline in big letters, the highlight line in a yellow tag. Use a photo with the dish on the right.</p>
+        <p className="text-sm text-muted">{w("Offers appear as banners on the customer home screen: the headline in big letters, the highlight line in a yellow tag. Use a photo with the dish on the right.")}</p>
         <button
           type="button"
           onClick={() => file.current?.click()}
@@ -92,10 +93,10 @@ function OfferSheet({ offer, products, onClose }: { offer: Offer | null; product
         <Field label="Highlight line" hint='e.g. "Buy one Get One Free!"'>
           {(id) => <Input id={id} value={subline} onChange={(e) => setSubline(e.target.value)} maxLength={60} />}
         </Field>
-        <Field label="Links to dish" hint="Optional">
+        <Field label={w("Links to dish")} hint="Optional">
           {(id) => (
             <Select id={id} value={productId} onChange={(e) => setProductId(e.target.value)}>
-              <option value="">No dish</option>
+              <option value="">{w("No dish")}</option>
               {products.map((p) => (
                 <option key={p.id} value={p.id}>{p.name}</option>
               ))}

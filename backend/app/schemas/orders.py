@@ -155,6 +155,7 @@ class TrackOut(Schema):
     hotel_name: str
     hotel_slug: str
     hotel_phone: str
+    hotel_kind: str = "hotel"
     till_number: str
     till_name: str | None = None  # M-Pesa shows this name before the customer enters their PIN
     hotel_verified: bool = False

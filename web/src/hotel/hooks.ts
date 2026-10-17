@@ -35,6 +35,28 @@ export const useDiscounts = () =>
 export const useOffers = () =>
   useQuery({ queryKey: keys.offers, queryFn: () => api.get<Offer[]>("/hotel/offers") });
 
+/** A liquor store's screens say drinks, not dishes or food. */
+export function toDrinks(s: string): string {
+  return s
+    .replace("Kitchen too busy", "Too busy")
+    .replace("Kitchen problem (gas, power…)", "Store problem (power, stock…)")
+    .replace("In the kitchen", "Preparing")
+    .replace("Nothing cooking.", "Nothing being prepared.")
+    .replace("start cooking", "start preparing")
+    .replace(", pickup, eat in and delivery,", ", pickup and delivery,")
+    .replace(/\bDishes\b/g, "Drinks")
+    .replace(/\bdishes\b/g, "drinks")
+    .replace(/\bDish\b/g, "Drink")
+    .replace(/\bdish\b/g, "drink")
+    .replace(/\bFood\b/g, "Drinks")
+    .replace(/\bfood\b/g, "drinks");
+}
+
+export function useW(): (s: string) => string {
+  const liquor = useHotelSettings().data?.kind === "liquor";
+  return (s) => (liquor ? toDrinks(s) : s);
+}
+
 export const useHotelSettings = () =>
   useQuery({ queryKey: keys.settings, queryFn: () => api.get<HotelSettings>("/hotel/settings") });
 

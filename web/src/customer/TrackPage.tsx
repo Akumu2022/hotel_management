@@ -14,7 +14,7 @@ import { api } from "../lib/api";
 import { money } from "../lib/format";
 import { useAlarm } from "../lib/alarm";
 import { useLive } from "../lib/live";
-import { tr, useT } from "../lib/i18n";
+import { tr, useT, useVariant } from "../lib/i18n";
 import { TopBar } from "./CustomerLayout";
 import { ConfirmDialog, HelpButton, JourneySteps, toast } from "./bits";
 import { useConfig } from "./OrderPanel";
@@ -179,7 +179,7 @@ function PayCard({ t, token, onCode }: { t: Track; token: string; onCode: () => 
             <p className="money text-2xl font-bold">{money(t.till_amount)}</p>
           </div>
         </div>
-        <p className="mt-3 text-sm text-muted">The hotel may call to confirm your order first.</p>
+        <p className="mt-3 text-sm text-muted">{tt("The hotel may call to confirm your order first.")}</p>
       </Card>
     );
   }
@@ -363,6 +363,7 @@ export function TrackPage() {
   const [confirmCancel, setConfirmCancel] = useState(false);
   const navigate = useNavigate();
   const config = useConfig();
+  useVariant(track.data?.hotel_kind);
 
   if (track.isLoading) return (<><TopBar /><div className="p-6"><Skeleton className="h-64 rounded-2xl" /></div></>);
   if (track.error || !track.data) return (<><TopBar /><div className="p-6"><ErrorNote error={track.error} /></div></>);

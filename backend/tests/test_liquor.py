@@ -132,3 +132,16 @@ async def test_liquor_is_delivery_or_pickup_only(client, db):
         "/api/v1/quotes", json={**{k: body(store, product)[k] for k in ("hotel_slug", "lines", "rider_fee_mode", "phone")}, "type": "eat_in", "rider_fee_mode": "none"}
     )
     assert r.status_code == 422 and r.json()["error"]["code"] == "eat_in_unavailable"
+
+
+async def test_track_and_store_settings_say_what_kind_of_store_it_is(client, db):
+    from tests.factories import auth_header, make_user
+
+    store, product = await liquor(db)
+    placed = await client.post(
+        "/api/v1/orders", headers=key(), json=body(store, product, age_confirmed=True)
+    )
+    token = placed.json()["tracking_token"]
+    assert (await client.get(f"/api/v1/track/{token}")).json()["hotel_kind"] == "liquor"
+    staff = auth_header(await make_user(db, "hotel_admin", store))
+    assert (await client.get("/api/v1/hotel/settings", headers=staff)).json()["kind"] == "liquor"

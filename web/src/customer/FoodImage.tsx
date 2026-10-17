@@ -1,7 +1,14 @@
 import clsx from "clsx";
 
+import { isDrinks } from "../lib/i18n";
+
 /** Keyword -> emoji for dishes without a photo yet. A warm tile beats an empty grey box. */
 const EMOJI: [RegExp, string][] = [
+  [/beer|lager|tusker|guinness|pilsner|\bale\b|stout|cider|balozi|white cap|castle/i, "🍺"],
+  [/wine|merlot|chardonnay|sauvignon|rose|prosecco/i, "🍷"],
+  [/whisk|brandy|cognac|\brum\b|jameson|johnnie|jack daniel|hennessy/i, "🥃"],
+  [/vodka|\bgin\b|gilbey|tequila|cocktail|liqueur|baileys|smirnoff|konyagi/i, "🍸"],
+  [/champagne|sparkling|[0-9]+ ?(ml|litre|ltr)\b|bottle|crate/i, "🍾"],
   [/chai|tea|coffee/i, "☕"],
   [/mandazi|doughnut|donut/i, "🍩"],
   [/egg/i, "🍳"],
@@ -28,7 +35,7 @@ const EMOJI: [RegExp, string][] = [
 const TINTS = ["#fff1ea", "#fef3c7", "#ecfccb", "#e0f2fe", "#fce7f3", "#ede9fe"];
 
 export function emojiFor(name: string): string {
-  return EMOJI.find(([re]) => re.test(name))?.[1] ?? "🍽️";
+  return EMOJI.find(([re]) => re.test(name))?.[1] ?? (isDrinks() ? "🍺" : "🍽️");
 }
 
 function tintFor(name: string): string {

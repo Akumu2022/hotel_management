@@ -136,6 +136,7 @@ async def track(token: str, session: Session, storage: StorageDep):
         hotel_name=hotel.name,
         hotel_slug=hotel.slug,
         hotel_phone=hotel.phone,
+        hotel_kind=hotel.kind,
         till_number=hotel.till_number,
         till_name=hotel.till_name,
         hotel_verified=hotel.verified_at is not None,

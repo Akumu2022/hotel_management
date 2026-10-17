@@ -7,7 +7,7 @@ import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom"
 import { ErrorNote, Skeleton } from "../components/ui";
 import { api } from "../lib/api";
 import { hhmm, money } from "../lib/format";
-import { tr, useT } from "../lib/i18n";
+import { isDrinks, tr, useT, useVariant } from "../lib/i18n";
 import { OfferCarousel } from "./OfferCarousel";
 import { ConfirmDialog, HotelCover, JourneySteps, VerifiedBadge, categoryEmoji, etaText, toast } from "./bits";
 import { AgeGate, useAgeConfirmed } from "./age";
@@ -237,6 +237,7 @@ export function HotelPage() {
   const aged = useAgeConfirmed();
   const liquor = menu.data?.hotel.kind === "liquor";
   const kindNow = menu.data?.hotel.kind;
+  useVariant(kindNow);
   useEffect(() => {
     if (kindNow) setSection(kindNow === "liquor" ? "liquor" : "hotel"); // the header shows where you are
   }, [kindNow]);
@@ -356,7 +357,7 @@ export function HotelPage() {
                       active ? "bg-brand shadow-lg shadow-brand/30 ring-4 ring-brand/15" : "bg-brand-soft group-hover:bg-brand-tint",
                     )}
                   >
-                    {cat.id === "all" ? "🍽️" : categoryEmoji(cat.name)}
+                    {cat.id === "all" ? (isDrinks() ? "🍻" : "🍽️") : categoryEmoji(cat.name)}
                   </span>
                   <span className={clsx("w-full truncate text-center text-xs", active ? "font-bold text-ink" : "font-medium text-muted")}>{cat.name}</span>
                 </button>

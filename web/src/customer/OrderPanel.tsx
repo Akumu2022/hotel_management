@@ -6,21 +6,24 @@ import { useNavigate } from "react-router-dom";
 
 import { api } from "../lib/api";
 import { money } from "../lib/format";
-import { useT } from "../lib/i18n";
+import { isDrinks, useT } from "../lib/i18n";
 import { BonusLine, BonusNudges, ConfirmDialog, ModePicker } from "./bits";
 import { FoodImage } from "./FoodImage";
+import { useSection } from "./section";
 import { cart, orderMode, useCart, useOrderMode } from "./store";
 import type { Menu, PublicConfig, Quote } from "./types";
 
 /** hotel or liquor for what is in the cart. Carts saved before liquor existed don't say, so the store's menu is asked. */
 export function useCartKind(): "hotel" | "liquor" {
   const c = useCart();
+  const section = useSection();
   const menu = useQuery({
     queryKey: ["menu", c.hotel_slug],
     queryFn: () => api.get<Menu>(`/hotels/${c.hotel_slug}/menu`),
     enabled: !!c.hotel_slug && !c.hotel_kind,
     staleTime: 60_000,
   });
+  if (!c.hotel_slug) return section; // empty cart: whichever part of Chakula you are in
   return c.hotel_kind ?? menu.data?.hotel.kind ?? "hotel";
 }
 
@@ -109,7 +112,7 @@ export function OrderPanel({ onProceed }: { onProceed?: () => void }) {
       <div className="flex-1 overflow-y-auto px-5 py-4">
         {empty ? (
           <div className="flex h-full min-h-40 flex-col items-center justify-center gap-2 text-center">
-            <span className="text-5xl">🍽️</span>
+            <span className="text-5xl">{isDrinks() ? "🍺" : "🍽️"}</span>
             <p className="font-semibold">{t("Your order is empty")}</p>
             <p className="max-w-56 text-sm text-muted">{liquor ? t("Tap “Add” on any drink to start your order.") : t("Tap “Add” on any dish to start your order.")}</p>
           </div>

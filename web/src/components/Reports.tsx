@@ -177,7 +177,7 @@ const KIND = { mpesa: { label: "M-Pesa", cls: "bg-ok-soft text-ok" }, cash: { la
 
 // --- Main --------------------------------------------------------------------------------------
 
-export function Reports({ scope }: { scope: "hotel" | "admin" }) {
+export function Reports({ scope, foodLabel = "Food sales" }: { scope: "hotel" | "admin"; foodLabel?: string }) {
   const base = scope === "admin" ? "/admin/reports" : "/hotel/reports";
   const [preset, setPreset] = useState<Preset>("7d");
   const [custom, setCustom] = useState(() => ({ start: addDays(iso(new Date()), -6), end: iso(new Date()) }));
@@ -271,7 +271,7 @@ export function Reports({ scope }: { scope: "hotel" | "admin" }) {
         <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
           <Kpi icon={<ReceiptText className="size-4" />} label="Money received" value={money(t.net_received)} sub={`M-Pesa ${money(t.mpesa)} · cash ${money(t.cash)}${t.refunds ? ` · refunds −${money(t.refunds)}` : ""}`} tone="ok" />
           <Kpi icon={<ShoppingBag className="size-4" />} label="Orders" value={String(t.orders)} sub={`${t.deliveries} delivery · ${t.pickups} pickup`} />
-          <Kpi icon={<Banknote className="size-4" />} label="Average order" value={money(t.average_order)} sub={`Food sales ${money(t.food_sales)}`} tone="warn" />
+          <Kpi icon={<Banknote className="size-4" />} label="Average order" value={money(t.average_order)} sub={`${foodLabel} ${money(t.food_sales)}`} tone="warn" />
           <Kpi icon={<HandCoins className="size-4" />} label="Platform fees" value={money(t.commission + t.service_fee - t.bonuses)} sub={`Commission ${money(t.commission)} · service ${money(t.service_fee)}${t.bonuses ? ` · bonuses credited −${money(t.bonuses)}` : ""}`} tone="bad" />
         </div>
       )}

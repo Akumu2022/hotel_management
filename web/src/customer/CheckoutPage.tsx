@@ -14,7 +14,7 @@ import { Skeleton } from "../components/ui";
 import { ApiError, api, request } from "../lib/api";
 import { money } from "../lib/format";
 import { pointInZone } from "../lib/geo";
-import { useT } from "../lib/i18n";
+import { useT, useVariant } from "../lib/i18n";
 import { BonusLine, BonusNudges, ConfirmDialog, HelpButton, JourneySteps, ModePicker } from "./bits";
 import { ageConfirmed } from "./age";
 import { TopBar } from "./CustomerLayout";
@@ -104,6 +104,7 @@ export function CheckoutPage() {
   const saved = useProfile();
   const type = useOrderMode();
   const kind = useCartKind();
+  useVariant(kind);
   const liquor = kind === "liquor";
   const config = useConfig({ fresh: true, kind });
   useEffect(() => {
@@ -195,7 +196,7 @@ export function CheckoutPage() {
         <div className="flex flex-1 flex-col items-center justify-center gap-3 p-10 text-center">
           <span className="text-7xl">🛒</span>
           <p className="text-xl font-bold">{t("Your order is empty")}</p>
-          <p className="text-sm text-muted">Pick a hotel and add something tasty.</p>
+          <p className="text-sm text-muted">{t("Pick a hotel and add something tasty.")}</p>
           <Link to="/" className="mt-2 rounded-xl bg-brand px-6 py-3 font-semibold text-white shadow-lg shadow-brand/25">
             {t("Browse hotels")}
           </Link>

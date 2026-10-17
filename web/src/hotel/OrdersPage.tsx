@@ -12,7 +12,7 @@ import { Badge, ErrorNote, Skeleton } from "../components/ui";
 import { api } from "../lib/api";
 import { money } from "../lib/format";
 import { useAlarmUnlocked } from "../lib/alarm";
-import { useHotelSettings, useIsAdmin } from "./hooks";
+import { useHotelSettings, useIsAdmin, useW } from "./hooks";
 
 /** Who paid, from the Till SMS, and whether it's the name given at checkout. Someone
  * else paying is normal (a friend, a parent), so this informs; it never blocks. */
@@ -91,6 +91,7 @@ function useTick(ms = 15000) {
 }
 
 function OrderCard({ o, onAction, canCancel }: { o: BoardOrder; onAction: (o: BoardOrder, a: string) => void; canCancel: boolean }) {
+  const w = useW();
   useTick();
   const isNew = o.status === "paid" || o.status === "awaiting_payment";
   const waited = minutesSince(o.paid_at ?? o.created_at);
@@ -186,7 +187,7 @@ function OrderCard({ o, onAction, canCancel }: { o: BoardOrder; onAction: (o: Bo
             {o.rider_photo_url ? <img src={o.rider_photo_url} alt="" className="size-10 rounded-full object-cover" /> : <span className="flex size-10 items-center justify-center rounded-full bg-surface"><Bike className="size-5 text-brand" /></span>}
             <span className="min-w-0 flex-1 text-sm">
               <span className="block font-bold">Rider: {o.rider_name}</span>
-              <span className="block text-muted">{o.status === "ready" ? "Coming for the food" : "Will collect when ready"}</span>
+              <span className="block text-muted">{w(o.status === "ready" ? "Coming for the food" : "Will collect when ready")}</span>
             </span>
             <a href={`tel:+${o.rider_phone}`} aria-label="Call rider" className="flex size-10 items-center justify-center rounded-lg bg-surface text-brand"><Phone className="size-4" /></a>
           </div>
@@ -196,7 +197,7 @@ function OrderCard({ o, onAction, canCancel }: { o: BoardOrder; onAction: (o: Bo
       ) : null}
       {o.type === "delivery" && o.status === "ready" && o.rider_name ? (
         <button onClick={() => onAction(o, "handed-to-rider")} className="mt-2 flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-ok px-3 py-2 font-semibold text-white">
-          <PackageCheck className="size-4 shrink-0" /> {o.fee_with_food ? `Handed food + ${money(o.rider_fee)} fee to ${o.rider_name}` : `Handed to ${o.rider_name}`}
+          <PackageCheck className="size-4 shrink-0" /> {o.fee_with_food ? w(`Handed food + ${money(o.rider_fee)} fee to ${o.rider_name}`) : `Handed to ${o.rider_name}`}
         </button>
       ) : null}
       {canCancel && ["accepted", "preparing", "ready"].includes(o.status) ? (
@@ -229,6 +230,7 @@ function Column({ title, tone, orders, onAction, empty, canCancel }: { title: st
 // --- Page ---------------------------------------------------------------------------------------
 
 export function OrdersPage() {
+  const w = useW();
   const qc = useQueryClient();
   const { data: settings } = useHotelSettings();
   const board = useQuery({ queryKey: ["hotel", "orders", "active"], queryFn: () => api.get<BoardOrder[]>("/hotel/orders"), refetchInterval: 30_000 });
@@ -314,7 +316,7 @@ export function OrdersPage() {
       ) : (
         <div className="grid items-start gap-5 lg:grid-cols-3">
           <Column title="New" tone="bg-brand animate-pulse" orders={fresh} onAction={onAction} empty="New orders appear here and ring." canCancel={isAdmin} />
-          <Column title="In the kitchen" tone="bg-warn" orders={kitchen} onAction={onAction} empty="Nothing cooking." canCancel={isAdmin} />
+          <Column title={w("In the kitchen")} tone="bg-warn" orders={kitchen} onAction={onAction} empty={w("Nothing cooking.")} canCancel={isAdmin} />
           <Column title="Ready" tone="bg-ok" orders={ready} onAction={onAction} empty="Nothing waiting for pickup." canCancel={isAdmin} />
         </div>
       )}
@@ -355,7 +357,7 @@ export function OrdersPage() {
               <button type="button" onClick={() => setHanding(null)} aria-label="Close" className="rounded-full p-1 text-muted"><X className="size-5" /></button>
             </div>
             <p className="mt-1 text-sm text-muted">
-              Ask {handing.customer_name} for the 4-digit PIN shown in their app. Only hand over the food once it matches.
+              Ask {handing.customer_name} for the 4-digit PIN shown in their app. Only hand over the {w("food")} once it matches.
             </p>
             <input
               autoFocus
@@ -399,7 +401,7 @@ export function OrdersPage() {
               <button type="button" onClick={() => setHandingRider(null)} aria-label="Close" className="rounded-full p-1 text-muted"><X className="size-5" /></button>
             </div>
             <p className="mt-1 text-sm text-muted">
-              Ask {handingRider.rider_name ?? "the rider"} for the 4-digit pickup PIN on their phone for order #{handingRider.code}. Only hand over the food once it matches.
+              Ask {handingRider.rider_name ?? "the rider"} for the 4-digit pickup PIN on their phone for order #{handingRider.code}. Only hand over the {w("food")} once it matches.
             </p>
             <input
               autoFocus
@@ -418,7 +420,7 @@ export function OrdersPage() {
               disabled={riderPin.length !== 4 || handover.isPending}
               className="mt-4 flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-ok font-semibold text-white disabled:opacity-50"
             >
-              <PackageCheck className="size-4" /> {handover.isPending ? "Checking…" : handingRider.fee_with_food ? `Hand food + ${money(handingRider.rider_fee)} fee` : "Hand over"}
+              <PackageCheck className="size-4" /> {handover.isPending ? "Checking…" : handingRider.fee_with_food ? w(`Hand food + ${money(handingRider.rider_fee)} fee`) : "Hand over"}
             </button>
           </form>
         </div>
@@ -472,7 +474,7 @@ export function OrdersPage() {
                   }}
                   className="h-11 rounded-xl border border-line text-sm font-semibold hover:border-bad/40 hover:bg-bad-soft hover:text-bad"
                 >
-                  {label}
+                  {w(label)}
                 </button>
               ))}
             </div>
@@ -502,7 +504,7 @@ export function OrdersPage() {
                   }}
                   className="h-11 rounded-xl border border-line text-sm font-semibold hover:border-bad/40 hover:bg-bad-soft hover:text-bad"
                 >
-                  {label}
+                  {w(label)}
                 </button>
               ))}
             </div>

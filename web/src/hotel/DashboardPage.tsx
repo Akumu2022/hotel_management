@@ -20,8 +20,7 @@ import {
   useHotelSettings,
   useIsAdmin,
   useOffers,
-  useProducts,
-} from "./hooks";
+  useProducts, useW } from "./hooks";
 
 function Stat({
   icon,
@@ -105,6 +104,7 @@ function QuickLink({
 }
 
 export function DashboardPage() {
+  const w = useW();
   const products = useProducts();
   const discounts = useDiscounts();
   const offers = useOffers();
@@ -147,7 +147,7 @@ export function DashboardPage() {
       <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
         <Stat
           icon={<UtensilsCrossed className="size-4" />}
-          label="Available dishes"
+          label={w("Available dishes")}
           value={available}
           total={`of ${list.length} on the menu`}
           pct={pct(available, list.length)}
@@ -156,7 +156,7 @@ export function DashboardPage() {
         />
         <Stat
           icon={<ImageOff className="size-4" />}
-          label="Dishes with photos"
+          label={w("Dishes with photos")}
           value={withPhoto}
           total={`${list.length - withPhoto} still need one`}
           pct={pct(withPhoto, list.length)}
@@ -174,7 +174,7 @@ export function DashboardPage() {
         />
       </div>
 
-      {isAdmin ? <Reports scope="hotel" /> : null}
+      {isAdmin ? <Reports scope="hotel" foodLabel={w("Food sales")} /> : null}
 
       <div className="grid items-start gap-5 lg:grid-cols-2">
         <section className="rounded-[1.5rem] bg-surface p-5 shadow-sm">
@@ -206,7 +206,7 @@ export function DashboardPage() {
               to="/hotel/menu"
               icon={<UtensilsCrossed className="size-5" />}
               title="Menu"
-              body="Add dishes, photos and sold-out"
+              body={w("Add dishes, photos and sold-out")}
             />
             <QuickLink
               to="/hotel/offers"
@@ -226,9 +226,9 @@ export function DashboardPage() {
 
       {noPhoto.length ? (
         <section className={clsx("rounded-[1.5rem] bg-surface p-5 shadow-sm")}>
-          <h2 className="text-lg font-bold">Dishes without a photo</h2>
+          <h2 className="text-lg font-bold">{w("Dishes without a photo")}</h2>
           <p className="mb-3 text-sm text-muted">
-            Photos sell food. Dishes with a good photo get ordered more.
+            {w("Photos sell food. Dishes with a good photo get ordered more.")}
           </p>
           <div className="flex flex-wrap gap-2">
             {noPhoto.map((p) => (

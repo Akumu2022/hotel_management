@@ -426,6 +426,7 @@ async def _settings_out(session, hotel: Hotel, storage: Storage) -> HotelSetting
     )
     return HotelSettingsOut(
         name=hotel.name,
+        kind=hotel.kind,
         phone=hotel.phone,
         till_number=hotel.till_number,
         till_name=hotel.till_name,

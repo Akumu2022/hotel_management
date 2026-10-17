@@ -4,7 +4,9 @@
  * Placeholders: t("Closes {time}", { time }) .
  * NOTE: have a native speaker review SW before launch.
  */
-import { useSyncExternalStore } from "react";
+import { useEffect, useSyncExternalStore } from "react";
+
+import { DRINK_WORDS, DRINK_WORDS_SW } from "./drinkWords";
 
 export type Lang = "en" | "sw";
 
@@ -309,6 +311,27 @@ let lang: Lang = (() => {
 })();
 const listeners = new Set<() => void>();
 
+// Pages about drinks (liquor stores) say "store" and "drinks" where the food pages say "hotel" and
+// "food": `tr` swaps the wording from drinkWords.ts while the variant is "liquor".
+let variant: "hotel" | "liquor" = "hotel";
+export function setVariant(v: "hotel" | "liquor") {
+  if (v === variant) return;
+  variant = v;
+  listeners.forEach((fn) => fn());
+}
+
+/** True while the page is about drinks (for emoji and other non-text bits). */
+export const isDrinks = () => variant === "liquor";
+
+/** Use on a page that is about one kind of store; it goes back to the food wording when you leave. */
+export function useVariant(kind: "hotel" | "liquor" | undefined) {
+  const k = kind === "liquor" ? "liquor" : "hotel";
+  useEffect(() => {
+    setVariant(k);
+    return () => setVariant("hotel");
+  }, [k]);
+}
+
 export function setLang(next: Lang) {
   lang = next;
   try {
@@ -325,7 +348,8 @@ export function getLang(): Lang {
 }
 
 export function tr(s: string, vars?: Record<string, string | number>): string {
-  let out = lang === "sw" ? (SW[s] ?? s) : s;
+  const key = variant === "liquor" ? (DRINK_WORDS[s] ?? s) : s;
+  let out = lang === "sw" ? (variant === "liquor" ? (DRINK_WORDS_SW[key] ?? SW[key] ?? SW[s] ?? key) : (SW[s] ?? s)) : key;
   if (vars) for (const [k, v] of Object.entries(vars)) out = out.replaceAll(`{${k}}`, String(v));
   return out;
 }
@@ -334,7 +358,7 @@ export function tr(s: string, vars?: Record<string, string | number>): string {
 export function useT() {
   useSyncExternalStore(
     (fn) => (listeners.add(fn), () => listeners.delete(fn)),
-    () => lang,
+    () => lang + variant,
   );
   return tr;
 }

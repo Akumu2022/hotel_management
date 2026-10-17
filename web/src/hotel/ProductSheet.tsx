@@ -6,7 +6,7 @@ import { api } from "../lib/api";
 import { compressImage, money } from "../lib/format";
 import type { Category, Product, Upload } from "../lib/types";
 import { CATEGORY_SUGGESTIONS } from "./categorySuggestions";
-import { keys, useProducts, useSave } from "./hooks";
+import { keys, useProducts, useSave, useW } from "./hooks";
 
 function PhotoPicker({
   url,
@@ -17,6 +17,7 @@ function PhotoPicker({
   onUploaded: (u: Upload) => void;
   onRemove: () => void;
 }) {
+  const w = useW();
   const input = useRef<HTMLInputElement>(null);
   const upload = useSave(async (file: File) => {
     const blob = await compressImage(file);
@@ -27,7 +28,7 @@ function PhotoPicker({
     <div className="flex flex-col gap-2">
       <div className="relative aspect-[4/3] w-full overflow-hidden rounded-card border border-line bg-page">
         {url ? (
-          <img src={url} alt="Dish" className="size-full object-cover" />
+          <img src={url} alt={w("Dish")} className="size-full object-cover" />
         ) : (
           <button
             type="button"
@@ -164,6 +165,7 @@ export function ProductSheet({
   defaultCategory?: string;
   onClose: () => void;
 }) {
+  const w = useW();
   // After creating a dish the sheet stays open in edit mode so options can be added.
   const [created, setCreated] = useState<Product | null>(product);
   const { data: all } = useProducts(true);
@@ -222,7 +224,7 @@ export function ProductSheet({
   return (
     <Sheet
       open
-      title={current ? `Edit ${current.name}` : "New dish"}
+      title={current ? `Edit ${current.name}` : w("New dish")}
       onClose={onClose}
       footer={
         <div className="flex gap-2">
@@ -236,7 +238,7 @@ export function ProductSheet({
             </Button>
           ) : null}
           <Button className="flex-1" type="submit" form="product-form" busy={save.isPending}>
-            {current ? "Save" : "Create dish"}
+            {current ? "Save" : w("Create dish")}
           </Button>
         </div>
       }
@@ -254,7 +256,7 @@ export function ProductSheet({
             setPhotoUrl(null);
           }}
         />
-        <Field label="Dish name">
+        <Field label={w("Dish name")}>
           {(id) => <Input id={id} value={name} onChange={(e) => setName(e.target.value)} required maxLength={120} />}
         </Field>
         <div className="grid grid-cols-2 gap-3">
@@ -312,7 +314,7 @@ export function ProductSheet({
           <OptionsEditor product={current} />
         </div>
       ) : (
-        <p className="mt-4 text-sm text-muted">You can add options and extras after creating the dish.</p>
+        <p className="mt-4 text-sm text-muted">You can add options and extras after creating the {w("dish")}.</p>
       )}
     </Sheet>
   );

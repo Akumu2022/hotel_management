@@ -5,7 +5,7 @@ import { Badge, Button, Card, EmptyState, ErrorNote, Field, Input, MoneyInput, S
 import { api } from "../lib/api";
 import { isoToLocal, localToIso, money, when } from "../lib/format";
 import type { Discount, Product } from "../lib/types";
-import { keys, useDiscounts, useIsAdmin, useProducts, useSave } from "./hooks";
+import { keys, useDiscounts, useIsAdmin, useProducts, useSave, useW } from "./hooks";
 
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const toMin = (hhmm: string) => Number(hhmm.slice(0, 2)) * 60 + Number(hhmm.slice(3, 5));
@@ -36,6 +36,7 @@ function status(d: Discount): { label: string; tone: "ok" | "warn" | "neutral" }
 }
 
 function NewDiscountSheet({ products, onClose }: { products: Product[]; onClose: () => void }) {
+  const w = useW();
   const [scope, setScope] = useState<"order" | "item">("order");
   const [productId, setProductId] = useState(products[0]?.id ?? "");
   const [kind, setKind] = useState<"percent" | "fixed">("percent");
@@ -96,12 +97,12 @@ function NewDiscountSheet({ products, onClose }: { products: Product[]; onClose:
           {(id) => (
             <Select id={id} value={scope} onChange={(e) => setScope(e.target.value as "order" | "item")}>
               <option value="order">The whole order</option>
-              <option value="item">One dish</option>
+              <option value="item">{w("One dish")}</option>
             </Select>
           )}
         </Field>
         {scope === "item" ? (
-          <Field label="Dish">
+          <Field label={w("Dish")}>
             {(id) => (
               <Select id={id} value={productId} onChange={(e) => setProductId(e.target.value)}>
                 {products.map((p) => (
@@ -192,13 +193,14 @@ function NewDiscountSheet({ products, onClose }: { products: Product[]; onClose:
 }
 
 function DiscountRow({ d, products, canEdit }: { d: Discount; products: Product[]; canEdit: boolean }) {
+  const w = useW();
   const toggle = useSave((is_active: boolean) => api.patch(`/hotel/discounts/${d.id}`, { is_active }), [keys.discounts]);
   const s = status(d);
   return (
     <li className="flex items-center gap-3 p-3">
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
-          <p className="font-medium">{describe(d, products)}</p>
+          <p className="font-medium">{w(describe(d, products))}</p>
           <Badge tone={s.tone}>{s.label}</Badge>
           {d.promo_code ? <Badge tone="brand">Code {d.promo_code}</Badge> : null}
         </div>
@@ -214,6 +216,7 @@ function DiscountRow({ d, products, canEdit }: { d: Discount; products: Product[
 }
 
 export function DiscountsPage() {
+  const w = useW();
   const isAdmin = useIsAdmin();
   const discounts = useDiscounts();
   const products = useProducts();
@@ -227,7 +230,7 @@ export function DiscountsPage() {
   return (
     <div>
       <div className="mb-4 flex items-center justify-between">
-        <p className="text-sm text-muted">Customers get the single best deal on each dish and on the order.</p>
+        <p className="text-sm text-muted">{w("Customers get the single best deal on each dish and on the order.")}</p>
         {isAdmin ? (
           <Button onClick={() => setCreating(true)}>
             <Plus className="size-4" /> Discount
@@ -237,7 +240,7 @@ export function DiscountsPage() {
       {list.length === 0 ? (
         <EmptyState
           title="No discounts yet"
-          body="Customers get the single best discount on each dish and on the order. Promo codes compete with automatic discounts."
+          body={w("Customers get the single best discount on each dish and on the order. Promo codes compete with automatic discounts.")}
           action={isAdmin ? <Button onClick={() => setCreating(true)}>Create a discount</Button> : null}
         />
       ) : (

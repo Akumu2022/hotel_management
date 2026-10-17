@@ -16,6 +16,7 @@ import { setTheme, useTheme } from "../lib/theme";
 import { HelpButton, Toaster } from "./bits";
 import { FoodImage } from "./FoodImage";
 import { OrderPanel, useCartQuote, useConfig } from "./OrderPanel";
+import { useSection } from "./section";
 import { cart, useCart, useRecentOrders } from "./store";
 import type { PublicHotel } from "./types";
 
@@ -50,7 +51,8 @@ function HotelSwitcher() {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
-  const hotels = useQuery({ queryKey: ["hotels"], queryFn: () => api.get<PublicHotel[]>("/hotels") });
+  const section = useSection();
+  const hotels = useQuery({ queryKey: section === "liquor" ? ["hotels", "liquor"] : ["hotels"], queryFn: () => api.get<PublicHotel[]>(section === "liquor" ? "/hotels?kind=liquor" : "/hotels") });
   const current = hotels.data?.find((h) => h.slug === slug);
 
   useEffect(() => {

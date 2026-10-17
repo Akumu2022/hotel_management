@@ -6,7 +6,7 @@ import { Link } from "react-router-dom";
 
 import { ErrorNote, Skeleton } from "../components/ui";
 import { api } from "../lib/api";
-import { useT } from "../lib/i18n";
+import { isDrinks, useT, useVariant } from "../lib/i18n";
 import { AgeGate, useAgeConfirmed } from "./age";
 import { setSection, useSection } from "./section";
 import { TopBar } from "./CustomerLayout";
@@ -147,7 +147,7 @@ function DishSearch({ q, area, kind }: { q: string; area: Area; kind: "hotel" | 
             {h.thumb_url ? (
               <img src={h.thumb_url} alt="" className="size-14 shrink-0 rounded-xl object-cover" />
             ) : (
-              <span className="flex size-14 shrink-0 items-center justify-center rounded-xl bg-subtle text-2xl">🍽️</span>
+              <span className="flex size-14 shrink-0 items-center justify-center rounded-xl bg-subtle text-2xl">{isDrinks() ? "🍺" : "🍽️"}</span>
             )}
             <span className="min-w-0 flex-1">
               <span className="block truncate font-semibold">{h.name}</span>
@@ -169,6 +169,7 @@ export function HomePage() {
   const [changing, setChanging] = useState(false);
   // Food hotels, or liquor stores (18+ only: the customer confirms once before the stores are shown).
   const kind = useSection();
+  useVariant(kind);
   useEffect(() => { setQ(""); setSearching(false); }, [kind]);
   const aged = useAgeConfirmed();
   const locked = kind === "liquor" && !aged;
@@ -185,7 +186,9 @@ export function HomePage() {
     enabled: !!area,
   });
   const recent = useRecentOrders();
-  const banner = useConfig().data?.banner;
+  // Drinks have their own built-in banner: the food photo and wording don't belong there.
+  const configBanner = useConfig().data?.banner;
+  const banner = kind === "liquor" ? undefined : configBanner;
   const [searching, setSearching] = useState(false);
   const [q, setQ] = useState("");
   const showSearch = searching || q.length > 0;
@@ -207,7 +210,7 @@ export function HomePage() {
               style={{ WebkitMaskImage: FEATHER, maskImage: FEATHER }}
             />
           ) : (
-            <span className="pointer-events-none absolute right-6 text-6xl select-none sm:text-[8rem]">{banner?.emoji || "🍲"}</span>
+            <span className="pointer-events-none absolute right-6 text-6xl select-none sm:text-[8rem]">{banner?.emoji || (kind === "liquor" ? "🍻" : "🍲")}</span>
           )}
           <div className="relative z-10 w-[56%] max-w-md min-w-0 sm:w-1/2">
             <p className="text-lg font-semibold opacity-90 sm:text-xl">{banner?.greeting || t("Karibu!")}</p>
@@ -310,7 +313,7 @@ export function HomePage() {
           ) : (
             hotels.data!.length === 0 ? (
               <div className="flex flex-col items-center gap-2 rounded-2xl border border-dashed border-line bg-surface px-6 py-12 text-center">
-                <span className="text-5xl">🍽️</span>
+                <span className="text-5xl">{isDrinks() ? "🍺" : "🍽️"}</span>
                 <p className="text-lg font-semibold">{kind === "liquor" ? t("No drinks stores near {place} yet", { place: area.label }) : t("No hotels near {place} yet", { place: area.label })}</p>
                 <p className="max-w-xs text-sm text-muted">{t("We're growing. Try another town, or check back soon.")}</p>
                 <button type="button" onClick={() => setChanging(true)} className="mt-1 text-sm font-semibold text-brand">{t("Change location")}</button>

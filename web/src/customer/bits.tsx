@@ -4,7 +4,7 @@ import { CheckCircle2, Gift, ShieldCheck, Truck } from "lucide-react";
 import { type ReactNode, useEffect, useState, useSyncExternalStore } from "react";
 
 import { money } from "../lib/format";
-import { useT } from "../lib/i18n";
+import { isDrinks, useT } from "../lib/i18n";
 import { orderMode, useOrderMode } from "./store";
 import type { Quote } from "./types";
 
@@ -186,6 +186,11 @@ export function ModePicker({
 // --- Category icons -----------------------------------------------------------------------------
 
 const CATEGORY_EMOJI: [RegExp, string][] = [
+  [/beer|lager|cider|stout/i, "🍺"],
+  [/wine/i, "🍷"],
+  [/whisk|brandy|cognac|rum/i, "🥃"],
+  [/spirit|vodka|gin|tequila|liqueur|cocktail/i, "🍸"],
+  [/champagne|sparkling/i, "🍾"],
   [/breakfast|morning/i, "🍳"],
   [/main|lunch|dinner|meal/i, "🍛"],
   [/drink|juice|beverage/i, "🥤"],
@@ -199,7 +204,7 @@ const CATEGORY_EMOJI: [RegExp, string][] = [
 ];
 
 export function categoryEmoji(name: string): string {
-  return CATEGORY_EMOJI.find(([re]) => re.test(name))?.[1] ?? "🍽️";
+  return CATEGORY_EMOJI.find(([re]) => re.test(name))?.[1] ?? (isDrinks() ? "🍻" : "🍽️");
 }
 
 /** Cover photo with the hotel name in bold uppercase on a dark gradient. */

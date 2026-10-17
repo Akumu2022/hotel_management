@@ -130,6 +130,7 @@ export type Track = {
   hotel_name: string;
   hotel_slug: string;
   hotel_phone: string;
+  hotel_kind?: "hotel" | "liquor";
   till_number: string;
   items: {
     product_id: string;

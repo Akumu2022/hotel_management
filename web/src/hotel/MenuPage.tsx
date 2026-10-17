@@ -9,10 +9,11 @@ import type { Category, Product } from "../lib/types";
 import { CategorySheet } from "./CategorySheet";
 import { FoodImage } from "../customer/FoodImage";
 import { ProductSheet } from "./ProductSheet";
-import { keys, useCategories, useHotelSettings, useIsAdmin, useProducts, useSave } from "./hooks";
+import { keys, useCategories, useHotelSettings, useIsAdmin, useProducts, useSave, useW } from "./hooks";
 
 /** Onboarding checklist (Bonfol "Setup store 6/7"), hidden once complete. */
 function SetupChecklist({ categories, products }: { categories: Category[]; products: Product[] }) {
+  const w = useW();
   const { data: settings } = useHotelSettings();
   const steps = [
     { done: !!settings?.hours.length, label: "Set opening hours (Settings)" },
@@ -38,7 +39,7 @@ function SetupChecklist({ categories, products }: { categories: Category[]; prod
         {steps.map((s) => (
           <li key={s.label} className={clsx("flex items-center gap-2 text-sm", s.done && "text-muted line-through")}>
             {s.done ? <CheckCircle2 className="size-4 text-ok" /> : <Circle className="size-4 text-muted" />}
-            {s.label}
+            {w(s.label)}
           </li>
         ))}
       </ul>
@@ -100,6 +101,7 @@ function ProductTile({ product, onEdit }: { product: Product; onEdit?: () => voi
 }
 
 export function MenuPage() {
+  const w = useW();
   const isAdmin = useIsAdmin();
   const [showArchived, setShowArchived] = useState(false);
   const categories = useCategories();
@@ -134,14 +136,14 @@ export function MenuPage() {
   return (
     <div>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <p className="text-sm text-muted">Tap a dish to edit it. Flip the switch when something runs out.</p>
+        <p className="text-sm text-muted">{w("Tap a dish to edit it. Flip the switch when something runs out.")}</p>
         {isAdmin ? (
           <div className="flex gap-2">
             <Button variant="secondary" onClick={() => setEditingCat("new")}>
               <Plus className="size-4" /> Category
             </Button>
             <Button onClick={() => setEditing("new")} disabled={!cats.length}>
-              <Plus className="size-4" /> Dish
+              <Plus className="size-4" /> {w("Dish")}
             </Button>
           </div>
         ) : null}
@@ -152,7 +154,7 @@ export function MenuPage() {
       {cats.length === 0 ? (
         <EmptyState
           title="No categories yet"
-          body="Start with categories such as Breakfast, Mains or Drinks, then add dishes to them."
+          body={w("Start with categories such as Breakfast, Mains or Drinks, then add dishes to them.")}
           action={isAdmin ? <Button onClick={() => setEditingCat("new")}>Add a category</Button> : null}
         />
       ) : (
@@ -173,7 +175,7 @@ export function MenuPage() {
           </div>
           <label className="mb-3 flex items-center gap-2 text-sm text-muted">
             <input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} />
-            Show archived dishes
+            {w("Show archived dishes")}
           </label>
 
           <div className="flex flex-col gap-4">
@@ -201,7 +203,7 @@ export function MenuPage() {
                     ))}
                   </div>
                 ) : (
-                  <p className="p-4 text-sm text-muted">No dishes in this category.</p>
+                  <p className="p-4 text-sm text-muted">{w("No dishes in this category.")}</p>
                 )}
               </Card>
             ))}

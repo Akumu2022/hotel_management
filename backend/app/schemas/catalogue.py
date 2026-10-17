@@ -268,6 +268,7 @@ class DayHours(Input):
 
 class HotelSettingsOut(Schema):
     name: str
+    kind: str = "hotel"
     phone: str
     till_number: str
     till_name: str | None = None
