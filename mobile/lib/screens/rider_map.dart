@@ -4,6 +4,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import '../api.dart';
 import '../i18n.dart';
+import '../tiles.dart';
 import '../util.dart';
 
 /// Live map once the food is on the road: the rider glides between position fixes and a dashed
@@ -21,6 +22,7 @@ class _RiderMapState extends State<RiderMap> with SingleTickerProviderStateMixin
   late final AnimationController _glide = AnimationController(vsync: this, duration: const Duration(seconds: 6));
   late LatLng _from = _fix, _to = _fix;
   List<LatLng>? _route;
+  int? _etaMin; // minutes for the whole road route, from the routing server
   LatLng? _routedFrom;
   bool _loadingRoute = true;
 
@@ -60,6 +62,7 @@ class _RiderMapState extends State<RiderMap> with SingleTickerProviderStateMixin
       if (mounted) {
         setState(() {
           _route = pts?.map((p) => LatLng((p[0] as num).toDouble(), (p[1] as num).toDouble())).toList();
+          _etaMin = (r['eta_min'] as num?)?.toInt();
           _loadingRoute = false;
         });
       }
@@ -98,7 +101,19 @@ class _RiderMapState extends State<RiderMap> with SingleTickerProviderStateMixin
     final dest = _dest;
     final line = _line;
     final km = const Distance().as(LengthUnit.Meter, rider, dest) / 1000;
-    final mins = (km / 20 * 60).ceil().clamp(1, 999); // a motorbike in town, ~20 km/h
+    // Minutes per km from the routing server's own travel time for the whole route; otherwise a
+    // motorbike in town, ~20 km/h.
+    double lengthOf(List<LatLng> pts) {
+      var m = 0.0;
+      for (var i = 1; i < pts.length; i++) {
+        m += const Distance().as(LengthUnit.Meter, pts[i - 1], pts[i]);
+      }
+      return m / 1000;
+    }
+
+    final fullKm = _route == null ? 0.0 : lengthOf(_route!);
+    final perKm = (_etaMin != null && fullKm > 0.05) ? _etaMin! / fullKm : 3.0;
+    final mins = ((_route == null ? km : lengthOf(line)) * perKm).ceil().clamp(1, 999);
     final live = widget.live['live'] == true;
     return Card(
       clipBehavior: Clip.antiAlias,
@@ -113,7 +128,7 @@ class _RiderMapState extends State<RiderMap> with SingleTickerProviderStateMixin
               ),
               children: [
                 TileLayer(
-                  urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                  urlTemplate: streetTilesUrl,
                   userAgentPackageName: 'com.hotelapp.hotel_app',
                   maxNativeZoom: 19,
                 ),

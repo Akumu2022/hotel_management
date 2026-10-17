@@ -13,7 +13,7 @@ from sqlalchemy import and_, func, or_, select
 from app.api.deps import CurrentUser, Session, SuperAdmin, require_roles
 from app.api.v1.auth import _out as token_out
 from app.api.v1.orders_board import SSE_HEADERS
-from app.core.errors import AppError
+from app.core.errors import AppError, not_found
 from app.core.ratelimit import limit
 from app.core.time import utcnow
 from app.models import Hotel, Order, OrderItem, RiderProfile, User
@@ -21,7 +21,7 @@ from app.schemas.auth import TokenOut
 from app.schemas.catalogue import Input
 from app.schemas.common import Schema
 from app.schemas.riders import ReviewIn, RiderDetailsIn, RiderOut, RiderRegisterIn, SubmitIn
-from app.services import audit, auth, delivery, events, media, ratings, riders, tracking
+from app.services import audit, auth, delivery, events, media, ratings, riders, routing, tracking
 from app.services.media import Storage
 
 public = APIRouter(tags=["riders"])
@@ -806,6 +806,44 @@ async def dispatch_board(_: SuperAdmin, session: Session, storage: StorageDep):
             for o, hotel in finished
         ],
     }
+
+
+@dispatch.get("/{order_id}/nearest")
+async def nearest_riders(order_id: uuid.UUID, _: SuperAdmin, session: Session):
+    """Riders with a recent position, nearest to the pickup first, by road when routing answers.
+    For the "Assign rider" list; riders with no recent position are simply not ranked."""
+    row = (
+        await session.execute(
+            select(Order, Hotel).join(Hotel, Hotel.id == Order.hotel_id).where(Order.id == order_id)
+        )
+    ).first()
+    if row is None:
+        raise not_found("Order not found")
+    _order, hotel = row
+    if hotel.lat is None or hotel.lng is None:
+        return []
+    now = utcnow()
+    profiles = (
+        (
+            await session.execute(
+                select(RiderProfile).where(
+                    RiderProfile.kyc_status == "approved",
+                    RiderProfile.last_lat.is_not(None),
+                    RiderProfile.last_lng.is_not(None),
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    recent = timedelta(minutes=15)
+    fresh = [p for p in profiles if p.last_location_at and now - p.last_location_at < recent]
+    trips = await routing.trips_to([(p.last_lat, p.last_lng) for p in fresh], hotel.lat, hotel.lng)
+    out = [
+        {"rider_id": str(p.user_id), "km": t.km, "minutes": t.minutes, "method": t.method}
+        for p, t in zip(fresh, trips, strict=True)
+    ]
+    return sorted(out, key=lambda x: (x["minutes"], x["km"]))
 
 
 @dispatch.get("/{order_id}/trail")

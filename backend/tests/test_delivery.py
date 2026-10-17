@@ -464,3 +464,46 @@ async def test_rider_summary_groups_and_pages_their_orders(client, db):
     assert month["counts"]["failed"] == 0 and old
     other = auth_header(await make_rider(db))
     assert (await client.get(f"{API}/rider/summary", headers=other)).json()["orders"] == []
+
+
+async def test_dispatch_lists_riders_nearest_to_the_pickup_first(client, db, monkeypatch):
+    from app.models import RiderProfile
+    from app.services import routing
+
+    hotel = await make_hotel(db, lat=0.5636, lng=34.5606)
+    order = await ready_delivery(db, hotel)
+    admin = auth_header(await make_user(db, "super_admin"))
+    near, far, silent = await make_rider(db), await make_rider(db), await make_rider(db)
+    for rider, (la, lo) in ((near, (0.5640, 34.5610)), (far, (0.6000, 34.6000))):
+        p = await db.get(RiderProfile, rider.id)
+        p.last_lat, p.last_lng, p.last_location_at = la, lo, utcnow()
+    await db.flush()
+
+    async def trips(starts, lat, lng):  # as if the road were twice the straight line
+        return [routing.Trip(km=round(i + 1.0, 1), minutes=(i + 1) * 4, method="road") for i, _ in enumerate(starts)]
+
+    monkeypatch.setattr(routing, "trips_to", trips)
+    r = await client.get(f"/api/v1/admin/dispatch/{order.id}/nearest", headers=admin)
+    assert r.status_code == 200, r.text
+    ids = [x["rider_id"] for x in r.json()]
+    assert str(silent.id) not in ids  # no recent position: not ranked
+    assert set(ids) == {str(near.id), str(far.id)}
+    assert [x["minutes"] for x in r.json()] == sorted(x["minutes"] for x in r.json())
+
+
+async def test_trips_fall_back_to_a_straight_line_estimate_when_routing_is_down(monkeypatch):
+    import httpx
+
+    from app.services import routing
+
+    class Down:
+        async def __aenter__(self):
+            raise httpx.ConnectError("down")
+
+        async def __aexit__(self, *a):
+            return False
+
+    monkeypatch.setattr(routing.httpx, "AsyncClient", lambda **kw: Down())
+    out = await routing.trips_to([(0.5640, 34.5610), (0.6000, 34.6000)], 0.5636, 34.5606)
+    assert [t.method for t in out] == ["estimated", "estimated"]
+    assert out[0].minutes >= 1 and out[1].km > out[0].km

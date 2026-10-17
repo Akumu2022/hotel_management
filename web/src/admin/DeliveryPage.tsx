@@ -7,6 +7,7 @@ import "leaflet/dist/leaflet.css";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import clsx from "clsx";
 import L from "leaflet";
+import { streetTiles } from "../lib/tiles";
 import { CheckCircle2, Circle, MapPin, Plus, Spline, Trash2, Undo2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
@@ -316,7 +317,7 @@ export function DeliveryPage() {
   useEffect(() => {
     if (!el.current || map.current) return;
     const m = L.map(el.current).setView([0.5636, 34.5606], 12);
-    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: "© OpenStreetMap" }).addTo(m);
+    streetTiles().addTo(m);
     zoneLayer.current = L.layerGroup().addTo(m);
     hotelLayer.current = L.layerGroup().addTo(m);
     calcLayer.current = L.layerGroup().addTo(m);

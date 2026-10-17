@@ -6,6 +6,9 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm ci
 COPY . .
+# Map tiles key (MapTiler). Baked into the web files at build time; blank = free OpenStreetMap tiles.
+ARG VITE_MAPTILER_KEY=
+ENV VITE_MAPTILER_KEY=$VITE_MAPTILER_KEY
 RUN npm run build
 
 FROM nginx:1.27-alpine

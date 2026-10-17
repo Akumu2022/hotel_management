@@ -185,6 +185,14 @@ async def test_customer_sees_rider_only_while_food_is_on_the_road(client, db, mo
         [0.5650, 34.5620],
         [0.5700, 34.5650],
     ]
+    # With the route known, the page can say how many minutes away the rider is.
+    import time
+
+    from app.services import routing
+
+    routing._route_cache[(0.565, 34.562, 0.57, 34.565)] = (time.monotonic(), [[0.565, 34.562]], 540.0)
+    assert (await client.get(f"{track}/route")).json()["eta_min"] == 9
+    routing._route_cache.clear()
 
     # A stale fix is flagged, not hidden.
     profile = await db.get(RiderProfile, rider.id)

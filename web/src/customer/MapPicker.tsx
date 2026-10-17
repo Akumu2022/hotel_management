@@ -1,6 +1,7 @@
 import "leaflet/dist/leaflet.css";
 
 import L from "leaflet";
+import { satelliteTiles, streetTiles } from "../lib/tiles";
 import { AlertTriangle, CheckCircle2, LocateFixed, Search } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
@@ -64,9 +65,9 @@ export default function MapPicker({
     map.current = m;
     // Give the map a view first: layers added to a map with no view aren't attached yet.
     m.setView(value ? [value.lat, value.lng] : hotel ? [hotel.lat, hotel.lng] : [0.5636, 34.5606], value ? 15 : hotel ? 14 : 12);
-    const street = L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: "© OpenStreetMap" }).addTo(m);
+    const street = streetTiles().addTo(m);
     if (precise) {
-      const sat = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", { maxZoom: 19, attribution: "Imagery © Esri" });
+      const sat = satelliteTiles();
       if (!value) m.setView(CBD, 13);
       L.control.layers({ Map: street, Satellite: sat }, undefined, { position: "topright" }).addTo(m);
     }

@@ -74,6 +74,8 @@ services:
     build:
       context: ./web
       dockerfile: Dockerfile.prod
+      args:
+        VITE_MAPTILER_KEY: ${VITE_MAPTILER_KEY:-}
     restart: unless-stopped
     volumes:
       - media:/usr/share/nginx/media:ro # menu photos, served directly and cached for a year

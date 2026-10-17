@@ -2,6 +2,7 @@ import "leaflet/dist/leaflet.css";
 
 import { useQuery } from "@tanstack/react-query";
 import L from "leaflet";
+import { streetTiles } from "../lib/tiles";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { api } from "../lib/api";
@@ -68,7 +69,7 @@ export default function RiderMap({ token, live, ping, riderName }: { token: stri
   const [routeKey, setRouteKey] = useState(0);
   const route = useQuery({
     queryKey: ["track-route", token, routeKey],
-    queryFn: () => api.get<{ points: Pt[] | null }>(`/track/${token}/route`),
+    queryFn: () => api.get<{ points: Pt[] | null; eta_min?: number | null }>(`/track/${token}/route`),
     staleTime: Infinity,
     refetchInterval: (q) => (q.state.data?.points ? false : 30_000), // routing busy: try again, line stays straight
   });
@@ -88,7 +89,10 @@ export default function RiderMap({ token, live, ping, riderName }: { token: stri
   const points = route.data?.points ?? null;
   const line = useMemo(() => remaining(points, rider, dest), [points, rider[0], rider[1]]); // eslint-disable-line react-hooks/exhaustive-deps
   const km = lengthKm(line);
-  const minutes = Math.max(1, Math.round((km / SPEED_KMH) * 60));
+  // Minutes per km from the road route's own travel time when we have it, else a flat bike speed.
+  const fullKm = points ? lengthKm(points) : 0;
+  const perKm = route.data?.eta_min && fullKm > 0.05 ? route.data.eta_min / fullKm : 60 / SPEED_KMH;
+  const minutes = Math.max(1, Math.round(km * perKm));
 
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 5000);
@@ -101,7 +105,7 @@ export default function RiderMap({ token, live, ping, riderName }: { token: stri
     const m = L.map(el.current, { zoomControl: false, attributionControl: true });
     map.current = m;
     m.setView(dest, 15);
-    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: "© OpenStreetMap" }).addTo(m);
+    streetTiles().addTo(m);
     L.control.zoom({ position: "bottomright" }).addTo(m);
     if (live.hotel_lat != null && live.hotel_lng != null) L.marker([live.hotel_lat, live.hotel_lng], { icon: icon("map-emoji", SHOP, 32), interactive: false }).addTo(m);
     L.marker(dest, { icon: icon("map-emoji", HOME, 36), interactive: false, zIndexOffset: 500 }).addTo(m);

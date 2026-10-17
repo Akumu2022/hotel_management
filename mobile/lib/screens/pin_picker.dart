@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
 import '../api.dart';
 import '../i18n.dart';
+import '../tiles.dart';
 import '../util.dart';
 
 const _bungoma = LatLng(0.5635, 34.5606);
@@ -110,9 +111,7 @@ class _PinPickerScreenState extends State<PinPickerScreen> {
           ),
           children: [
             TileLayer(
-              urlTemplate: _satellite
-                  ? 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
-                  : 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+              urlTemplate: _satellite ? satelliteTilesUrl : streetTilesUrl,
               userAgentPackageName: 'com.hotelapp.hotel_app',
               maxNativeZoom: 19,
             ),

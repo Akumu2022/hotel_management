@@ -5,6 +5,7 @@
 import "leaflet/dist/leaflet.css";
 
 import L from "leaflet";
+import { streetTiles } from "../lib/tiles";
 import { useEffect, useRef } from "react";
 
 export type MapOrder = {
@@ -68,7 +69,7 @@ export default function DispatchMap({ orders, riders }: { orders: MapOrder[]; ri
     if (!el.current || map.current) return;
     const m = L.map(el.current, { zoomControl: true }).setView([0.5636, 34.5606], 13);
     map.current = m;
-    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: "© OpenStreetMap" }).addTo(m);
+    streetTiles().addTo(m);
     layer.current = L.layerGroup().addTo(m);
     return () => {
       m.remove();

@@ -217,6 +217,7 @@ def _live(order, hotel, profile, now) -> TrackLive | None:
 
 class RouteOut(Schema):
     points: list[list[float]] | None
+    eta_min: int | None = None  # minutes until the rider arrives, when the road route is known
 
 
 @router.get(
@@ -228,9 +229,9 @@ async def track_route(token: str, session: Session):
     profile = await session.get(RiderProfile, order.rider_id) if order.rider_id else None
     if _live(order, None, profile, utcnow()) is None:
         return RouteOut(points=None)
-    return RouteOut(
-        points=await routing.route_points(profile.last_lat, profile.last_lng, order.lat, order.lng)
-    )
+    points = await routing.route_points(profile.last_lat, profile.last_lng, order.lat, order.lng)
+    eta = routing.cached_eta_min(profile.last_lat, profile.last_lng, order.lat, order.lng)
+    return RouteOut(points=points, eta_min=eta)
 
 
 @router.post("/track/{token}/cancel", dependencies=[Depends(limit("cancel", 10))])
