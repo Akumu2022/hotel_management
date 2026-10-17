@@ -390,7 +390,7 @@ export function HotelPage() {
                 {showHeadings ? (
                   <h2 className="mb-3 flex items-center justify-between gap-2 text-xl font-extrabold">
                     <span className="flex items-center gap-2"><span>{g.id === "sorted" ? "↕️" : categoryEmoji(g.name)}</span> {g.name}</span>
-                    <span className="text-sm font-semibold text-brand">{liquor ? t("{n} drinks", { n: g.items.length }) : t("{n} dishes", { n: g.items.length })}</span>
+                    <span className="text-sm font-semibold text-brand">{liquor ? (g.items.length === 1 ? t("1 drink") : t("{n} drinks", { n: g.items.length })) : t("{n} dishes", { n: g.items.length })}</span>
                   </h2>
                 ) : null}
                 <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 xl:grid-cols-4">

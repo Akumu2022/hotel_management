@@ -85,6 +85,8 @@ export function FeesPage() {
 
 function FeesForm({ kind }: { kind: Kind }) {
   const liquor = kind === "liquor";
+  // Liquor stores read "store" and "drinks" where the hotel page says "hotel" and "food".
+  const wd = (s: string) => (liquor ? s.replaceAll("hotels", "stores").replaceAll("hotel", "store").replaceAll("Hotels", "Stores").replaceAll("Food", "Drinks").replaceAll("food", "drinks") : s);
   const qs = liquor ? "?kind=liquor" : "";
   const key = liquor ? ["admin", "settings", "liquor"] : ["admin", "settings"];
   const qc = useQueryClient();
@@ -132,7 +134,7 @@ function FeesForm({ kind }: { kind: Kind }) {
       </div>
 
       <div className="grid gap-5 xl:grid-cols-2">
-        <Card icon={<Percent className="size-5" />} title="Commission" sub="Charged to the hotel on the food total only. Rider fees and the service fee are never included.">
+        <Card icon={<Percent className="size-5" />} title="Commission" sub={wd("Charged to the hotel on the food total only. Rider fees and the service fee are never included.")}>
           <div className="mb-4 grid grid-cols-2 gap-1 rounded-xl bg-subtle p-1 text-sm font-semibold">
             {(["tiers", "percent"] as const).map((m) => (
               <button key={m} onClick={() => set({ commission_mode: m })} className={clsx("h-9 rounded-lg", s.commission_mode === m ? "bg-surface shadow-sm" : "text-muted")}>
@@ -145,7 +147,7 @@ function FeesForm({ kind }: { kind: Kind }) {
               <ul className="flex flex-col gap-2">
                 {s.commission_tiers.map((t, i) => (
                   <li key={i} className="flex flex-wrap items-center gap-2 text-sm">
-                    <span className="w-24 text-muted">{i === 0 ? "Food up to" : `${money(s.commission_tiers[i - 1].up_to + 1)} –`}</span>
+                    <span className="w-24 text-muted">{i === 0 ? wd("Food up to") : `${money(s.commission_tiers[i - 1].up_to + 1)} –`}</span>
                     <Num label={`Tier ${i + 1} up to`} value={t.up_to} onChange={(n) => setTier(i, { up_to: n })} />
                     <span className="text-muted">pays</span>
                     <Num label={`Tier ${i + 1} fee`} value={t.fee} onChange={(n) => setTier(i, { fee: n })} width="w-24" />
@@ -176,10 +178,10 @@ function FeesForm({ kind }: { kind: Kind }) {
             <p className="flex flex-wrap items-center gap-2 text-sm">
               Commission of
               <PercentInput value={s.commission_percent} onChange={(n) => set({ commission_percent: n })} />
-              of the food total.
+              {wd("of the food total.")}
             </p>
           )}
-          <p className="mt-3 text-xs text-muted">A hotel with its own percentage deal (set on the hotel) always uses that instead.</p>
+          <p className="mt-3 text-xs text-muted">{wd("A hotel with its own percentage deal (set on the hotel) always uses that instead.")}</p>
           <div className="mt-4 rounded-2xl bg-subtle p-3">
             <p className="mb-2 text-xs font-semibold tracking-wide text-muted uppercase">Examples</p>
             <div className="grid grid-cols-5 gap-2 text-center text-sm">
@@ -216,7 +218,7 @@ function FeesForm({ kind }: { kind: Kind }) {
           </Card>
           <Card icon={<Truck className="size-5" />} title="Free delivery" sub="Encourages bigger orders. Applies when the customer pays everything by M-Pesa (the rider is paid as usual).">
             <p className="flex flex-wrap items-center gap-2 text-sm">
-              Free delivery when food reaches
+              {liquor ? "Free delivery when drinks reach" : "Free delivery when food reaches"}
               <Num label="Free delivery minimum" value={s.free_delivery_min_food} onChange={(n) => set({ free_delivery_min_food: n })} width="w-32" />
             </p>
             <p className="mt-2 text-xs text-muted">0 turns free delivery off.</p>
@@ -226,7 +228,7 @@ function FeesForm({ kind }: { kind: Kind }) {
           </Card>}
           <p className="flex items-start gap-2 rounded-2xl bg-brand-soft p-4 text-sm">
             <Gift className="mt-0.5 size-4 shrink-0 text-brand" />
-            <span>Bonuses are paid by the platform: the customer pays less and the hotel is credited the difference on its statement, so hotels never lose. One bonus per order, whichever is bigger. Hotels run their own happy hours under Discounts.</span>
+            <span>{wd("Bonuses are paid by the platform: the customer pays less and the hotel is credited the difference on its statement, so hotels never lose. One bonus per order, whichever is bigger. Hotels run their own happy hours under Discounts.")}</span>
           </p>
         </div>
       </div>

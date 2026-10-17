@@ -345,10 +345,26 @@ async def confirm_manual(
         # An unmatched payment (e.g. from an SMS) with this code: link it to this order.
         if existing.till_number != hotel.till_number:
             raise AppError(409, "wrong_till", "That code was paid to a different Till")
+        other = await _other_payment(session, order.id, existing.id)
+        if other is not None:
+            raise AppError(
+                409,
+                "order_has_payment",
+                f"Order #{order.code} already has a payment ({other.trans_code}, "
+                f"KES {other.amount:,}). Handle this one from the review list.",
+            )
         existing.order_id = order.id
         existing.confirmed_by = cashier_id
         payment = existing
     else:
+        other = await _other_payment(session, order.id)
+        if other is not None:
+            raise AppError(
+                409,
+                "order_has_payment",
+                f"Order #{order.code} already has a payment ({other.trans_code}, "
+                f"KES {other.amount:,}). Handle this one from the review list.",
+            )
         payment = await _insert_payment(
             session,
             till_number=hotel.till_number,
@@ -429,6 +445,17 @@ async def submit_customer_code(
             "late", order.status, "Your order had expired. The hotel will check your payment."
         )
     return Outcome("pending", order.status, "Thanks! We're checking your payment with the hotel.")
+
+
+async def _other_payment(
+    session: AsyncSession, order_id: uuid.UUID, exclude_id: uuid.UUID | None = None
+) -> Payment | None:
+    """A payment already linked to this order. An order holds one payment, so a second one (a
+    top-up after an underpayment, or a double payment) cannot be linked and needs a person."""
+    stmt = select(Payment).where(Payment.order_id == order_id)
+    if exclude_id is not None:
+        stmt = stmt.where(Payment.id != exclude_id)
+    return (await session.execute(stmt.limit(1))).scalar_one_or_none()
 
 
 async def record_incoming(
@@ -567,6 +594,22 @@ async def record_incoming(
                 f"KES {amount:,} received ({code}"
                 f"{f', from {payment.payer_name}' if payment.payer_name else ''}) "
                 "but no order could be matched"
+            ),
+        )
+        return payment, None
+
+    other = await _other_payment(session, order.id, payment.id)
+    if other is not None:
+        await open_review(
+            session,
+            type="unmatched_sms",
+            hotel_id=hotel.id,
+            payment_id=payment.id,
+            sms_message_id=sms_message_id,
+            reason=(
+                f"KES {amount:,} received ({code}) for order #{order.code}, which already has a "
+                f"payment ({other.trans_code}, KES {other.amount:,}). Check with the customer: "
+                "a top-up, or a double payment to refund."
             ),
         )
         return payment, None

@@ -546,3 +546,38 @@ async def test_payment_simulator_is_off_in_production(client, db, monkeypatch):
     assert (await client.get("/api/v1/admin/tools/status", headers=admin)).json() == {
         "payment_simulator": True
     }
+
+
+# --- A second payment for an order that already has one -----------------------------------------
+
+
+async def test_second_sms_payment_after_an_underpayment_goes_to_review_not_a_crash(db, setup):
+    hotel, order, _ = setup
+    order.customer_trans_code = "AAA1111111"
+    await db.flush()
+    first, _ = await payments.record_incoming(
+        db, till_number=hotel.till_number, code="AAA1111111", amount=700,
+        paid_at=utcnow(), source="forwarder", now=utcnow(),
+    )
+    assert first.order_id == order.id
+    # The customer then pays the full amount with a second M-Pesa code and types it in.
+    order.customer_trans_code = "BBB2222222"
+    await db.flush()
+    second, outcome = await payments.record_incoming(
+        db, till_number=hotel.till_number, code="BBB2222222", amount=770,
+        paid_at=utcnow(), source="forwarder", now=utcnow(),
+    )
+    assert outcome is None and second.order_id is None  # kept apart, not linked
+    (item,) = await reviews(db, None, "unmatched_sms")
+    assert "already has a payment" in item.reason and "AAA1111111" in item.reason
+    assert item.payment_id == second.id
+    await db.refresh(first)
+    assert first.order_id == order.id  # the first payment is untouched
+
+
+async def test_cashier_cannot_link_a_second_payment_to_a_paid_order(db, setup):
+    _, order, cashier = setup
+    await confirm(db, order, cashier, code="CCC3333333", amount=700)  # underpaid, linked
+    with pytest.raises(AppError) as e:
+        await confirm(db, order, cashier, code="DDD4444444", amount=770)
+    assert e.value.status_code == 409 and e.value.code == "order_has_payment"

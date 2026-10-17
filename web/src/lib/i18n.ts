@@ -30,6 +30,7 @@ const SW: Record<string, string> = {
   "Today's deals": "Ofa za leo",
   "Hotels near you": "Hoteli zilizo karibu nawe",
   "Chakula": "Chakula",
+  "1 drink": "Kinywaji 1",
   "Bring your ID. You must be 18 or older.": "Leta kitambulisho chako. Lazima uwe na miaka 18 au zaidi.",
   "Have your ID ready: the rider checks you are 18 or older.": "Kuwa na kitambulisho tayari: mwendeshaji anakagua kuwa una miaka 18 au zaidi.",
   "Sections": "Sehemu",

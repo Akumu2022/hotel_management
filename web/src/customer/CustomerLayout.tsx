@@ -37,11 +37,11 @@ function useOnline() {
 
 export function Logo() {
   return (
-    <Link to="/" className="flex items-center gap-2.5">
-      <span className="flex size-10 items-center justify-center rounded-xl border border-line bg-surface text-brand shadow-sm">
+    <Link to="/" className="flex min-w-0 items-center gap-2.5">
+      <span className="flex size-10 shrink-0 items-center justify-center rounded-xl border border-line bg-surface text-brand shadow-sm">
         <UtensilsCrossed className="size-5" />
       </span>
-      <span className="hidden text-[1.375rem] font-extrabold tracking-tight text-brand min-[440px]:inline">Chakula na Drinks</span>
+      <span className="min-w-0 truncate text-[1.05rem] font-extrabold tracking-tight text-brand min-[440px]:text-[1.375rem]">Chakula na Drinks</span>
     </Link>
   );
 }
