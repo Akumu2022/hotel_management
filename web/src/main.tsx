@@ -104,6 +104,7 @@ createRoot(document.getElementById("root")!).render(
                 <Route path="riders" element={<RidersPage />} />
                 <Route path="hotels" element={<AdminHotelsPage />} />
                 <Route path="hotels/:id" element={<AdminHotelDetailPage />} />
+                <Route path="liquor" element={<AdminHotelsPage kind="liquor" />} />
                 <Route path="fees" element={<FeesPage />} />
                 <Route path="delivery" element={<DeliveryPage />} />
                 <Route path="tools" element={<ToolsPage />} />

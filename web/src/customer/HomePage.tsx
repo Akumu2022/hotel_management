@@ -238,7 +238,7 @@ export function HomePage() {
         ) : null}
 
         <div role="tablist" className="mt-6 grid grid-cols-2 gap-1 rounded-xl bg-subtle p-1">
-          {([["hotel", t("Hotels")], ["liquor", t("Liquor stores")]] as const).map(([k, label]) => (
+          {([["hotel", t("Chakula")], ["liquor", t("Drinks")]] as const).map(([k, label]) => (
             <button
               key={k}
               role="tab"
@@ -254,7 +254,7 @@ export function HomePage() {
         <section className="mt-4">
           <div className="mb-3 flex items-center justify-between gap-3">
             <h2 className="min-w-0 text-lg font-semibold">
-              {kind === "liquor" ? t("Liquor stores near you") : t("Hotels near you")}
+              {kind === "liquor" ? t("Drinks near you") : t("Hotels near you")}
               {area ? (
                 <button
                   type="button"
@@ -308,7 +308,7 @@ export function HomePage() {
             hotels.data!.length === 0 ? (
               <div className="flex flex-col items-center gap-2 rounded-2xl border border-dashed border-line bg-surface px-6 py-12 text-center">
                 <span className="text-5xl">🍽️</span>
-                <p className="text-lg font-semibold">{kind === "liquor" ? t("No liquor stores near {place} yet", { place: area.label }) : t("No hotels near {place} yet", { place: area.label })}</p>
+                <p className="text-lg font-semibold">{kind === "liquor" ? t("No drinks stores near {place} yet", { place: area.label }) : t("No hotels near {place} yet", { place: area.label })}</p>
                 <p className="max-w-xs text-sm text-muted">{t("We're growing. Try another town, or check back soon.")}</p>
                 <button type="button" onClick={() => setChanging(true)} className="mt-1 text-sm font-semibold text-brand">{t("Change location")}</button>
               </div>

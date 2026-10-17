@@ -1,7 +1,7 @@
 /** Owner's hotel list: only the owner creates hotels, with the hotel admin's login, and can
  * reset any staff password. Each hotel admin pins their own location on the map. */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Building2, ChevronRight, Plus, ShieldCheck, Users } from "lucide-react";
+import { Building2, ChevronRight, Plus, ShieldCheck, Users, Wine } from "lucide-react";
 import { Link } from "react-router-dom";
 import { type FormEvent, useState } from "react";
 
@@ -100,12 +100,12 @@ function LicencePanel({ hotel }: { hotel: Hotel }) {
   );
 }
 
-function NewHotel({ onDone }: { onDone: () => void }) {
+function NewHotel({ onDone, kind }: { onDone: () => void; kind: "hotel" | "liquor" }) {
   const qc = useQueryClient();
   const [f, setF] = useState({ name: "", slug: "", phone: "", till_number: "", till_name: "", admin_name: "", admin_phone: "", admin_password: "" });
   const [verified, setVerified] = useState(false);
-  const [kind, setKind] = useState<"hotel" | "liquor">("hotel");
   const [licence, setLicence] = useState({ no: "", expires: "" });
+  const [rates, setRates] = useState({ commission: "", service_fee: "" });
   const set = (k: keyof typeof f) => (e: { target: { value: string } }) =>
     setF((v) => ({ ...v, [k]: e.target.value, ...(k === "name" && (!v.slug || v.slug === slugify(v.name)) ? { slug: slugify(e.target.value) } : {}) }));
   const create = useMutation({
@@ -117,7 +117,15 @@ function NewHotel({ onDone }: { onDone: () => void }) {
         till_number: f.till_number,
         till_name: f.till_name.trim() || null,
         verified,
-        ...(kind === "liquor" ? { kind, liquor_licence_no: licence.no.trim(), liquor_licence_expires: licence.expires } : {}),
+        ...(kind === "liquor"
+          ? {
+              kind,
+              liquor_licence_no: licence.no.trim(),
+              liquor_licence_expires: licence.expires,
+              commission_percent: Number(rates.commission),
+              ...(rates.service_fee.trim() ? { service_fee: Number(rates.service_fee) } : {}),
+            }
+          : {}),
         admin: { name: f.admin_name, phone: f.admin_phone, password: f.admin_password },
       }),
     onSuccess: () => {
@@ -131,18 +139,12 @@ function NewHotel({ onDone }: { onDone: () => void }) {
   };
   return (
     <form onSubmit={submit} className="flex flex-col gap-3">
-      <Field label="Type">
-        {(id) => (
-          <select id={id} value={kind} onChange={(e) => setKind(e.target.value as "hotel" | "liquor")} className="h-11 rounded-xl border border-line bg-surface px-3 text-sm">
-            <option value="hotel">Hotel (food)</option>
-            <option value="liquor">Liquor store</option>
-          </select>
-        )}
-      </Field>
       {kind === "liquor" ? (
         <div className="grid grid-cols-2 gap-3">
           <Field label="Liquor licence number">{(id) => <Input id={id} value={licence.no} onChange={(e) => setLicence((v) => ({ ...v, no: e.target.value }))} required minLength={2} />}</Field>
           <Field label="Licence valid until">{(id) => <Input id={id} type="date" value={licence.expires} onChange={(e) => setLicence((v) => ({ ...v, expires: e.target.value }))} required />}</Field>
+          <Field label="Commission %" hint="Liquor has its own rate, not the food fee bands">{(id) => <Input id={id} inputMode="decimal" value={rates.commission} onChange={(e) => setRates((v) => ({ ...v, commission: e.target.value }))} required pattern="[0-9]+(\.[0-9]+)?" placeholder="e.g. 5" />}</Field>
+          <Field label="Service fee (KES)" hint="Blank = platform default">{(id) => <Input id={id} inputMode="numeric" value={rates.service_fee} onChange={(e) => setRates((v) => ({ ...v, service_fee: e.target.value }))} />}</Field>
         </div>
       ) : null}
       <Field label={kind === "liquor" ? "Store name" : "Hotel name"}>{(id) => <Input id={id} value={f.name} onChange={set("name")} required minLength={2} />}</Field>
@@ -156,19 +158,21 @@ function NewHotel({ onDone }: { onDone: () => void }) {
         <input type="checkbox" checked={verified} onChange={(e) => setVerified(e.target.checked)} className="mt-1 size-4 accent-[var(--color-brand)]" />
         <span>I have checked this hotel and its Till (shows "Checked by Chakula" to customers)</span>
       </label>
-      <p className="mt-2 text-sm font-bold">Hotel admin login</p>
+      <p className="mt-2 text-sm font-bold">{kind === "liquor" ? "Store admin login" : "Hotel admin login"}</p>
       <Field label="Their name">{(id) => <Input id={id} value={f.admin_name} onChange={set("admin_name")} required minLength={2} />}</Field>
       <div className="grid grid-cols-2 gap-3">
         <Field label="Their phone">{(id) => <Input id={id} type="tel" value={f.admin_phone} onChange={set("admin_phone")} required />}</Field>
         <Field label="First password" hint="They change it at first login">{(id) => <PasswordInput id={id} autoComplete="new-password" value={f.admin_password} onChange={set("admin_password")} required minLength={8} />}</Field>
       </div>
       <ErrorNote error={create.error} />
-      <Button type="submit" size="lg" busy={create.isPending}>Create hotel</Button>
+      <Button type="submit" size="lg" busy={create.isPending}>{kind === "liquor" ? "Create liquor store" : "Create hotel"}</Button>
     </form>
   );
 }
 
-export function HotelsPage() {
+export function HotelsPage({ kind = "hotel" }: { kind?: "hotel" | "liquor" }) {
+  const liquor = kind === "liquor";
+  const noun = liquor ? "liquor store" : "hotel";
   const hotels = useQuery({ queryKey: ["admin", "hotels"], queryFn: () => getAllPages<Hotel>("/admin/hotels") });
   const [adding, setAdding] = useState(false);
   const [open, setOpen] = useState<string | null>(null);
@@ -177,15 +181,15 @@ export function HotelsPage() {
     <div className="mx-auto flex max-w-4xl flex-col gap-5 p-4 sm:p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="flex items-center gap-2 text-xl font-bold"><Building2 className="size-5 text-brand" /> Hotels</h1>
-          <p className="text-sm text-muted">Only you can add hotels. Each gets an admin login that can add its own cashiers.</p>
+          <h1 className="flex items-center gap-2 text-xl font-bold">{liquor ? <Wine className="size-5 text-brand" /> : <Building2 className="size-5 text-brand" />} {liquor ? "Liquor stores" : "Hotels"}</h1>
+          <p className="text-sm text-muted">Only you can add {noun}s. Each gets an admin login that can add its own cashiers.{liquor ? " Liquor stores are 18+, need a valid licence, and have their own commission rate." : ""}</p>
         </div>
-        <Button onClick={() => setAdding(true)}><Plus className="size-4" /> Add hotel</Button>
+        <Button onClick={() => setAdding(true)}><Plus className="size-4" /> Add {noun}</Button>
       </div>
       <ErrorNote error={hotels.error} />
       {hotels.isLoading ? <Skeleton className="h-40 rounded-3xl" /> : null}
       <ul className="flex flex-col gap-3">
-        {hotels.data?.items.map((h) => (
+        {hotels.data?.items.filter((h) => (h.kind === "liquor") === liquor).map((h) => (
           <li key={h.id} className="rounded-3xl border border-line bg-surface p-4">
             <div className="flex flex-wrap items-start justify-between gap-2">
               <div>
@@ -215,8 +219,8 @@ export function HotelsPage() {
           </li>
         ))}
       </ul>
-      <Sheet open={adding} onClose={() => setAdding(false)} title="Add hotel">
-        <NewHotel onDone={() => setAdding(false)} />
+      <Sheet open={adding} onClose={() => setAdding(false)} title={`Add ${noun}`}>
+        <NewHotel kind={kind} onDone={() => setAdding(false)} />
       </Sheet>
     </div>
   );

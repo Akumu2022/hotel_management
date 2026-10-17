@@ -1,6 +1,6 @@
 import clsx from "clsx";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bike, Building2, FlaskConical, KeyRound, LayoutDashboard, LogOut, MapPinned, Percent, ShieldAlert, Users, UtensilsCrossed, Wallet } from "lucide-react";
+import { Bike, Building2, FlaskConical, KeyRound, LayoutDashboard, LogOut, MapPinned, Percent, ShieldAlert, Users, UtensilsCrossed, Wallet, Wine } from "lucide-react";
 import { useSyncExternalStore } from "react";
 import { Link, NavLink, Navigate, Outlet } from "react-router-dom";
 
@@ -17,6 +17,7 @@ const NAV = [
   { to: "dispatch", label: "Dispatch", icon: Bike },
   { to: "billing", label: "Billing", icon: Wallet },
   { to: "hotels", label: "Hotels", icon: Building2 },
+  { to: "liquor", label: "Liquor stores", icon: Wine },
   { to: "riders", label: "Riders", icon: Users },
   { to: "fees", label: "Fees & bonuses", icon: Percent },
   { to: "delivery", label: "Delivery", icon: MapPinned },
