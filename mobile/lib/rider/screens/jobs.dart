@@ -275,6 +275,7 @@ class _JobCardState extends State<_JobCard> {
   }
 
   String _readyText() {
+    if (j['age_check'] == true) return tr(j['status'] == 'ready' ? 'Food is ready' : 'Being prepared'); // drinks: no prep time
     if (j['status'] == 'ready') return tr('Food is ready');
     final prep = j['prep_minutes'];
     final at = j['accepted_at'] == null ? null : DateTime.tryParse('${j['accepted_at']}');
@@ -287,6 +288,7 @@ class _JobCardState extends State<_JobCard> {
 
   @override
   Widget build(BuildContext context) {
+    drinksVariant = j['age_check'] == true; // liquor jobs say store and drinks
     final stage = jobStage(j);
     final mine = stage != JobStage.open;
     final cs = Theme.of(context).colorScheme;

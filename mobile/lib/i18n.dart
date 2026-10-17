@@ -364,6 +364,15 @@ const Map<String, String> _sw = {
 };
 
 const Map<String, String> _drink = {
+  'Food is ready': 'Order is ready',
+  'Fee comes with the food': 'Fee comes with the drinks',
+  'Go to the hotel': 'Go to the store',
+  'Collect the food': 'Collect the drinks',
+  'Food collected: head to the customer': 'Drinks collected: head to the customer',
+  'Directions to the hotel': 'Directions to the store',
+  'Show this PIN to the hotel. They hand you the food once it matches.': 'Show this PIN to the store. They hand you the drinks once it matches.',
+  'Wait for the food, then show this PIN to the hotel.': 'Wait for the order, then show this PIN to the store.',
+  'Being prepared': 'Being packed',
   'Browse hotels': 'Browse stores',
   'You pay the rider the delivery fee yourself when the food arrives. The hotel never handles it.': 'You pay the rider the delivery fee yourself when your drinks arrive. The store never handles it.',
   'Pay with M-Pesa first. The hotel starts cooking once your payment arrives.': 'Pay with M-Pesa first. The store prepares your order once your payment arrives.',
@@ -384,6 +393,15 @@ const Map<String, String> _drink = {
 };
 
 const Map<String, String> _drinkSw = {
+  'Order is ready': 'Oda iko tayari',
+  'Fee comes with the drinks': 'Ada inakuja na vinywaji',
+  'Go to the store': 'Nenda dukani',
+  'Collect the drinks': 'Chukua vinywaji',
+  'Drinks collected: head to the customer': 'Vinywaji vimechukuliwa: nenda kwa mteja',
+  'Directions to the store': 'Maelekezo ya kwenda dukani',
+  'Show this PIN to the store. They hand you the drinks once it matches.': 'Onyesha PIN hii kwa duka. Watakukabidhi vinywaji ikilingana.',
+  'Wait for the order, then show this PIN to the store.': 'Subiri oda, kisha onyesha PIN hii kwa duka.',
+  'Being packed': 'Inapakiwa',
   'Browse stores': 'Tazama maduka',
   'You pay the rider the delivery fee yourself when your drinks arrive. The store never handles it.': 'Unamlipa mwendeshaji ada ya kusafirisha mwenyewe vinywaji vikifika. Duka halishughulikii.',
   'Pay with M-Pesa first. The store prepares your order once your payment arrives.': 'Lipa kwa M-Pesa kwanza. Duka litaandaa oda yako malipo yakifika.',

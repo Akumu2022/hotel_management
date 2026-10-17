@@ -57,7 +57,21 @@ const FAIL_REASONS: [string, string][] = [
 const directions = (lat: number | null, lng: number | null) => (lat != null && lng != null ? `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&travelmode=driving` : null);
 const tel = (phone: string | null) => (phone ? `tel:+${phone}` : undefined);
 
+/** Jobs from a liquor store (they carry the ID-check flag) say store and drinks, not hotel and food. */
+function dr(j: { age_check?: boolean }, s: string): string {
+  if (!j.age_check) return s;
+  return s
+    .replaceAll("Food is ready", "Order is ready")
+    .replaceAll("Food collected", "Drinks collected")
+    .replaceAll("hotels", "stores")
+    .replaceAll("hotel", "store")
+    .replaceAll("Hotel", "Store")
+    .replaceAll("Food", "Drinks")
+    .replaceAll("food", "drinks");
+}
+
 function readyIn(j: Job) {
+  if (j.age_check) return j.status === "ready" ? "Order is ready" : "Being packed";
   if (j.status === "ready") return "Food is ready";
   if (!j.accepted_at || !j.prep_minutes) return "Being prepared";
   const left = Math.round((new Date(j.accepted_at).getTime() + j.prep_minutes * 60_000 - Date.now()) / 60_000);
@@ -116,7 +130,7 @@ function MyJob({ j, act }: { j: Job; act: (path: string, body?: unknown) => Prom
           </span>
         </span>
         <span className="rounded-full bg-white/20 px-3 py-1 text-sm font-semibold">
-          {goingToHotel ? "Go to the hotel" : j.status === "picked_up" ? "Food collected" : "On the way"}
+          {dr(j, goingToHotel ? "Go to the hotel" : j.status === "picked_up" ? "Food collected" : "On the way")}
         </span>
       </header>
       <div className="flex flex-col gap-4 p-5">
@@ -125,10 +139,10 @@ function MyJob({ j, act }: { j: Job; act: (path: string, body?: unknown) => Prom
           <div>
             <p className="flex items-center gap-2 text-sm font-semibold text-muted"><Store className="size-4" /> Pick up from</p>
             <p className="text-xl font-bold">{j.hotel_name}</p>
-            <p className={clsx("text-sm font-semibold", j.status === "ready" ? "text-ok" : "text-warn")}>{readyIn(j)}</p>
+            <p className={clsx("text-sm font-semibold", j.status === "ready" ? "text-ok" : "text-warn")}>{dr(j, readyIn(j))}</p>
             <div className="mt-3 flex gap-2">
               <LinkButton href={directions(j.hotel_lat, j.hotel_lng)} icon={<Navigation className="size-4" />} label="Directions" />
-              <LinkButton href={tel(j.hotel_phone)} icon={<Phone className="size-4" />} label="Call hotel" />
+              <LinkButton href={tel(j.hotel_phone)} icon={<Phone className="size-4" />} label={dr(j, "Call hotel")} />
             </div>
           </div>
         ) : (
@@ -156,15 +170,15 @@ function MyJob({ j, act }: { j: Job; act: (path: string, body?: unknown) => Prom
           {j.collect_cash_fee
             ? `Collect ${money(j.rider_fee)} cash from the customer at the door.`
             : j.fee_with_food
-              ? `The hotel gives you ${money(j.rider_fee)} with the food.`
+              ? dr(j, `The hotel gives you ${money(j.rider_fee)} with the food.`)
               : "Paid to you in the weekly payout."}
         </p>
 
         {/* Hotel tapped "Handed to rider" first: the rider still confirms the fee. */}
         {!goingToHotel && j.fee_with_food && !j.fee_rider_confirmed ? (
           <div className="rounded-2xl border-2 border-warn/40 bg-warn-soft p-4">
-            <p className="font-bold">Did the hotel give you {money(j.rider_fee)}?</p>
-            <p className="text-sm text-muted">The hotel says it handed over your fee with the food.</p>
+            <p className="font-bold">{dr(j, `Did the hotel give you ${money(j.rider_fee)}?`)}</p>
+            <p className="text-sm text-muted">{dr(j, "The hotel says it handed over your fee with the food.")}</p>
             <div className="mt-3 grid grid-cols-2 gap-2">
               <button onClick={() => void run(`/rider/jobs/${j.id}/picked-up`, { fee_received: true })} className="h-11 rounded-xl bg-ok font-semibold text-white">Yes, I got it</button>
               <button onClick={() => void run(`/rider/jobs/${j.id}/picked-up`, { fee_received: false })} className="h-11 rounded-xl border-2 border-line bg-surface font-semibold">No</button>
@@ -185,7 +199,7 @@ function MyJob({ j, act }: { j: Job; act: (path: string, body?: unknown) => Prom
               <p className="text-sm font-semibold text-muted">Your pickup PIN for #{j.code}</p>
               <p className="money mt-1 text-5xl font-extrabold tracking-[0.35em] text-brand">{j.pickup_pin ?? "····"}</p>
               <p className="mt-2 text-sm font-semibold">
-                {j.status === "ready" ? "Show this PIN to the hotel. They hand you the food once it matches." : "Wait for the food, then show this PIN to the hotel."}
+                {dr(j, j.status === "ready" ? "Show this PIN to the hotel. They hand you the food once it matches." : "Wait for the food, then show this PIN to the hotel.")}
               </p>
             </div>
             <button onClick={() => void run(`/rider/jobs/${j.id}/release`)} className="text-sm font-semibold text-muted hover:text-bad">Drop this job</button>
@@ -224,8 +238,8 @@ function MyJob({ j, act }: { j: Job; act: (path: string, body?: unknown) => Prom
           <div role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()} className="w-full max-w-sm rounded-3xl bg-surface p-6">
             {ask === "pickup_fee" ? (
               <>
-                <h2 className="text-xl font-bold">Did the hotel give you {money(j.rider_fee)}?</h2>
-                <p className="mt-1 text-sm text-muted">Your delivery fee comes with the food for this order.</p>
+                <h2 className="text-xl font-bold">{dr(j, `Did the hotel give you ${money(j.rider_fee)}?`)}</h2>
+                <p className="mt-1 text-sm text-muted">{dr(j, "Your delivery fee comes with the food for this order.")}</p>
                 <div className="mt-5 flex flex-col gap-2">
                   <BigButton tone="ok" onClick={() => void run(`/rider/jobs/${j.id}/picked-up`, { fee_received: true })}>Yes, I got {money(j.rider_fee)}</BigButton>
                   <BigButton tone="ghost" onClick={() => void run(`/rider/jobs/${j.id}/picked-up`, { fee_received: false })}>No, not yet</BigButton>
@@ -261,7 +275,7 @@ function MyJob({ j, act }: { j: Job; act: (path: string, body?: unknown) => Prom
                 <div className="mt-4 flex flex-col gap-2">
                   {FAIL_REASONS.filter(([value]) => value !== "underage_or_no_id" || j.age_check).map(([value, label]) => (
                     <button key={value} onClick={() => void run(`/rider/jobs/${j.id}/failed`, { reason: value })} className="h-12 rounded-xl border border-line text-sm font-semibold hover:border-bad/40 hover:bg-bad-soft hover:text-bad">
-                      {label}
+                      {dr(j, label)}
                     </button>
                   ))}
                 </div>
@@ -512,7 +526,7 @@ export function JobsPage({ me }: { me: RiderMe }) {
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <p className="text-lg font-bold">{j.hotel_name}</p>
-                    <p className="text-sm text-muted">{j.items.length} item{j.items.length === 1 ? "" : "s"} · {readyIn(j)}</p>
+                    <p className="text-sm text-muted">{j.items.length} item{j.items.length === 1 ? "" : "s"} · {dr(j, readyIn(j))}</p>
                   </div>
                   <div className="text-right">
                     <p className="money text-2xl font-extrabold whitespace-nowrap text-ok">{money(j.rider_fee)}</p>

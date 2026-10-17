@@ -108,40 +108,11 @@ function LicencePanel({ hotel }: { hotel: Hotel }) {
   );
 }
 
-/** The owner can set opening hours for a hotel or store: without hours it always reads closed. */
-function HoursPanel({ hotel }: { hotel: Hotel }) {
-  const qc = useQueryClient();
-  const [opens, setOpens] = useState("08:00");
-  const [closes, setCloses] = useState("22:00");
-  const save = useMutation({
-    mutationFn: () =>
-      api.put(`/admin/hotels/${hotel.id}/hours`, { hours: [0, 1, 2, 3, 4, 5, 6].map((weekday) => ({ weekday, opens_at: `${opens}:00`, closes_at: `${closes}:00` })) }),
-    onSuccess: () => {
-      toast("Opening hours saved");
-      return qc.invalidateQueries({ queryKey: ["admin", "hotels"] });
-    },
-  });
-  return (
-    <div className="rounded-2xl border border-line p-4">
-      <p className="text-sm font-bold">Opening hours</p>
-      <p className="mt-1 text-xs text-muted">
-        {hotel.has_hours ? "Hours are set. Saving here replaces them with the same times every day." : "No hours are set, so customers see this as closed."} The store can fine-tune each day in its own Settings.
-      </p>
-      <div className="mt-3 grid grid-cols-2 gap-3">
-        <Field label="Opens">{(id) => <Input id={id} type="time" value={opens} onChange={(e) => setOpens(e.target.value)} />}</Field>
-        <Field label="Closes">{(id) => <Input id={id} type="time" value={closes} onChange={(e) => setCloses(e.target.value)} />}</Field>
-      </div>
-      <ErrorNote error={save.error} />
-      <Button className="mt-3" onClick={() => save.mutate()} busy={save.isPending} disabled={!opens || !closes || opens === closes}>Save hours (every day)</Button>
-    </div>
-  );
-}
-
 /** Why a hotel or store is closed to customers right now, in plain words. */
 function closedReasons(h: Hotel): string[] {
   const out: string[] = [];
   if (h.status === "paused") out.push("Paused");
-  if (!h.has_hours) out.push("No opening hours set");
+  if (!h.has_hours) out.push("No opening hours yet (the store sets them in its Settings)");
   if (h.kind === "liquor") {
     if (!h.liquor_licence_no || !h.liquor_licence_expires) out.push("No liquor licence");
     else if (h.liquor_licence_expires < new Date().toISOString().slice(0, 10)) out.push("Liquor licence expired");
@@ -155,7 +126,6 @@ function NewHotel({ onDone, kind }: { onDone: () => void; kind: "hotel" | "liquo
   const [verified, setVerified] = useState(false);
   const [licence, setLicence] = useState({ no: "", expires: "" });
   const [rates, setRates] = useState({ commission: "", service_fee: "" });
-  const [hours, setHours] = useState(kind === "liquor" ? { opens: "08:00", closes: "22:00" } : { opens: "", closes: "" });
   const set = (k: keyof typeof f) => (e: { target: { value: string } }) =>
     setF((v) => ({ ...v, [k]: e.target.value, ...(k === "name" && (!v.slug || v.slug === slugify(v.name)) ? { slug: slugify(e.target.value) } : {}) }));
   const create = useMutation({
@@ -176,7 +146,6 @@ function NewHotel({ onDone, kind }: { onDone: () => void; kind: "hotel" | "liquo
               ...(rates.service_fee.trim() ? { service_fee: Number(rates.service_fee) } : {}),
             }
           : {}),
-        ...(hours.opens && hours.closes && hours.opens !== hours.closes ? { opens_at: `${hours.opens}:00`, closes_at: `${hours.closes}:00` } : {}),
         admin: { name: f.admin_name, phone: f.admin_phone, password: f.admin_password },
       }),
     onSuccess: () => {
@@ -199,10 +168,6 @@ function NewHotel({ onDone, kind }: { onDone: () => void; kind: "hotel" | "liquo
           <Field label="Service fee (KES)" hint="Optional. Blank uses the default.">{(id) => <Input id={id} inputMode="numeric" value={rates.service_fee} onChange={(e) => setRates((v) => ({ ...v, service_fee: e.target.value.replace(/[^0-9]/g, "") }))} />}</Field>
         </div>
       ) : null}
-      <div className="grid grid-cols-2 gap-3">
-        <Field label="Opens" hint="Optional. Without hours it reads closed.">{(id) => <Input id={id} type="time" value={hours.opens} onChange={(e) => setHours((v) => ({ ...v, opens: e.target.value }))} />}</Field>
-        <Field label="Closes">{(id) => <Input id={id} type="time" value={hours.closes} onChange={(e) => setHours((v) => ({ ...v, closes: e.target.value }))} />}</Field>
-      </div>
       <Field label={kind === "liquor" ? "Store name" : "Hotel name"}>{(id) => <Input id={id} value={f.name} onChange={set("name")} required minLength={2} />}</Field>
       <Field label="Web address" hint={`chakula…/h/${f.slug || "name"}`}>{(id) => <Input id={id} value={f.slug} onChange={set("slug")} required pattern="[a-z0-9-]{2,80}" />}</Field>
       <div className="grid grid-cols-2 gap-3">
@@ -273,7 +238,6 @@ export function HotelsPage({ kind = "hotel" }: { kind?: "hotel" | "liquor" }) {
             {open === h.id ? (
               <div className="mt-3 flex flex-col gap-3">
                 <VerifyPanel key={`${h.till_number}-${h.till_name}-${h.verified}`} hotel={h} />
-                <HoursPanel key={`hours-${h.has_hours}`} hotel={h} />
                 {h.kind === "liquor" ? <LicencePanel key={`${h.liquor_licence_no}-${h.liquor_licence_expires}`} hotel={h} /> : null}
                 <StaffList hotel={h} />
               </div>

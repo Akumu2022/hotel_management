@@ -119,7 +119,7 @@ class _TrackScreenState extends State<TrackScreen> {
           }), ok: tr('Thanks for rating!'));
       // Rated = order finished: back to the hotels after a moment to read the thanks.
       Future.delayed(const Duration(milliseconds: 1800), () {
-        if (mounted) goHome(context);
+        if (mounted) _goHome();
       });
     }
   }
@@ -299,7 +299,13 @@ class _TrackScreenState extends State<TrackScreen> {
     );
   }
 
-  Widget _homeButton(BuildContext context) => IconButton(icon: const Icon(Icons.home_outlined), tooltip: tr('Home'), onPressed: () => goHome(context));
+  /// Home is the side this order was on: Drinks for a liquor store, Chakula for a hotel.
+  void _goHome() {
+    context.read<AppState>().setSection(t?['hotel_kind'] == 'liquor' ? 'liquor' : 'hotel');
+    goHome(context);
+  }
+
+  Widget _homeButton(BuildContext context) => IconButton(icon: const Icon(Icons.home_outlined), tooltip: tr('Home'), onPressed: _goHome);
 
   /// "Step 3 of 7" with a bar that fills as the order moves along.
   Widget _progress(List<String> steps, int idx) => Padding(

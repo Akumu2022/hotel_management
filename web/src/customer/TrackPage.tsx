@@ -15,6 +15,7 @@ import { money } from "../lib/format";
 import { useAlarm } from "../lib/alarm";
 import { useLive } from "../lib/live";
 import { tr, useT, useVariant } from "../lib/i18n";
+import { setSection } from "./section";
 import { TopBar } from "./CustomerLayout";
 import { ConfirmDialog, HelpButton, JourneySteps, toast } from "./bits";
 import { useConfig } from "./OrderPanel";
@@ -364,6 +365,11 @@ export function TrackPage() {
   const navigate = useNavigate();
   const config = useConfig();
   useVariant(track.data?.hotel_kind);
+  const orderKind = track.data?.hotel_kind;
+  useEffect(() => {
+    // Home, "order again" and the header go back to the side this order was on.
+    if (orderKind) setSection(orderKind === "liquor" ? "liquor" : "hotel");
+  }, [orderKind]);
 
   if (track.isLoading) return (<><TopBar /><div className="p-6"><Skeleton className="h-64 rounded-2xl" /></div></>);
   if (track.error || !track.data) return (<><TopBar /><div className="p-6"><ErrorNote error={track.error} /></div></>);
