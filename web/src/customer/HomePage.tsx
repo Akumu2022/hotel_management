@@ -240,7 +240,21 @@ export function HomePage() {
         ) : null}
 
 
-        <section className="mt-6">
+        <div role="tablist" className="mt-6 grid grid-cols-2 gap-1 rounded-xl bg-subtle p-1">
+          {([["hotel", t("Chakula")], ["liquor", t("Drinks")]] as const).map(([k, label]) => (
+            <button
+              key={k}
+              role="tab"
+              aria-selected={kind === k}
+              onClick={() => setSection(k)}
+              className={clsx("h-10 rounded-lg text-sm font-semibold", kind === k ? "bg-surface shadow-sm" : "text-muted")}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        <section className="mt-4">
           <div className="mb-3 flex items-center justify-between gap-3">
             <h2 className="min-w-0 text-lg font-semibold">
               {kind === "liquor" ? t("Drinks near you") : t("Hotels near you")}

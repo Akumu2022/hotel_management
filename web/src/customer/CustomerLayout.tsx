@@ -16,7 +16,6 @@ import { setTheme, useTheme } from "../lib/theme";
 import { HelpButton, Toaster } from "./bits";
 import { FoodImage } from "./FoodImage";
 import { OrderPanel, useCartQuote, useConfig } from "./OrderPanel";
-import { setSection, useSection } from "./section";
 import { cart, useCart, useRecentOrders } from "./store";
 import type { PublicHotel } from "./types";
 
@@ -41,7 +40,7 @@ export function Logo() {
       <span className="flex size-10 items-center justify-center rounded-xl border border-line bg-surface text-brand shadow-sm">
         <UtensilsCrossed className="size-5" />
       </span>
-      <span className="hidden text-[1.375rem] font-extrabold tracking-tight text-brand min-[440px]:inline">Chakula</span>
+      <span className="hidden text-[1.375rem] font-extrabold tracking-tight text-brand min-[440px]:inline">Chakula na Drinks</span>
     </Link>
   );
 }
@@ -136,27 +135,12 @@ export function TopBar() {
   const recent = useRecentOrders();
   const { slug } = useParams();
   const config = useConfig();
-  const section = useSection();
-  const navigate = useNavigate();
   return (
-    <header className="flex flex-wrap items-center justify-between gap-x-3 gap-y-3 border-b border-line px-4 py-4 sm:px-6">
+    <header className="flex items-center justify-between gap-3 border-b border-line px-4 py-4 sm:px-6">
       <div className="flex min-w-0 items-center gap-3 sm:gap-5">
         <Logo />
         <div className="hidden sm:block">{slug ? <HotelSwitcher /> : null}</div>
       </div>
-      <nav aria-label={t("Sections")} className="order-last grid w-full grid-cols-2 gap-1 rounded-xl bg-subtle p-1 text-sm font-semibold sm:order-none sm:w-64">
-        {([["hotel", t("Chakula")], ["liquor", t("Drinks")]] as const).map(([k, label]) => (
-          <button
-            key={k}
-            type="button"
-            aria-current={section === k ? "page" : undefined}
-            onClick={() => { setSection(k); navigate("/"); }}
-            className={clsx("h-9 rounded-lg", section === k ? "bg-surface shadow-sm" : "text-muted")}
-          >
-            {label}
-          </button>
-        ))}
-      </nav>
       <div className="flex items-center gap-2">
         <ThemeToggle />
         <LangToggle />
