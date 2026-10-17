@@ -92,6 +92,7 @@ function useTick(ms = 15000) {
 
 function OrderCard({ o, onAction, canCancel }: { o: BoardOrder; onAction: (o: BoardOrder, a: string) => void; canCancel: boolean }) {
   const w = useW();
+  const liquor = useHotelSettings().data?.kind === "liquor";
   useTick();
   const isNew = o.status === "paid" || o.status === "awaiting_payment";
   const waited = minutesSince(o.paid_at ?? o.created_at);
@@ -122,6 +123,7 @@ function OrderCard({ o, onAction, canCancel }: { o: BoardOrder; onAction: (o: Bo
             </Badge>
           )}
           {o.payment_method === "cash" && !o.paid_at ? <Badge tone="warn">Cash at counter</Badge> : <Badge tone="ok">Paid</Badge>}
+          {liquor && o.type === "pickup" ? <Badge tone="warn">Check ID: 18+</Badge> : null}
         </div>
       </div>
 
@@ -359,6 +361,11 @@ export function OrdersPage() {
             <p className="mt-1 text-sm text-muted">
               Ask {handing.customer_name} for the 4-digit PIN shown in their app. Only hand over the {w("food")} once it matches.
             </p>
+            {settings?.kind === "liquor" ? (
+              <p className="mt-2 rounded-xl bg-warn-soft p-3 text-sm font-semibold text-warn">
+                Alcohol: check the customer's ID (18+). Do not hand over to anyone under 18 or without ID.
+              </p>
+            ) : null}
             <input
               autoFocus
               inputMode="numeric"

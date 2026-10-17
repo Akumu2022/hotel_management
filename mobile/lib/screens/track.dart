@@ -127,6 +127,7 @@ class _TrackScreenState extends State<TrackScreen> {
   @override
   Widget build(BuildContext context) {
     final o = t;
+    drinksVariant = o != null && o['hotel_kind'] == 'liquor';
     if (o == null) {
       return Scaffold(
         appBar: AppBar(title: Text(tr('Your order')), actions: [_homeButton(context)]),
@@ -171,6 +172,7 @@ class _TrackScreenState extends State<TrackScreen> {
               child: ListTile(
                 leading: const Icon(Icons.pin),
                 title: Text(tr('Give the rider this code: {code}', {'code': o['delivery_code']})),
+                subtitle: o['hotel_kind'] == 'liquor' ? Text(tr('Have your ID ready: the rider checks you are 18 or older.')) : null,
               ),
             ),
           if (o['type'] != 'delivery' && o['delivery_code'] != null && !_ended.contains(status) && !const ['awaiting_payment', 'checking_payment', 'collected'].contains(status))
@@ -279,6 +281,7 @@ class _TrackScreenState extends State<TrackScreen> {
           ]),
           const SizedBox(height: 4),
           Text(tr('Tell the hotel this PIN when you get there. They only hand over your food once you give it.'), style: labelOf(context)),
+          if (o['hotel_kind'] == 'liquor') Text(tr('Bring your ID. You must be 18 or older.'), style: const TextStyle(color: Color(0xFFB45309), fontWeight: FontWeight.w700)),
           const SizedBox(height: 12),
           Row(mainAxisAlignment: MainAxisAlignment.center, children: [
             for (final d in '${o['delivery_code']}'.split(''))

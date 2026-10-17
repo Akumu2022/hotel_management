@@ -7,7 +7,8 @@ import 'hotel.dart';
 
 /// Keyword search across every hotel's menu (e.g. "pizza").
 class SearchScreen extends StatefulWidget {
-  const SearchScreen({super.key});
+  final String kind; // 'hotel' or 'liquor'
+  const SearchScreen({super.key, this.kind = 'hotel'});
   @override
   State<SearchScreen> createState() => _SearchScreenState();
 }
@@ -23,7 +24,7 @@ class _SearchScreenState extends State<SearchScreen> {
       final t = v.trim();
       setState(() {
         _term = t;
-        _hits = t.isEmpty ? null : apiGet('/search?q=${Uri.encodeQueryComponent(t)}').then((r) => r as List);
+        _hits = t.isEmpty ? null : apiGet('/search?q=${Uri.encodeQueryComponent(t)}&kind=${widget.kind}').then((r) => r as List);
       });
     });
   }
@@ -36,6 +37,7 @@ class _SearchScreenState extends State<SearchScreen> {
 
   @override
   Widget build(BuildContext context) {
+    drinksVariant = widget.kind == 'liquor';
     return Scaffold(
       appBar: AppBar(
         title: TextField(

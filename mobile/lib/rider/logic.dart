@@ -96,6 +96,7 @@ Uri directionsTo(double lat, double lng) => Uri.parse('https://www.google.com/ma
 const failReasons = {
   'customer_unreachable': "Customer can't be reached",
   'customer_refused': 'Customer refused the order',
+  'underage_or_no_id': 'Under 18, or no ID shown (alcohol not handed over)',
   'wrong_location': 'Wrong or missing location',
   'accident': 'I had an accident',
   'other': 'Something else',

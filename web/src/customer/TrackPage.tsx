@@ -446,6 +446,7 @@ export function TrackPage() {
               <div>
                 <p className="font-semibold">{t.type === "eat_in" ? tt("Eat-in PIN") : tt("Pickup PIN")}</p>
                 <p className="text-sm text-muted">{tt("Tell the hotel this PIN when you get there. They only hand over your food once you give it.")}</p>
+                {t.hotel_kind === "liquor" ? <p className="mt-1 text-sm font-semibold text-warn">{tt("Bring your ID. You must be 18 or older.")}</p> : null}
               </div>
               <div className="flex gap-1.5">
                 {t.delivery_code.split("").map((d, i) => (
@@ -460,6 +461,7 @@ export function TrackPage() {
               <div>
                 <p className="font-semibold">{tt("Delivery code")}</p>
                 <p className="text-sm text-muted">{tt("Give it to the rider when your food arrives")}</p>
+                {t.hotel_kind === "liquor" ? <p className="mt-1 text-sm font-semibold text-warn">{tt("Have your ID ready: the rider checks you are 18 or older.")}</p> : null}
               </div>
               <div className="flex gap-1.5">
                 {t.delivery_code.split("").map((d, i) => (

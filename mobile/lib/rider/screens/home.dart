@@ -91,7 +91,7 @@ class _HistoryTabState extends State<HistoryTab> {
                   child: Card(
                     child: ListTile(
                       title: Text('${j['hotel_name']} · #${j['code']}', style: kItem),
-                      subtitle: Text('${(j['items'] as List).join(', ')}', maxLines: 2, overflow: TextOverflow.ellipsis),
+                      subtitle: Text((j['items'] as List).join(', '), maxLines: 2, overflow: TextOverflow.ellipsis),
                       trailing: j['status'] == 'delivered' ? Text(kes(j['rider_fee']), style: const TextStyle(color: Color(0xFF16A34A), fontWeight: FontWeight.w800)) : Text(tr('Failed'), style: const TextStyle(color: Colors.red, fontWeight: FontWeight.w800)),
                     ),
                   ),

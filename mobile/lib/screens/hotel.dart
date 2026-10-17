@@ -5,6 +5,7 @@ import '../api.dart';
 import '../store.dart';
 import '../i18n.dart';
 import '../util.dart';
+import 'age_gate.dart';
 import 'safety.dart';
 import 'shell.dart';
 import 'checkout.dart';
@@ -78,7 +79,7 @@ class _HotelScreenState extends State<HotelScreen> {
       ((p['discount_price'] ?? p['price']) as int) + chosenOpts.fold<int>(0, (n, o) => n + (o['price_delta'] as int)),
       qty,
     );
-    if (state.add(hotel['slug'], hotel['name'], line)) {
+    if (state.add(hotel['slug'], hotel['name'], line, kind: '${hotel['kind'] ?? 'hotel'}')) {
       HapticFeedback.lightImpact();
       toast(context, tr('{qty}× {name} added to cart', {'qty': line.quantity, 'name': line.name}));
       return;
@@ -97,7 +98,7 @@ class _HotelScreenState extends State<HotelScreen> {
       );
       if (clear == true) {
         state.clear();
-        state.add(hotel['slug'], hotel['name'], line);
+        state.add(hotel['slug'], hotel['name'], line, kind: '${hotel['kind'] ?? 'hotel'}');
       }
     }
   }
@@ -130,6 +131,10 @@ class _HotelScreenState extends State<HotelScreen> {
           }
           if (snap.hasError) return Center(child: Text('${snap.error}'));
           final hotel = snap.data!['hotel'] as Json;
+          final liquor = hotel['kind'] == 'liquor';
+          drinksVariant = liquor;
+          final st = context.watch<AppState>();
+          if (liquor && !st.ageOk) return Center(child: AgeGate(onYes: st.confirmAge, onNo: () => Navigator.pop(context)));
           final open = hotel['state'] == 'open' || hotel['state'] == 'closing_soon';
           final accent = accentOf(hotel['accent_color']);
           final cats = (snap.data!['categories'] as List).cast<Json>();

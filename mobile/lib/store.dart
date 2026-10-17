@@ -22,6 +22,9 @@ class CartLine {
 class AppState extends ChangeNotifier {
   late SharedPreferences _p;
   String? hotelSlug, hotelName;
+  String? hotelKind; // 'hotel' or 'liquor': what the cart holds (null for carts saved before liquor existed)
+  String section = 'hotel'; // which tab of the home screen: Chakula ('hotel') or Drinks ('liquor')
+  bool ageOk = false; // the customer said they are 18 or older
   List<CartLine> lines = [];
   String name = '', phone = '', landmark = '';
   double? lat, lng;
@@ -37,6 +40,8 @@ class AppState extends ChangeNotifier {
       final c = jsonDecode(_p.getString('cart') ?? '{}') as Map;
       hotelSlug = c['slug'];
       hotelName = c['hname'];
+      hotelKind = c['kind'];
+      ageOk = _p.getBool('age18') ?? false;
       lines = [for (final l in (c['lines'] ?? []) as List) CartLine.fromJson(l)];
       final pr = jsonDecode(_p.getString('profile') ?? '{}') as Map;
       name = pr['name'] ?? '';
@@ -54,7 +59,8 @@ class AppState extends ChangeNotifier {
   }
 
   void _save() {
-    _p.setString('cart', jsonEncode({'slug': hotelSlug, 'hname': hotelName, 'lines': lines.map((l) => l.toJson()).toList()}));
+    _p.setBool('age18', ageOk);
+    _p.setString('cart', jsonEncode({'slug': hotelSlug, 'hname': hotelName, 'kind': hotelKind, 'lines': lines.map((l) => l.toJson()).toList()}));
     _p.setString('profile', jsonEncode({'name': name, 'phone': phone, 'landmark': landmark, 'lat': lat, 'lng': lng}));
     _p.setString('recent', jsonEncode(recent));
     _p.setString('places', jsonEncode(places));
@@ -67,10 +73,11 @@ class AppState extends ChangeNotifier {
   int get estimate => lines.fold(0, (n, l) => n + l.unitPrice * l.quantity);
 
   /// False when the cart holds another hotel's items (caller asks to clear first).
-  bool add(String slug, String hname, CartLine line) {
+  bool add(String slug, String hname, CartLine line, {String kind = 'hotel'}) {
     if (hotelSlug != null && hotelSlug != slug && lines.isNotEmpty) return false;
     hotelSlug = slug;
     hotelName = hname;
+    hotelKind = kind;
     final i = lines.indexWhere((l) => l.key == line.key);
     if (i >= 0) {
       lines[i].quantity = (lines[i].quantity + line.quantity).clamp(1, 20);
@@ -87,13 +94,23 @@ class AppState extends ChangeNotifier {
     } else {
       l.quantity = q.clamp(1, 20);
     }
-    if (lines.isEmpty) hotelSlug = hotelName = null;
+    if (lines.isEmpty) hotelSlug = hotelName = hotelKind = null;
     _save();
+  }
+
+  void confirmAge() {
+    ageOk = true;
+    _save();
+  }
+
+  void setSection(String s) {
+    section = s;
+    notifyListeners();
   }
 
   void clear() {
     lines = [];
-    hotelSlug = hotelName = null;
+    hotelSlug = hotelName = hotelKind = null;
     _save();
   }
 
@@ -145,6 +162,7 @@ class AppState extends ChangeNotifier {
     lines = [];
     hotelSlug = t['hotel_slug'];
     hotelName = t['hotel_name'];
+    hotelKind = t['hotel_kind'];
     for (final i in (t['items'] as List).cast<Map>()) {
       final qty = i['quantity'] as int;
       lines.add(CartLine(

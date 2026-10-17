@@ -5,6 +5,7 @@ import '../store.dart';
 import '../i18n.dart';
 import '../util.dart';
 import 'hotel.dart';
+import 'age_gate.dart';
 import 'safety.dart';
 import 'server.dart';
 import 'search.dart';
@@ -16,7 +17,9 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  late Future<List> _hotels = _get('/hotels');
+  late Future<List> _hotels = _get(_hotelsPath);
+  // Chakula (food hotels) or Drinks (liquor stores)
+  String get _hotelsPath => context.read<AppState>().section == 'liquor' ? '/hotels?kind=liquor' : '/hotels';
   late Future<List> _offers = _offersOrEmpty();
   late Future<Json?> _banner = _bannerOrNull();
   Future<Json?> _bannerOrNull() async {
@@ -39,7 +42,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _refresh() async {
     setState(() {
-      _hotels = _get('/hotels');
+      _hotels = _get(_hotelsPath);
       _offers = _offersOrEmpty();
       _banner = _bannerOrNull();
     });
@@ -50,6 +53,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final st = context.watch<AppState>();
+    final liquor = st.section == 'liquor';
+    drinksVariant = liquor;
     return Scaffold(
       appBar: AppBar(
         // Press and hold the title to open the server address (for whoever sets the app up).
@@ -98,7 +104,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
           SliverToBoxAdapter(
-            child: FutureBuilder<Json?>(future: _banner, builder: (_, snap) => _Hero(snap.data)),
+            child: FutureBuilder<Json?>(future: _banner, builder: (_, snap) => _Hero(liquor ? null : snap.data)),
           ),
           SliverToBoxAdapter(
             child: Padding(
@@ -120,11 +126,27 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
           SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
+              child: SegmentedButton<String>(
+                segments: [
+                  ButtonSegment(value: 'hotel', label: Text(tr('Chakula'))),
+                  ButtonSegment(value: 'liquor', label: Text(tr('Drinks'))),
+                ],
+                selected: {st.section},
+                onSelectionChanged: (v) {
+                  st.setSection(v.first);
+                  setState(() => _hotels = _get(_hotelsPath));
+                },
+              ),
+            ),
+          ),
+          SliverToBoxAdapter(
             child: FutureBuilder<List>(
               future: _offers,
               builder: (_, snap) {
                 final offers = snap.data ?? const [];
-                if (offers.isEmpty) return const SizedBox.shrink();
+                if (offers.isEmpty || liquor) return const SizedBox.shrink();
                 return _Deals(offers.cast<Json>());
               },
             ),
@@ -138,11 +160,14 @@ class _HomeScreenState extends State<HomeScreen> {
                   style: FilledButton.styleFrom(minimumSize: const Size(0, 40), padding: const EdgeInsets.symmetric(horizontal: 16)),
                   icon: const Icon(Icons.search, size: 20),
                   label: Text(tr('Search')),
-                  onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SearchScreen())),
+                  onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => SearchScreen(kind: st.section))),
                 ),
               ]),
             ),
           ),
+          if (liquor && !st.ageOk)
+            SliverToBoxAdapter(child: AgeGate(onYes: st.confirmAge, onNo: () => st.setSection('hotel')))
+          else
           FutureBuilder<List>(
             future: _hotels,
             builder: (_, snap) {

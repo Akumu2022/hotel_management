@@ -266,7 +266,8 @@ class _JobCardState extends State<_JobCard> {
       builder: (ctx) => SafeArea(
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           Padding(padding: const EdgeInsets.all(16), child: Text(tr("Why can't you deliver?"), style: kSection)),
-          for (final e in failReasons.entries) ListTile(title: Text(tr(e.value)), onTap: () => Navigator.pop(ctx, e.key)),
+          for (final e in failReasons.entries)
+            if (e.key != 'underage_or_no_id' || j['age_check'] == true) ListTile(title: Text(tr(e.value)), onTap: () => Navigator.pop(ctx, e.key)),
         ]),
       ),
     );
@@ -294,6 +295,17 @@ class _JobCardState extends State<_JobCard> {
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          if (j['age_check'] == true)
+            Container(
+              width: double.infinity,
+              margin: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(color: const Color(0xFFFEF3C7), borderRadius: BorderRadius.circular(12)),
+              child: Text(
+                tr("Alcohol order: check the customer's ID at the door. Under 18, or no ID? Do not hand it over. Mark the delivery as failed and call the Chakula team."),
+                style: const TextStyle(color: Color(0xFFB45309), fontWeight: FontWeight.w700),
+              ),
+            ),
           if (mine) ...[
             Row(children: [
               _orderTag(),

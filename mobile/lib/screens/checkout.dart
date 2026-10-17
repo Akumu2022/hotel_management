@@ -25,7 +25,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   late final _landmark = TextEditingController(text: s.landmark);
   final _promo = TextEditingController();
 
-  late String type = s.mode; // delivery | pickup | eat_in
+  late bool liquor = s.hotelKind == 'liquor'; // drinks: delivery or pickup only
+  late String type = (s.mode == 'eat_in' && liquor) ? 'delivery' : s.mode; // delivery | pickup | eat_in
   String feeMode = 'cash'; // always cash: the customer pays the rider directly (hotels never handle rider money)
   String payment = 'mpesa';
   int arriveIn = 30;
@@ -41,6 +42,23 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     lat = s.lat;
     lng = s.lng;
     _requote();
+    _learnKind();
+  }
+
+  /// A cart saved before liquor existed doesn't say what kind of store it is: ask the menu once.
+  Future<void> _learnKind() async {
+    if (s.hotelKind != null || s.hotelSlug == null) return;
+    try {
+      final m = await apiGet('/hotels/${s.hotelSlug}/menu') as Json;
+      final k = (m['hotel'] as Json)['kind'] == 'liquor' ? 'liquor' : 'hotel';
+      if (!mounted) return;
+      s.hotelKind = k;
+      setState(() {
+        liquor = k == 'liquor';
+        if (liquor && type == 'eat_in') type = 'delivery';
+      });
+      if (liquor) _requote();
+    } catch (_) {}
   }
 
   Json get _base => {
@@ -129,6 +147,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         'payment_method': payment,
         'landmark': type == 'delivery' ? _landmark.text.trim() : null,
         'expected_total': expected ?? q['till_amount'],
+        if (liquor) 'age_confirmed': s.ageOk,
       };
       final sig = jsonEncode(base);
       var pend = s.pending;
@@ -175,6 +194,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
   @override
   Widget build(BuildContext context) {
+    drinksVariant = liquor;
     final cart = context.watch<AppState>();
     if (cart.lines.isEmpty) {
       return Scaffold(
@@ -229,7 +249,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           segments: [
             ButtonSegment(value: 'delivery', label: Text(tr('Delivery')), icon: Icon(Icons.delivery_dining)),
             ButtonSegment(value: 'pickup', label: Text(tr('Pickup')), icon: Icon(Icons.storefront)),
-            ButtonSegment(value: 'eat_in', label: Text(tr('Eat in')), icon: Icon(Icons.restaurant)),
+            if (!liquor) ButtonSegment(value: 'eat_in', label: Text(tr('Eat in')), icon: Icon(Icons.restaurant)),
           ],
           selected: {type},
           onSelectionChanged: (v) {

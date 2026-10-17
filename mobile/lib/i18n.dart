@@ -5,8 +5,13 @@ import 'package:flutter/foundation.dart';
 /// NOTE: have a native speaker review the Kiswahili before launch (same as the web app).
 final ValueNotifier<String> lang = ValueNotifier<String>('en');
 
+/// True while the screen is about drinks (a liquor store): `tr` then says store and drinks where the
+/// food screens say hotel and food. Each screen sets it when it builds.
+bool drinksVariant = false;
+
 String tr(String s, [Map<String, Object?>? vars]) {
-  var out = lang.value == 'sw' ? (_sw[s] ?? s) : s;
+  final key = drinksVariant ? (_drink[s] ?? s) : s;
+  var out = lang.value == 'sw' ? (drinksVariant ? (_drinkSw[key] ?? _sw[key] ?? _sw[s] ?? key) : (_sw[s] ?? s)) : key;
   if (vars != null) {
     vars.forEach((k, v) => out = out.replaceAll('{$k}', '$v'));
   }
@@ -14,6 +19,7 @@ String tr(String s, [Map<String, Object?>? vars]) {
 }
 
 const Map<String, String> _sw = {
+  'Drinks': 'Vinywaji',
   'About {km} km from the hotel (in a straight line)': 'Takriban km {km} kutoka hotelini (kwa mstari ulionyooka)',
   'Add · {amount}': 'Ongeza · {amount}',
   'Again': 'Tena',
@@ -355,4 +361,44 @@ const Map<String, String> _sw = {
   'preparing': 'inaandaliwa',
   'ready': 'tayari',
   'rejected': 'imekataliwa',
+};
+
+const Map<String, String> _drink = {
+  'Browse hotels': 'Browse stores',
+  'You pay the rider the delivery fee yourself when the food arrives. The hotel never handles it.': 'You pay the rider the delivery fee yourself when your drinks arrive. The store never handles it.',
+  'Pay with M-Pesa first. The hotel starts cooking once your payment arrives.': 'Pay with M-Pesa first. The store prepares your order once your payment arrives.',
+  'Order food': 'Order drinks',
+  "You're offline. Showing saved hotels; pull down to retry.": "You're offline. Showing saved stores; pull down to retry.",
+  "You pay the hotel's own M-Pesa Till directly. Tap to see how we keep you safe.": "You pay the store's own M-Pesa Till directly. Tap to see how we keep you safe.",
+  'Hotels near you': 'Drinks near you',
+  'No hotels are open right now': 'No stores are open right now',
+  'Hot food from local hotels, delivered or ready for pickup.': 'Cold drinks from local stores, delivered or ready for pickup.',
+  'Your cart has items from {hotel}. You can order from one hotel at a time.': 'Your cart has items from {hotel}. You can order from one store at a time.',
+  'Search dishes': 'Search drinks',
+  'No dish matches "{q}"': 'No drink matches "{q}"',
+  'Search food, e.g. pizza': 'Search drinks, e.g. beer',
+  'Tell the hotel this PIN when you get there. They only hand over your food once you give it.': 'Tell the store this PIN when you get there. They only hand over your drinks once you give it.',
+  'This page updates by itself once the hotel confirms your payment.': 'This page updates by itself once the store confirms your payment.',
+  'Hotel accepted': 'Store accepted',
+  'Hotel': 'Store',
+};
+
+const Map<String, String> _drinkSw = {
+  'Browse stores': 'Tazama maduka',
+  'You pay the rider the delivery fee yourself when your drinks arrive. The store never handles it.': 'Unamlipa mwendeshaji ada ya kusafirisha mwenyewe vinywaji vikifika. Duka halishughulikii.',
+  'Pay with M-Pesa first. The store prepares your order once your payment arrives.': 'Lipa kwa M-Pesa kwanza. Duka litaandaa oda yako malipo yakifika.',
+  'Order drinks': 'Agiza vinywaji',
+  'Drinks near you': 'Vinywaji karibu nawe',
+  'No stores are open right now': 'Hakuna duka lililofunguliwa sasa',
+  'Cold drinks from local stores, delivered or ready for pickup.': 'Vinywaji baridi kutoka maduka ya karibu, vinaletwa au viko tayari kuchukuliwa.',
+  'Search drinks': 'Tafuta vinywaji',
+  'Search drinks, e.g. beer': 'Tafuta vinywaji, mfano bia',
+  'Store accepted': 'Duka limekubali',
+  'Store': 'Duka',
+  'Are you 18 or older?': 'Una miaka 18 au zaidi?',
+  'Alcohol is sold only to people aged 18 and over. The rider will check your ID at the door.': 'Pombe inauzwa kwa watu wa miaka 18 na zaidi tu. Mwendeshaji ataangalia kitambulisho chako mlangoni.',
+  'Yes, I am 18 or older': 'Ndiyo, nina miaka 18 au zaidi',
+  'No, go back': 'Hapana, rudi nyuma',
+  'Have your ID ready: the rider checks you are 18 or older.': 'Kuwa na kitambulisho tayari: mwendeshaji anakagua kuwa una miaka 18 au zaidi.',
+  'Bring your ID. You must be 18 or older.': 'Leta kitambulisho chako. Lazima uwe na miaka 18 au zaidi.',
 };
