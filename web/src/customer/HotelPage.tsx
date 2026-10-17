@@ -234,6 +234,7 @@ export function HotelPage() {
   const c = useCart();
   const t = useT();
   const aged = useAgeConfirmed();
+  const liquor = menu.data?.hotel.kind === "liquor";
   const navigate = useNavigate();
   const mode = useOrderMode();
   const offers = useQuery({ queryKey: ["offers", "all"], queryFn: () => api.get<PublicOffer[]>("/offers") });
@@ -274,7 +275,7 @@ export function HotelPage() {
       <div className="flex-1 bg-[linear-gradient(to_bottom,var(--color-brand-soft),transparent_34rem)] px-4 pt-4 pb-28 sm:px-6 lg:pb-8">
         <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-6">
           <Link to="/" className="flex h-10 w-fit shrink-0 items-center gap-2 rounded-xl border border-line bg-surface px-3.5 text-sm font-semibold hover:bg-subtle">
-            <ArrowLeft className="size-4" /> {t("All hotels")}
+            <ArrowLeft className="size-4" /> {liquor ? t("All drinks stores") : t("All hotels")}
           </Link>
           <JourneySteps step={0} className="sm:max-w-xl" />
         </div>
@@ -317,7 +318,7 @@ export function HotelPage() {
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder={t("Search dishes")}
+              placeholder={liquor ? t("Search drinks") : t("Search dishes")}
               aria-label="Search the menu"
               className="h-12 w-full rounded-full bg-surface pr-4 pl-11 text-sm shadow-sm ring-1 ring-line/70 outline-none focus:ring-2 focus:ring-brand"
             />
@@ -374,7 +375,7 @@ export function HotelPage() {
           ) : groups.length === 0 ? (
             <div className="flex flex-col items-center gap-2 py-16 text-center">
               <span className="text-5xl">🔎</span>
-              <p className="font-semibold">{search ? t("No dishes match “{q}”", { q: search }) : t("No dishes here yet")}</p>
+              <p className="font-semibold">{search ? (liquor ? t("No drinks match “{q}”", { q: search }) : t("No dishes match “{q}”", { q: search })) : liquor ? t("No drinks here yet") : t("No dishes here yet")}</p>
               {search ? <button onClick={() => setSearch("")} className="text-sm font-semibold text-brand">{t("Clear search")}</button> : null}
             </div>
           ) : (
@@ -383,7 +384,7 @@ export function HotelPage() {
                 {showHeadings ? (
                   <h2 className="mb-3 flex items-center justify-between gap-2 text-xl font-extrabold">
                     <span className="flex items-center gap-2"><span>{g.id === "sorted" ? "↕️" : categoryEmoji(g.name)}</span> {g.name}</span>
-                    <span className="text-sm font-semibold text-brand">{t("{n} dishes", { n: g.items.length })}</span>
+                    <span className="text-sm font-semibold text-brand">{liquor ? t("{n} drinks", { n: g.items.length }) : t("{n} dishes", { n: g.items.length })}</span>
                   </h2>
                 ) : null}
                 <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 xl:grid-cols-4">

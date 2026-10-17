@@ -60,7 +60,7 @@ async def list_hotels(
     if near is not None:
         stmt = stmt.where(Hotel.id.in_(list(near)))
     hotels = (await session.execute(stmt)).scalars().all()
-    values, _ = await settings.load(session)
+    values, _ = await settings.load_for(session, kind)
     hours = await catalogue.hotel_hours(session, [h.id for h in hotels])
     prep = await catalogue.typical_prep(session, [h.id for h in hotels])
     now = utcnow()
@@ -200,9 +200,10 @@ async def list_offers(
 
 
 @router.get("/config")
-async def public_config(session: Session, storage: StorageDep):
-    """What the customer app needs before checkout: the delivery zone (drawn by the admin)."""
-    values, _ = await settings.load(session)
+async def public_config(session: Session, storage: StorageDep, kind: Kind = "hotel"):
+    """What the customer app needs before checkout: the delivery zone (drawn by the admin).
+    `kind=liquor` gives the liquor delivery prices."""
+    values, _ = await settings.load_for(session, kind)
     return {
         "delivery_zone": [],  # no drawn area any more: delivery is by distance from the hotel
         # Without a drawn area, hotels with a location deliver up to max_delivery_km.

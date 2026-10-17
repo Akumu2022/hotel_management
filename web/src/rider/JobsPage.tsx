@@ -48,6 +48,7 @@ type Job = {
 const FAIL_REASONS: [string, string][] = [
   ["customer_unreachable", "Customer not answering at the pin"],
   ["customer_refused", "Customer refused the order"],
+  ["underage_or_no_id", "Under 18, or no ID shown (alcohol not handed over)"],
   ["wrong_location", "Wrong or unreachable location"],
   ["accident", "Accident or food damaged"],
   ["other", "Something else"],
@@ -258,7 +259,7 @@ function MyJob({ j, act }: { j: Job; act: (path: string, body?: unknown) => Prom
                 <h2 className="text-xl font-bold">Why can't you deliver?</h2>
                 <p className="mt-1 text-sm text-muted">Call the customer first. The Chakula team reviews every failed delivery.</p>
                 <div className="mt-4 flex flex-col gap-2">
-                  {FAIL_REASONS.map(([value, label]) => (
+                  {FAIL_REASONS.filter(([value]) => value !== "underage_or_no_id" || j.age_check).map(([value, label]) => (
                     <button key={value} onClick={() => void run(`/rider/jobs/${j.id}/failed`, { reason: value })} className="h-12 rounded-xl border border-line text-sm font-semibold hover:border-bad/40 hover:bg-bad-soft hover:text-bad">
                       {label}
                     </button>

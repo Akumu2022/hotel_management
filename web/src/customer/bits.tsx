@@ -112,12 +112,14 @@ export function ModePicker({
   hotelName,
   deliveryAvailable = true,
   compact,
+  liquor = false,
 }: {
   riderFee?: number;
   feeIsFrom?: boolean; // the fee depends on distance until a pin is dropped
   hotelName?: string | null;
   deliveryAvailable?: boolean;
   compact?: boolean;
+  liquor?: boolean; // drinks: delivery or pickup only
 }) {
   const t = useT();
   const mode = useOrderMode();
@@ -148,9 +150,9 @@ export function ModePicker({
       body: t("Order ahead, eat there"),
       disabled: false,
     },
-  ];
+  ].filter((o) => !(liquor && o.value === "eat_in"));
   return (
-    <div className={clsx("grid gap-2.5", compact ? "grid-cols-3" : "grid-cols-2 sm:grid-cols-3")} role="radiogroup" aria-label={t("How do you want your food?")}>
+    <div className={clsx("grid gap-2.5", liquor ? "grid-cols-2" : compact ? "grid-cols-3" : "grid-cols-2 sm:grid-cols-3")} role="radiogroup" aria-label={liquor ? t("How do you want your drink?") : t("How do you want your food?")}>
       {options.map((o) => {
         const active = mode === o.value;
         return (

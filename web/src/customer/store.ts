@@ -53,7 +53,7 @@ export type CartLine = {
   thumb_url?: string | null;
 };
 
-export type Cart = { hotel_slug: string | null; hotel_name: string | null; lines: CartLine[] };
+export type Cart = { hotel_slug: string | null; hotel_name: string | null; hotel_kind?: "hotel" | "liquor"; lines: CartLine[] };
 
 const EMPTY: Cart = { hotel_slug: null, hotel_name: null, lines: [] };
 const cartStore = createStore<Cart>("cart-v1", EMPTY);
@@ -64,7 +64,7 @@ export const cart = {
   get: cartStore.get,
   lineKey: (productId: string, optionIds: string[]) => [productId, ...[...optionIds].sort()].join(":"),
   /** Returns false if the cart holds another hotel's items (caller asks to clear first). */
-  add(hotel: { slug: string; name: string }, line: Omit<CartLine, "key" | "quantity">, qty = 1): boolean {
+  add(hotel: { slug: string; name: string; kind?: string }, line: Omit<CartLine, "key" | "quantity">, qty = 1): boolean {
     const c = cartStore.get();
     if (c.hotel_slug && c.hotel_slug !== hotel.slug && c.lines.length) return false;
     const key = cart.lineKey(line.product_id, line.option_ids);
@@ -72,7 +72,7 @@ export const cart = {
     const lines = existing
       ? c.lines.map((l) => (l.key === key ? { ...l, quantity: Math.min(20, l.quantity + qty) } : l))
       : [...c.lines, { ...line, key, quantity: qty }];
-    cartStore.set({ hotel_slug: hotel.slug, hotel_name: hotel.name, lines });
+    cartStore.set({ hotel_slug: hotel.slug, hotel_name: hotel.name, hotel_kind: hotel.kind === "liquor" ? "liquor" : "hotel", lines });
     return true;
   },
   setQuantity(key: string, quantity: number) {

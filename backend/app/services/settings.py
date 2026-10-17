@@ -197,8 +197,35 @@ _cache: tuple[float, PlatformSettings, bool] | None = None
 
 
 def clear_cache() -> None:
-    global _cache
+    global _cache, _liquor_cache
     _cache = None
+    _liquor_cache = None
+
+
+# Liquor stores have their own fees, bonuses and delivery rates. They are stored beside the food ones
+# as "liquor.<name>" rows; a liquor store uses its own value where one is saved and the food value
+# where not. Bonuses are off for liquor until the owner turns them on.
+LIQUOR_PREFIX = "liquor."
+LIQUOR_FIELDS = (
+    "commission_mode",
+    "commission_tiers",
+    "commission_step",
+    "commission_step_fee",
+    "commission_bp",
+    "service_fee",
+    "rider_fee_mode",
+    "rider_fee_bands",
+    "rider_fee_base",
+    "rider_fee_per_km",
+    "rider_fee_min",
+    "rider_fee_max_km",
+    "distance_method",
+    "stamp_every",
+    "stamp_reward",
+    "free_delivery_min_food",
+)
+LIQUOR_BONUSES_OFF = {"stamp_reward": 0, "free_delivery_min_food": 0}
+_liquor_cache: tuple[float, PlatformSettings] | None = None
 
 
 async def load(session: AsyncSession) -> tuple[PlatformSettings, bool]:
@@ -214,6 +241,52 @@ async def load(session: AsyncSession) -> tuple[PlatformSettings, bool]:
     values = PlatformSettings(**{**DEFAULTS.model_dump(), **known})
     _cache = (now + CACHE_SECONDS, values, reviewed)
     return values.model_copy(deep=True), reviewed
+
+
+async def load_for(session: AsyncSession, kind: str | None) -> tuple[PlatformSettings, bool]:
+    """The settings that apply to one kind of store: food hotels use the main settings."""
+    global _liquor_cache
+    values, reviewed = await load(session)
+    if kind != "liquor":
+        return values, reviewed
+    now = time.monotonic()
+    if _liquor_cache is not None and now < _liquor_cache[0]:
+        return _liquor_cache[1].model_copy(deep=True), reviewed
+    rows = (
+        await session.execute(select(Setting).where(Setting.key.like(f"{LIQUOR_PREFIX}%")))
+    ).scalars()
+    own = {r.key[len(LIQUOR_PREFIX) :]: r.value for r in rows}
+    own = {k: v for k, v in own.items() if k in LIQUOR_FIELDS}
+    merged = PlatformSettings(**{**values.model_dump(), **LIQUOR_BONUSES_OFF, **own})
+    _liquor_cache = (now + CACHE_SECONDS, merged)
+    return merged.model_copy(deep=True), reviewed
+
+
+async def update_liquor(
+    session: AsyncSession, changes: dict, actor_id: uuid.UUID | None
+) -> PlatformSettings:
+    """Save liquor fees, bonuses and delivery. Only the liquor fields are taken; each one sent is
+    stored for liquor (so it no longer follows the food value). Caller commits."""
+    clear_cache()
+    current, _ = await load_for(session, "liquor")
+    clear_cache()
+    picked = {k: v for k, v in changes.items() if k in LIQUOR_FIELDS}
+    merged = PlatformSettings(**{**current.model_dump(), **picked})  # raises ValidationError
+    old, new = current.model_dump(), merged.model_dump()
+    for key in picked:
+        await _upsert(session, LIQUOR_PREFIX + key, new[key], actor_id)
+        if old[key] != new[key]:
+            await audit.log(
+                session,
+                actor_id=actor_id,
+                action="settings.update",
+                target_type="setting",
+                target_id=LIQUOR_PREFIX + key,
+                details={"old": old[key], "new": new[key]},
+            )
+    clear_cache()
+    event.listen(session.sync_session, "after_commit", lambda _s: clear_cache(), once=True)
+    return merged
 
 
 async def update(

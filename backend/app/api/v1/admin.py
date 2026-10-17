@@ -1,5 +1,5 @@
 import uuid
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, File, UploadFile
 from pydantic import ValidationError
@@ -36,15 +36,20 @@ router = APIRouter(prefix="/admin", tags=["admin"])
 
 
 @router.get("/settings", response_model=SettingsOut)
-async def get_settings(_: SuperAdmin, session: Session):
-    values, reviewed = await settings.load(session)
+async def get_settings(_: SuperAdmin, session: Session, kind: Literal["hotel", "liquor"] = "hotel"):
+    values, reviewed = await settings.load_for(session, kind)
     return SettingsOut.build(values, reviewed)
 
 
 @router.put("/settings", response_model=SettingsOut)
-async def put_settings(body: SettingsIn, admin: SuperAdmin, session: Session):
+async def put_settings(
+    body: SettingsIn, admin: SuperAdmin, session: Session, kind: Literal["hotel", "liquor"] = "hotel"
+):
     try:
-        values = await settings.update(session, body.to_changes(), admin.id)
+        if kind == "liquor":
+            values = await settings.update_liquor(session, body.to_changes(), admin.id)
+        else:
+            values = await settings.update(session, body.to_changes(), admin.id)
     except ValidationError as e:
         raise AppError(422, "validation_error", e.errors()[0]["msg"]) from None
     except ValueError as e:
@@ -80,7 +85,7 @@ async def distance_check(
         raise not_found("Hotel not found")
     if hotel.lat is None:
         raise AppError(409, "no_location", f"Place {hotel.name} on the map first")
-    values, _ = await settings.load(session)
+    values, _ = await settings.load_for(session, hotel.kind)
     d = await routing.distance(hotel.lat, hotel.lng, lat, lng, values.distance_method)
     straight = round(settings.distance_km(hotel.lat, hotel.lng, lat, lng), 1)
     fee = values.rider_fee_at(d.km)

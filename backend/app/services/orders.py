@@ -123,7 +123,9 @@ async def price(
     session: AsyncSession, body: QuoteIn, now: datetime, *, lock_promo: bool = False
 ) -> Priced:
     hotel = await _hotel_by_slug(session, body.hotel_slug)
-    values, _ = await settings.load(session)
+    if hotel.kind == "liquor" and body.type == "eat_in":
+        raise AppError(422, "eat_in_unavailable", "Liquor stores are delivery or pickup only")
+    values, _ = await settings.load_for(session, hotel.kind)
     products = await _catalogue(session, hotel.id, {ln.product_id for ln in body.lines}, now)
 
     automatic = (

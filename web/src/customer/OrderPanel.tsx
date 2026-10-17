@@ -1,7 +1,7 @@
 /** The "Order" panel from the reference POS design, with a plain delivery/pickup choice. */
 import { useQuery } from "@tanstack/react-query";
 import { Minus, Plus, Trash2, X } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { api } from "../lib/api";
@@ -9,13 +9,14 @@ import { money } from "../lib/format";
 import { useT } from "../lib/i18n";
 import { BonusLine, BonusNudges, ConfirmDialog, ModePicker } from "./bits";
 import { FoodImage } from "./FoodImage";
-import { cart, useCart, useOrderMode } from "./store";
+import { cart, orderMode, useCart, useOrderMode } from "./store";
 import type { PublicConfig, Quote } from "./types";
 
-export function useConfig(opts: { fresh?: boolean } = {}) {
+export function useConfig(opts: { fresh?: boolean; kind?: "hotel" | "liquor" } = {}) {
+  const liquor = opts.kind === "liquor"; // liquor stores have their own delivery prices
   return useQuery({
-    queryKey: ["config"],
-    queryFn: () => api.get<PublicConfig>("/config"),
+    queryKey: liquor ? ["config", "liquor"] : ["config"],
+    queryFn: () => api.get<PublicConfig>(liquor ? "/config?kind=liquor" : "/config"),
     staleTime: opts.fresh ? 0 : 60_000,
     refetchOnMount: opts.fresh ? "always" : true,
   });
@@ -63,7 +64,11 @@ export function OrderPanel({ onProceed }: { onProceed?: () => void }) {
   const mode = useOrderMode();
   const navigate = useNavigate();
   const quote = useCartQuote();
-  const config = useConfig();
+  const liquor = c.hotel_kind === "liquor";
+  const config = useConfig({ kind: c.hotel_kind });
+  useEffect(() => {
+    if (liquor && mode === "eat_in") orderMode.set("delivery");
+  }, [liquor, mode]);
   const [confirmClear, setConfirmClear] = useState(false);
   const q = quote.data;
   const empty = c.lines.length === 0;
@@ -82,9 +87,9 @@ export function OrderPanel({ onProceed }: { onProceed?: () => void }) {
         ) : null}
       </div>
 
-      <SectionLabel>{t("How do you want your food?")}</SectionLabel>
+      <SectionLabel>{liquor ? t("How do you want your drink?") : t("How do you want your food?")}</SectionLabel>
       <div className="px-5 py-4">
-        <ModePicker compact riderFee={config.data?.rider_fee} hotelName={c.hotel_name} deliveryAvailable={config.data?.delivery_available ?? true} />
+        <ModePicker compact liquor={liquor} riderFee={config.data?.rider_fee} hotelName={c.hotel_name} deliveryAvailable={config.data?.delivery_available ?? true} />
       </div>
 
       <SectionLabel>{t("Order details")}</SectionLabel>

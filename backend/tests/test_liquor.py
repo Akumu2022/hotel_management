@@ -87,3 +87,48 @@ async def test_admin_makes_a_liquor_store_with_its_licence(client, headers):  # 
         f"/api/v1/admin/hotels/{hid}", headers=headers, json={"liquor_licence_no": None}
     )
     assert r.status_code == 422
+
+
+async def test_liquor_has_its_own_fees_and_delivery(client, db, headers):  # noqa: F811
+    food, fproduct = await open_hotel(db)
+    store, sproduct = await liquor(db)
+    await set_zone(db)
+
+    def quote_body(hotel, product):
+        b = body(hotel, product)
+        return {k: b[k] for k in ("hotel_slug", "lines", "type", "rider_fee_mode", "phone", "lat", "lng")}
+
+    before = (await client.post("/api/v1/quotes", json=quote_body(store, sproduct))).json()
+    # Until set, liquor follows the food values; its bonuses are off.
+    liquor_now = (await client.get("/api/v1/admin/settings?kind=liquor", headers=headers)).json()
+    assert liquor_now["stamp_reward"] == 0 and liquor_now["free_delivery_min_food"] == 0
+
+    r = await client.put(
+        "/api/v1/admin/settings?kind=liquor",
+        headers=headers,
+        json={
+            "service_fee": 45,
+            "rider_fee_mode": "bands",
+            "rider_fee_bands": [{"max_km": 30, "fee": 300}],
+        },
+    )
+    assert r.status_code == 200, r.text
+    after = (await client.post("/api/v1/quotes", json=quote_body(store, sproduct))).json()
+    assert after["rider_fee"] == 300 and after["service_fee"] == 45
+    assert before["rider_fee"] != 300
+    # The food side did not move.
+    food_quote = (await client.post("/api/v1/quotes", json=quote_body(food, fproduct))).json()
+    assert food_quote["rider_fee"] != 300 and food_quote["service_fee"] != 45
+    food_settings = (await client.get("/api/v1/admin/settings", headers=headers)).json()
+    assert food_settings["service_fee"] != 45 and food_settings["rider_fee_mode"] != "bands"
+    # Non-liquor fields sent with kind=liquor are ignored, not applied to anything.
+    await client.put("/api/v1/admin/settings?kind=liquor", headers=headers, json={"banner_title": "X"})
+    assert (await client.get("/api/v1/admin/settings", headers=headers)).json()["banner_title"] != "X"
+
+
+async def test_liquor_is_delivery_or_pickup_only(client, db):
+    store, product = await liquor(db)
+    r = await client.post(
+        "/api/v1/quotes", json={**{k: body(store, product)[k] for k in ("hotel_slug", "lines", "rider_fee_mode", "phone")}, "type": "eat_in", "rider_fee_mode": "none"}
+    )
+    assert r.status_code == 422 and r.json()["error"]["code"] == "eat_in_unavailable"

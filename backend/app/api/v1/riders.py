@@ -267,7 +267,12 @@ class DeliverIn(Input):
 
 class FailIn(Input):
     reason: Literal[
-        "customer_unreachable", "customer_refused", "wrong_location", "accident", "other"
+        "customer_unreachable",
+        "customer_refused",
+        "underage_or_no_id",
+        "wrong_location",
+        "accident",
+        "other",
     ]
     note: str | None = Field(None, max_length=200)
 
@@ -275,6 +280,7 @@ class FailIn(Input):
 FAIL_TEXT = {
     "customer_unreachable": "Customer unreachable at the pin",
     "customer_refused": "Customer refused the order",
+    "underage_or_no_id": "Customer under 18 or no ID shown (alcohol not handed over)",
     "wrong_location": "Wrong or unreachable location",
     "accident": "Accident or food damaged on the way",
     "other": "Other",

@@ -37,7 +37,7 @@ function HotelCard({ hotel }: { hotel: PublicHotel }) {
         <p className="mt-1.5 flex items-center gap-3 text-xs font-medium text-white/85">
           <span className="flex items-center gap-1"><Bike className="size-3.5" /> {t("Delivery")}</span>
           <span className="flex items-center gap-1"><Store className="size-3.5" /> {t("Pickup")}</span>
-          <span className="flex items-center gap-1"><UtensilsCrossed className="size-3.5" /> {t("Eat in")}</span>
+          {hotel.kind === "liquor" ? null : <span className="flex items-center gap-1"><UtensilsCrossed className="size-3.5" /> {t("Eat in")}</span>}
         </p>
       </HotelCover>
       <div className="flex items-center justify-between gap-2 px-4 py-3">

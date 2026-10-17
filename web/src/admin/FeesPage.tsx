@@ -7,6 +7,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { ErrorNote, Skeleton } from "../components/ui";
 import { api } from "../lib/api";
 import { money } from "../lib/format";
+import { type Kind, KindSwitch } from "./KindSwitch";
 
 type Tier = { up_to: number; fee: number };
 type FeeSettings = {
@@ -73,8 +74,21 @@ function Card({ icon, title, sub, children }: { icon: ReactNode; title: string; 
 }
 
 export function FeesPage() {
+  const [kind, setKind] = useState<Kind>("hotel");
+  return (
+    <>
+      <div className="px-4 pt-4 sm:px-6 sm:pt-6"><KindSwitch kind={kind} onChange={setKind} /></div>
+      <FeesForm key={kind} kind={kind} />
+    </>
+  );
+}
+
+function FeesForm({ kind }: { kind: Kind }) {
+  const liquor = kind === "liquor";
+  const qs = liquor ? "?kind=liquor" : "";
+  const key = liquor ? ["admin", "settings", "liquor"] : ["admin", "settings"];
   const qc = useQueryClient();
-  const q = useQuery({ queryKey: ["admin", "settings"], queryFn: () => api.get<FeeSettings>("/admin/settings") });
+  const q = useQuery({ queryKey: key, queryFn: () => api.get<FeeSettings>(`/admin/settings${qs}`) });
   const [s, setS] = useState<FeeSettings | null>(null);
   const [saved, setSaved] = useState(false);
   useEffect(() => {
@@ -83,7 +97,7 @@ export function FeesPage() {
 
   const save = useMutation({
     mutationFn: (v: FeeSettings) =>
-      api.put<FeeSettings>("/admin/settings", {
+      api.put<FeeSettings>(`/admin/settings${qs}`, {
         commission_mode: v.commission_mode,
         commission_tiers: v.commission_tiers,
         commission_step: v.commission_step,
@@ -97,7 +111,7 @@ export function FeesPage() {
         bonus_daily_budget: v.bonus_daily_budget,
       }),
     onSuccess: (v) => {
-      qc.setQueryData(["admin", "settings"], v);
+      qc.setQueryData(key, v);
       setS(v);
       setSaved(true);
       setTimeout(() => setSaved(false), 2500);
@@ -113,8 +127,8 @@ export function FeesPage() {
   return (
     <div className="flex flex-col gap-5 p-4 sm:p-6">
       <div>
-        <h1 className="text-2xl font-bold">Fees & bonuses</h1>
-        <p className="text-sm text-muted">What the platform charges hotels, and the rewards that bring customers back. Changes apply to new orders only.</p>
+        <h1 className="text-2xl font-bold">{liquor ? "Fees & bonuses: liquor stores" : "Fees & bonuses"}</h1>
+        <p className="text-sm text-muted">{liquor ? "What the platform charges liquor stores, and their rewards. These are separate from the hotel settings. Bonuses are off for liquor until you set them. Changes apply to new orders only." : "What the platform charges hotels, and the rewards that bring customers back. Changes apply to new orders only."}</p>
       </div>
 
       <div className="grid gap-5 xl:grid-cols-2">
@@ -181,10 +195,12 @@ export function FeesPage() {
             Service fee paid by the customer:
             <Num label="Service fee" value={s.service_fee} onChange={(n) => set({ service_fee: n })} width="w-24" />
           </p>
-          <p className="mt-3 flex flex-wrap items-center gap-2 text-sm">
-            Eat-in markup, added to every eat-in order (yours, 0 = none):
-            <Num label="Eat-in markup" value={s.eat_in_fee} onChange={(n) => set({ eat_in_fee: n })} width="w-24" />
-          </p>
+          {liquor ? null : (
+            <p className="mt-3 flex flex-wrap items-center gap-2 text-sm">
+              Eat-in markup, added to every eat-in order (yours, 0 = none):
+              <Num label="Eat-in markup" value={s.eat_in_fee} onChange={(n) => set({ eat_in_fee: n })} width="w-24" />
+            </p>
+          )}
         </Card>
 
         <div className="flex flex-col gap-5">
@@ -205,9 +221,9 @@ export function FeesPage() {
             </p>
             <p className="mt-2 text-xs text-muted">0 turns free delivery off.</p>
           </Card>
-          <Card icon={<Wallet className="size-5" />} title="Daily bonus budget" sub="The most the platform spends on bonuses per day, all hotels together. Once it's used up, bonuses pause until midnight.">
+          {liquor ? null : <Card icon={<Wallet className="size-5" />} title="Daily bonus budget" sub="The most the platform spends on bonuses per day, all hotels together. Once it's used up, bonuses pause until midnight.">
             <Num label="Daily bonus budget" value={s.bonus_daily_budget} onChange={(n) => set({ bonus_daily_budget: n })} width="w-36" />
-          </Card>
+          </Card>}
           <p className="flex items-start gap-2 rounded-2xl bg-brand-soft p-4 text-sm">
             <Gift className="mt-0.5 size-4 shrink-0 text-brand" />
             <span>Bonuses are paid by the platform: the customer pays less and the hotel is credited the difference on its statement, so hotels never lose. One bonus per order, whichever is bigger. Hotels run their own happy hours under Discounts.</span>

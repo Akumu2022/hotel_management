@@ -103,7 +103,11 @@ export function CheckoutPage() {
   const c = useCart();
   const saved = useProfile();
   const type = useOrderMode();
-  const config = useConfig({ fresh: true });
+  const liquor = c.hotel_kind === "liquor";
+  const config = useConfig({ fresh: true, kind: c.hotel_kind });
+  useEffect(() => {
+    if (liquor && orderMode.get() === "eat_in") orderMode.set("delivery");
+  }, [liquor]);
   const menu = useQuery({
     queryKey: ["menu", c.hotel_slug],
     queryFn: () => api.get<Menu>(`/hotels/${c.hotel_slug}/menu`),
@@ -294,8 +298,8 @@ export function CheckoutPage() {
                 <div className={clsx("h-full rounded-full transition-all duration-500", doneCount === 4 ? "bg-ok" : "bg-brand")} style={{ width: `${(doneCount / 4) * 100}%` }} />
               </div>
             </div>
-            <Step n={1} title={t("How do you want your food?")} done={done.how}>
-              <ModePicker riderFee={riderFee} feeIsFrom={feeIsFrom} hotelName={c.hotel_name} deliveryAvailable={deliveryAvailable} />
+            <Step n={1} title={liquor ? t("How do you want your drink?") : t("How do you want your food?")} done={done.how}>
+              <ModePicker liquor={liquor} riderFee={riderFee} feeIsFrom={feeIsFrom} hotelName={c.hotel_name} deliveryAvailable={deliveryAvailable} />
             </Step>
 
             <Step n={2} title={t("Your details")} hint={t("So the hotel and rider can reach you")} done={done.details}>

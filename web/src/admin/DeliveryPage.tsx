@@ -13,6 +13,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ErrorNote, Skeleton } from "../components/ui";
 import { api, getAllPages } from "../lib/api";
 import { compressImage, money } from "../lib/format";
+import { type Kind, KindSwitch } from "./KindSwitch";
 import { type LngLat, circleZone } from "../lib/geo";
 
 type Band = { max_km: number; fee: number };
@@ -224,6 +225,10 @@ export function DeliveryPage() {
   const qc = useQueryClient();
   const settings = useQuery({ queryKey: ["admin", "settings"], queryFn: () => api.get<AdminSettings>("/admin/settings") });
   const hotels = useQuery({ queryKey: ["admin", "hotels"], queryFn: () => getAllPages<AdminHotel>("/admin/hotels") });
+  // Delivery prices are set separately for food hotels and liquor stores.
+  const [pk, setPk] = useState<Kind>("hotel");
+  const kindQs = pk === "liquor" ? "?kind=liquor" : "";
+  const pricingQ = useQuery({ queryKey: pk === "liquor" ? ["admin", "settings", "liquor"] : ["admin", "settings"], queryFn: () => api.get<AdminSettings>(`/admin/settings${kindQs}`) });
 
   const [mode, setMode] = useState<Mode>("circle");
   const [centre, setCentre] = useState<{ lat: number; lng: number } | null>(null);
@@ -234,7 +239,7 @@ export function DeliveryPage() {
 
   const saved = settings.data?.delivery_zone ?? [];
   const zone = draft ?? saved;
-  const editBands = bands ?? settings.data?.rider_fee_bands ?? [];
+  const editBands = bands ?? pricingQ.data?.rider_fee_bands ?? [];
 
   // Circle mode: the draft follows centre + radius.
   useEffect(() => {
@@ -254,7 +259,7 @@ export function DeliveryPage() {
     },
   });
   const saveBands = useMutation({
-    mutationFn: (b: Band[]) => api.put("/admin/settings", { rider_fee_bands: b }),
+    mutationFn: (b: Band[]) => api.put(`/admin/settings${kindQs}`, { rider_fee_bands: b }),
     onSuccess: () => {
       setBands(null);
       return qc.invalidateQueries({ queryKey: ["admin", "settings"] });
@@ -267,20 +272,20 @@ export function DeliveryPage() {
 
   // Pricing draft (per-km / bands / distance method)
   const [pricing, setPricing] = useState<Pricing | null>(null);
-  const savedPricing: Pricing | null = settings.data
+  const savedPricing: Pricing | null = pricingQ.data
     ? {
-        rider_fee_mode: settings.data.rider_fee_mode,
-        rider_fee_base: settings.data.rider_fee_base,
-        rider_fee_per_km: settings.data.rider_fee_per_km,
-        rider_fee_min: settings.data.rider_fee_min,
-        rider_fee_max_km: settings.data.rider_fee_max_km,
-        nearby_radius_km: settings.data.nearby_radius_km,
-        distance_method: settings.data.distance_method,
+        rider_fee_mode: pricingQ.data.rider_fee_mode,
+        rider_fee_base: pricingQ.data.rider_fee_base,
+        rider_fee_per_km: pricingQ.data.rider_fee_per_km,
+        rider_fee_min: pricingQ.data.rider_fee_min,
+        rider_fee_max_km: pricingQ.data.rider_fee_max_km,
+        nearby_radius_km: pricingQ.data.nearby_radius_km,
+        distance_method: pricingQ.data.distance_method,
       }
     : null;
   const editPricing = pricing ?? savedPricing;
   const savePricing = useMutation({
-    mutationFn: (p: Pricing) => api.put("/admin/settings", p),
+    mutationFn: (p: Pricing) => api.put(`/admin/settings${kindQs}`, p),
     onSuccess: () => {
       setPricing(null);
       return qc.invalidateQueries({ queryKey: ["admin", "settings"] });
@@ -477,7 +482,8 @@ export function DeliveryPage() {
         </Card>
 
         <div className="flex flex-col gap-5">
-          <Card title="Delivery fees" subtitle="Worked out automatically from the distance between the hotel and the customer's pin.">
+          <Card title="Delivery fees" subtitle={pk === "liquor" ? "For liquor stores only. Worked out from the distance between the store and the customer's pin." : "Worked out automatically from the distance between the hotel and the customer's pin."}>
+            <div className="mb-4"><KindSwitch kind={pk} onChange={(k) => { setPk(k); setPricing(null); setBands(null); }} /></div>
             {editPricing ? (
               <div className="mb-5 flex flex-col gap-4">
                 <div className="grid grid-cols-2 gap-1 rounded-xl bg-subtle p-1 text-sm font-semibold">
@@ -497,7 +503,7 @@ export function DeliveryPage() {
                   ))}
                 </div>
 
-                <label className="flex flex-col gap-1">
+                {pk === "liquor" ? null : <label className="flex flex-col gap-1">
                   <span className="text-xs font-medium text-muted">Customers see hotels within (from where they are)</span>
                   <span className="relative">
                     <input
@@ -508,7 +514,7 @@ export function DeliveryPage() {
                     />
                     <span className="absolute top-1/2 right-3 -translate-y-1/2 text-xs text-muted">km</span>
                   </span>
-                </label>
+                </label>}
 
                 {editPricing.rider_fee_mode === "per_km" ? (
                   <div className="grid grid-cols-2 gap-3">
