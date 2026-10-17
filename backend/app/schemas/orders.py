@@ -48,6 +48,8 @@ class OrderIn(QuoteIn):
     # The total the customer saw. If the server's total differs, placement is refused with
     # 409 price_changed and the new quote, so the customer confirms the new amount.
     expected_total: int = Field(ge=0, strict=True)
+    # Liquor stores only: the customer confirms they are 18 or older.
+    age_confirmed: bool = False
 
     @model_validator(mode="after")
     def _delivery(self):

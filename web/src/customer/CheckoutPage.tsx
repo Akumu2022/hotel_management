@@ -16,6 +16,7 @@ import { money } from "../lib/format";
 import { pointInZone } from "../lib/geo";
 import { useT } from "../lib/i18n";
 import { BonusLine, BonusNudges, ConfirmDialog, HelpButton, JourneySteps, ModePicker } from "./bits";
+import { ageConfirmed } from "./age";
 import { TopBar } from "./CustomerLayout";
 import { FoodImage } from "./FoodImage";
 import { useConfig } from "./OrderPanel";
@@ -220,6 +221,7 @@ export function CheckoutPage() {
           landmark: type === "delivery" ? landmark : null,
           arrive_at: type === "eat_in" && arriveIn ? new Date(Date.now() + arriveIn * 60_000).toISOString() : null,
           expected_total: expectedTotal,
+          age_confirmed: ageConfirmed(),
         },
         { auth: false, headers: { "Idempotency-Key": idemKey } },
       );

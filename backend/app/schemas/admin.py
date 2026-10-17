@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from typing import Annotated, Literal
 
 from pydantic import AfterValidator, ConfigDict, Field, field_validator, model_validator
@@ -185,6 +185,9 @@ class HotelOut(Schema):
     accent_color: str | None
     lat: float | None = None
     lng: float | None = None
+    kind: str = "hotel"
+    liquor_licence_no: str | None = None
+    liquor_licence_expires: date | None = None
     created_at: datetime
     rating: float | None = None
     rating_count: int = 0
@@ -227,12 +230,18 @@ class HotelCreate(Schema):
     accent_color: str | None = Field(None, pattern=_COLOR)
     lat: float | None = Field(None, ge=-90, le=90)
     lng: float | None = Field(None, ge=-180, le=180)
+    kind: Literal["hotel", "liquor"] = "hotel"
+    liquor_licence_no: str | None = Field(None, min_length=2, max_length=60)
+    liquor_licence_expires: date | None = None
     admin: HotelLoginIn | None = None
 
     @model_validator(mode="after")
     def _location_pair(self):
         if (self.lat is None) != (self.lng is None):
             raise ValueError("Set both latitude and longitude, or neither")
+        licensed = bool(self.liquor_licence_no) and self.liquor_licence_expires is not None
+        if self.kind == "liquor" and not licensed:
+            raise ValueError("A liquor store needs its licence number and expiry date")
         return self
 
 
@@ -251,6 +260,9 @@ class HotelPatch(Schema):
     accent_color: str | None = Field(None, pattern=_COLOR)
     lat: float | None = Field(None, ge=-90, le=90)
     lng: float | None = Field(None, ge=-180, le=180)
+    kind: Literal["hotel", "liquor"] | None = None
+    liquor_licence_no: str | None = Field(None, min_length=2, max_length=60)
+    liquor_licence_expires: date | None = None
 
     @model_validator(mode="after")
     def _location_pair(self):
@@ -266,6 +278,8 @@ _NULLABLE_HOTEL_FIELDS = {
     "accent_color",
     "lat",
     "lng",
+    "liquor_licence_no",
+    "liquor_licence_expires",
 }
 
 

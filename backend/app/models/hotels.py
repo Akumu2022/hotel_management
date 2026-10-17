@@ -1,9 +1,10 @@
 import uuid
-from datetime import datetime, time
+from datetime import date, datetime, time
 
 from sqlalchemy import (
     Boolean,
     CheckConstraint,
+    Date,
     DateTime,
     Float,
     ForeignKey,
@@ -16,13 +17,14 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, created_at, one_of, updated_at, uuid_pk
-from app.models.enums import HOTEL_STATUSES
+from app.models.enums import HOTEL_KINDS, HOTEL_STATUSES
 
 
 class Hotel(Base):
     __tablename__ = "hotels"
     __table_args__ = (
         one_of("status", HOTEL_STATUSES),
+        one_of("kind", HOTEL_KINDS),
         # Blank = use the global default; when set, same bounds as the global setting.
         CheckConstraint(
             "commission_bp IS NULL OR commission_bp BETWEEN 0 AND 5000", name="commission_bp_range"
@@ -48,6 +50,11 @@ class Hotel(Base):
     # "Busy" mode: still taking orders, but every quoted prep time is this many minutes longer.
     busy_extra_minutes: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     status: Mapped[str] = mapped_column(String(16), default="active", server_default="active")
+    # "hotel" (food) or "liquor" (a licensed liquor store: same workings, plus the licence and the
+    # 18+ checks). Only the super admin sets these.
+    kind: Mapped[str] = mapped_column(String(8), default="hotel", server_default="hotel")
+    liquor_licence_no: Mapped[str | None] = mapped_column(String(60))
+    liquor_licence_expires: Mapped[date | None] = mapped_column(Date)
     pause_reason: Mapped[str | None] = mapped_column(String(200))
     cover_image_key: Mapped[str | None] = mapped_column(String(200))
     accent_color: Mapped[str | None] = mapped_column(String(7))

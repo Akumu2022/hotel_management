@@ -48,6 +48,11 @@ def open_status(
 
     if hotel.status == "paused":
         return OpenStatus(False, "paused", None, None)
+    # A liquor store sells only while its licence is valid (through the expiry date).
+    if hotel.kind == "liquor" and (
+        hotel.liquor_licence_expires is None or hotel.liquor_licence_expires < local_now.date()
+    ):
+        return OpenStatus(False, "paused", None, None)
     if current is None:
         return OpenStatus(False, "closed", None, opens_at)
     closes_at = current[1].astimezone(utc)

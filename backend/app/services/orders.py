@@ -305,6 +305,9 @@ async def _check_can_order(session: AsyncSession, body: OrderIn, p: Priced, now:
         }
         raise AppError(409, "hotel_closed", messages.get(status.state, "Closed"))
 
+    if p.hotel.kind == "liquor" and not body.age_confirmed:
+        raise AppError(422, "age_required", "You must be 18 or older to order alcohol")
+
     customer = p.customer
     if customer is not None and customer.blocklisted:
         raise AppError(403, "blocked", "This number cannot place orders. Contact support.")

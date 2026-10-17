@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import clsx from "clsx";
 import { ArrowLeft, Bike, ChevronDown, Clock, Minus, Phone, Plus, Search, Store, Timer, X } from "lucide-react";
 import { useMemo, useState } from "react";
-import { Link, useParams, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 
 import { ErrorNote, Skeleton } from "../components/ui";
 import { api } from "../lib/api";
@@ -10,6 +10,7 @@ import { hhmm, money } from "../lib/format";
 import { tr, useT } from "../lib/i18n";
 import { OfferCarousel } from "./OfferCarousel";
 import { ConfirmDialog, HotelCover, JourneySteps, VerifiedBadge, categoryEmoji, etaText, toast } from "./bits";
+import { AgeGate, useAgeConfirmed } from "./age";
 import { TopBar } from "./CustomerLayout";
 import { FoodImage } from "./FoodImage";
 import { cart, useCart, useOrderMode } from "./store";
@@ -232,6 +233,8 @@ export function HotelPage() {
   const [conflict, setConflict] = useState<null | (() => void)>(null);
   const c = useCart();
   const t = useT();
+  const aged = useAgeConfirmed();
+  const navigate = useNavigate();
   const mode = useOrderMode();
   const offers = useQuery({ queryKey: ["offers", "all"], queryFn: () => api.get<PublicOffer[]>("/offers") });
   const hotelOffers = (offers.data ?? []).filter((o) => o.hotel_slug === slug);
@@ -260,6 +263,7 @@ export function HotelPage() {
   }, [menu.data, category, search, sort]);
 
   if (menu.error) return (<><TopBar /><div className="p-6"><ErrorNote error={menu.error} /></div></>);
+  if (menu.data?.hotel.kind === "liquor" && !aged) return (<><TopBar /><div className="p-4 sm:p-6"><AgeGate onNo={() => navigate("/")} /></div></>);
 
   const hotel = menu.data?.hotel;
   const showHeadings = category === "all" || sort !== "popular";

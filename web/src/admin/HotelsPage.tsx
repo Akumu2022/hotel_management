@@ -20,6 +20,9 @@ export type Hotel = {
   status: string;
   lat: number | null;
   lng: number | null;
+  kind?: "hotel" | "liquor";
+  liquor_licence_no?: string | null;
+  liquor_licence_expires?: string | null;
   rating: number | null;
   rating_count: number;
 };
@@ -74,10 +77,35 @@ export function VerifyPanel({ hotel }: { hotel: Hotel }) {
   );
 }
 
+/** Liquor stores sell only while their licence is valid: record its number and expiry, and renew here. */
+function LicencePanel({ hotel }: { hotel: Hotel }) {
+  const qc = useQueryClient();
+  const [no, setNo] = useState(hotel.liquor_licence_no ?? "");
+  const [expires, setExpires] = useState(hotel.liquor_licence_expires ?? "");
+  const save = useMutation({
+    mutationFn: () => api.patch(`/admin/hotels/${hotel.id}`, { liquor_licence_no: no.trim(), liquor_licence_expires: expires }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "hotels"] }),
+  });
+  return (
+    <div className="rounded-2xl border border-line p-4">
+      <p className="text-sm font-bold">Liquor licence</p>
+      <p className="mt-1 text-xs text-muted">The store stops taking orders the day after the expiry date. Update it here when the licence is renewed.</p>
+      <div className="mt-3 grid grid-cols-2 gap-3">
+        <Field label="Licence number">{(id) => <Input id={id} value={no} onChange={(e) => setNo(e.target.value)} maxLength={60} />}</Field>
+        <Field label="Valid until">{(id) => <Input id={id} type="date" value={expires} onChange={(e) => setExpires(e.target.value)} />}</Field>
+      </div>
+      <ErrorNote error={save.error} />
+      <Button className="mt-3" onClick={() => save.mutate()} busy={save.isPending} disabled={no.trim().length < 2 || !expires}>Save licence</Button>
+    </div>
+  );
+}
+
 function NewHotel({ onDone }: { onDone: () => void }) {
   const qc = useQueryClient();
   const [f, setF] = useState({ name: "", slug: "", phone: "", till_number: "", till_name: "", admin_name: "", admin_phone: "", admin_password: "" });
   const [verified, setVerified] = useState(false);
+  const [kind, setKind] = useState<"hotel" | "liquor">("hotel");
+  const [licence, setLicence] = useState({ no: "", expires: "" });
   const set = (k: keyof typeof f) => (e: { target: { value: string } }) =>
     setF((v) => ({ ...v, [k]: e.target.value, ...(k === "name" && (!v.slug || v.slug === slugify(v.name)) ? { slug: slugify(e.target.value) } : {}) }));
   const create = useMutation({
@@ -89,6 +117,7 @@ function NewHotel({ onDone }: { onDone: () => void }) {
         till_number: f.till_number,
         till_name: f.till_name.trim() || null,
         verified,
+        ...(kind === "liquor" ? { kind, liquor_licence_no: licence.no.trim(), liquor_licence_expires: licence.expires } : {}),
         admin: { name: f.admin_name, phone: f.admin_phone, password: f.admin_password },
       }),
     onSuccess: () => {
@@ -102,7 +131,21 @@ function NewHotel({ onDone }: { onDone: () => void }) {
   };
   return (
     <form onSubmit={submit} className="flex flex-col gap-3">
-      <Field label="Hotel name">{(id) => <Input id={id} value={f.name} onChange={set("name")} required minLength={2} />}</Field>
+      <Field label="Type">
+        {(id) => (
+          <select id={id} value={kind} onChange={(e) => setKind(e.target.value as "hotel" | "liquor")} className="h-11 rounded-xl border border-line bg-surface px-3 text-sm">
+            <option value="hotel">Hotel (food)</option>
+            <option value="liquor">Liquor store</option>
+          </select>
+        )}
+      </Field>
+      {kind === "liquor" ? (
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Liquor licence number">{(id) => <Input id={id} value={licence.no} onChange={(e) => setLicence((v) => ({ ...v, no: e.target.value }))} required minLength={2} />}</Field>
+          <Field label="Licence valid until">{(id) => <Input id={id} type="date" value={licence.expires} onChange={(e) => setLicence((v) => ({ ...v, expires: e.target.value }))} required />}</Field>
+        </div>
+      ) : null}
+      <Field label={kind === "liquor" ? "Store name" : "Hotel name"}>{(id) => <Input id={id} value={f.name} onChange={set("name")} required minLength={2} />}</Field>
       <Field label="Web address" hint={`chakula…/h/${f.slug || "name"}`}>{(id) => <Input id={id} value={f.slug} onChange={set("slug")} required pattern="[a-z0-9-]{2,80}" />}</Field>
       <div className="grid grid-cols-2 gap-3">
         <Field label="Hotel phone">{(id) => <Input id={id} type="tel" value={f.phone} onChange={set("phone")} required />}</Field>
@@ -146,7 +189,7 @@ export function HotelsPage() {
           <li key={h.id} className="rounded-3xl border border-line bg-surface p-4">
             <div className="flex flex-wrap items-start justify-between gap-2">
               <div>
-                <p className="font-bold">{h.name} {h.status === "paused" ? <Badge tone="warn">Paused</Badge> : null} {h.verified ? <Badge tone="ok">Checked</Badge> : <Badge tone="warn">Not checked</Badge>}</p>
+                <p className="font-bold">{h.name} {h.kind === "liquor" ? <Badge tone="warn">Liquor</Badge> : null} {h.status === "paused" ? <Badge tone="warn">Paused</Badge> : null} {h.verified ? <Badge tone="ok">Checked</Badge> : <Badge tone="warn">Not checked</Badge>}</p>
                 <p className="text-sm text-muted">
                   Till <span className="money">{h.till_number}</span>{h.till_name ? <> ({h.till_name})</> : <span className="text-warn"> (name not recorded)</span>} · <span className="money">{h.phone}</span> ·{" "}
                   {h.lat != null ? <span className="text-ok">location pinned</span> : <span className="text-warn">location not pinned yet</span>}
@@ -165,6 +208,7 @@ export function HotelsPage() {
             {open === h.id ? (
               <div className="mt-3 flex flex-col gap-3">
                 <VerifyPanel key={`${h.till_number}-${h.till_name}-${h.verified}`} hotel={h} />
+                {h.kind === "liquor" ? <LicencePanel key={`${h.liquor_licence_no}-${h.liquor_licence_expires}`} hotel={h} /> : null}
                 <StaffList hotel={h} />
               </div>
             ) : null}

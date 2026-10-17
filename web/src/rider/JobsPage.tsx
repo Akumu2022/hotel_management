@@ -42,6 +42,7 @@ type Job = {
   fee_not_paid: boolean;
   code_attempts_left: number | null;
   pickup_pin?: string | null;
+  age_check?: boolean;
 };
 
 const FAIL_REASONS: [string, string][] = [
@@ -168,6 +169,12 @@ function MyJob({ j, act }: { j: Job; act: (path: string, body?: unknown) => Prom
               <button onClick={() => void run(`/rider/jobs/${j.id}/picked-up`, { fee_received: false })} className="h-11 rounded-xl border-2 border-line bg-surface font-semibold">No</button>
             </div>
           </div>
+        ) : null}
+
+        {j.age_check ? (
+          <p className="rounded-2xl bg-warn-soft p-4 text-sm font-semibold text-warn">
+            Alcohol order: check the customer's ID at the door. Under 18, or no ID? Do not hand it over. Mark the delivery as failed and call the Chakula team.
+          </p>
         ) : null}
 
         {/* The next step */}

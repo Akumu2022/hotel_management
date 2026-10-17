@@ -2,7 +2,7 @@
 
 import hashlib
 import uuid
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, Header, Query, Response
 from sqlalchemy import or_, select
@@ -24,6 +24,8 @@ StorageDep = Annotated[Storage, Depends(media.get_storage)]
 Lat = Annotated[float | None, Query(ge=-90, le=90)]
 Lng = Annotated[float | None, Query(ge=-180, le=180)]
 RadiusKm = Annotated[float | None, Query(gt=0, le=200)]
+# Food hotels by default, so apps that don't know about liquor stores never list them.
+Kind = Annotated[Literal["hotel", "liquor"], Query()]
 
 
 async def _nearby_ids(
@@ -46,10 +48,15 @@ async def _nearby_ids(
 
 @router.get("/hotels", response_model=list[PublicHotel])
 async def list_hotels(
-    session: Session, storage: StorageDep, lat: Lat = None, lng: Lng = None, radius_km: RadiusKm = None
+    session: Session,
+    storage: StorageDep,
+    lat: Lat = None,
+    lng: Lng = None,
+    radius_km: RadiusKm = None,
+    kind: Kind = "hotel",
 ):
     near = await _nearby_ids(session, lat, lng, radius_km)
-    stmt = select(Hotel).order_by(Hotel.name)
+    stmt = select(Hotel).where(Hotel.kind == kind).order_by(Hotel.name)
     if near is not None:
         stmt = stmt.where(Hotel.id.in_(list(near)))
     hotels = (await session.execute(stmt)).scalars().all()
@@ -114,6 +121,7 @@ async def search_dishes(
     lat: Lat = None,
     lng: Lng = None,
     radius_km: RadiusKm = None,
+    kind: Kind = "hotel",
 ):
     """Keyword search across active hotels' live menus (dish, description or category).
     With the customer's location, only hotels within the radius are searched."""
@@ -125,7 +133,9 @@ async def search_dishes(
         select(Product, Category, Hotel)
         .join(Category, Category.id == Product.category_id)
         .join(Hotel, Hotel.id == Product.hotel_id)
-        .where(Hotel.status == "active", Product.is_archived.is_(False))
+        .where(
+            Hotel.status == "active", Hotel.kind == kind, Product.is_archived.is_(False)
+        )
     )
     if near is not None:
         stmt = stmt.where(Hotel.id.in_(list(near)))
@@ -152,7 +162,12 @@ async def search_dishes(
 
 @router.get("/offers", response_model=list[PublicOffer])
 async def list_offers(
-    session: Session, storage: StorageDep, lat: Lat = None, lng: Lng = None, radius_km: RadiusKm = None
+    session: Session,
+    storage: StorageDep,
+    lat: Lat = None,
+    lng: Lng = None,
+    radius_km: RadiusKm = None,
+    kind: Kind = "hotel",
 ):
     near = await _nearby_ids(session, lat, lng, radius_km)
     now = utcnow()
@@ -161,6 +176,7 @@ async def list_offers(
         .join(Hotel, Hotel.id == Offer.hotel_id)
         .where(
             Hotel.status == "active",
+            Hotel.kind == kind,
             Offer.starts_at <= now,
             or_(Offer.ends_at.is_(None), Offer.ends_at > now),
         )

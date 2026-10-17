@@ -317,6 +317,7 @@ class HotelSettingsIn(Input):
 class PublicHotel(Schema):
     slug: str
     name: str
+    kind: str = "hotel"  # "liquor" = a liquor store: 18+ only
     phone: str
     accent_color: str | None
     cover_url: str | None

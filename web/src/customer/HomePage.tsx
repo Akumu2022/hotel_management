@@ -7,6 +7,7 @@ import { Link } from "react-router-dom";
 import { ErrorNote, Skeleton } from "../components/ui";
 import { api } from "../lib/api";
 import { useT } from "../lib/i18n";
+import { AgeGate, useAgeConfirmed } from "./age";
 import { TopBar } from "./CustomerLayout";
 import { HotelCover, VerifiedBadge, etaText } from "./bits";
 import { TOWNS, areaQuery, locate, setArea, townArea, useArea, type Area } from "./area";
@@ -119,7 +120,7 @@ function LocationPicker({ onDone, current }: { onDone: () => void; current: Area
   );
 }
 
-function DishSearch({ q, area }: { q: string; area: Area }) {
+function DishSearch({ q, area, kind }: { q: string; area: Area; kind: "hotel" | "liquor" }) {
   const t = useT();
   const [term, setTerm] = useState(q);
   useEffect(() => {
@@ -127,8 +128,8 @@ function DishSearch({ q, area }: { q: string; area: Area }) {
     return () => clearTimeout(id);
   }, [q]);
   const hits = useQuery({
-    queryKey: ["search", term, area.lat, area.lng],
-    queryFn: () => api.get<SearchHit[]>(`/search?q=${encodeURIComponent(term)}&${areaQuery(area)}`),
+    queryKey: ["search", term, area.lat, area.lng, kind],
+    queryFn: () => api.get<SearchHit[]>(`/search?q=${encodeURIComponent(term)}&${areaQuery(area)}&kind=${kind}`),
     enabled: term.length > 0,
     placeholderData: (prev) => prev,
   });
@@ -165,11 +166,15 @@ export function HomePage() {
   const t = useT();
   const area = useArea();
   const [changing, setChanging] = useState(false);
+  // Food hotels, or liquor stores (18+ only: the customer confirms once before the stores are shown).
+  const [kind, setKind] = useState<"hotel" | "liquor">("hotel");
+  const aged = useAgeConfirmed();
+  const locked = kind === "liquor" && !aged;
   // Nothing is fetched until we know where the customer is.
   const hotels = useQuery({
-    queryKey: ["hotels", area?.lat, area?.lng],
-    queryFn: () => api.get<PublicHotel[]>(`/hotels?${areaQuery(area)}`),
-    enabled: !!area,
+    queryKey: ["hotels", area?.lat, area?.lng, ...(kind === "liquor" ? ["liquor"] : [])],
+    queryFn: () => api.get<PublicHotel[]>(`/hotels?${areaQuery(area)}${kind === "liquor" ? "&kind=liquor" : ""}`),
+    enabled: !!area && !locked,
     refetchInterval: 60_000,
   });
   const offers = useQuery({
@@ -223,7 +228,7 @@ export function HomePage() {
           </Link>
         ) : null}
 
-        {area && offers.data?.length ? (
+        {area && kind === "hotel" && offers.data?.length ? (
           <section className="mt-6">
             <h2 className="mb-3 flex items-center gap-2 text-lg font-semibold">
               <Flame className="size-5 text-brand" /> {t("Today's deals")}
@@ -232,10 +237,24 @@ export function HomePage() {
           </section>
         ) : null}
 
-        <section className="mt-6">
+        <div role="tablist" className="mt-6 grid grid-cols-2 gap-1 rounded-xl bg-subtle p-1">
+          {([["hotel", t("Hotels")], ["liquor", t("Liquor stores")]] as const).map(([k, label]) => (
+            <button
+              key={k}
+              role="tab"
+              aria-selected={kind === k}
+              onClick={() => { setKind(k); setQ(""); setSearching(false); }}
+              className={clsx("h-10 rounded-lg text-sm font-semibold", kind === k ? "bg-surface shadow-sm" : "text-muted")}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        <section className="mt-4">
           <div className="mb-3 flex items-center justify-between gap-3">
             <h2 className="min-w-0 text-lg font-semibold">
-              {t("Hotels near you")}
+              {kind === "liquor" ? t("Liquor stores near you") : t("Hotels near you")}
               {area ? (
                 <button
                   type="button"
@@ -269,13 +288,15 @@ export function HomePage() {
                   className="h-11 w-full rounded-full border border-line bg-surface pr-4 pl-10 text-sm outline-none focus:border-brand"
                 />
               </div>
-              {area ? <DishSearch q={q} area={area} /> : null}
+              {area ? <DishSearch q={q} area={area} kind={kind} /> : null}
             </div>
           ) : null}
           {!area || changing ? (
             <div className="mb-4"><LocationPicker current={area} onDone={() => setChanging(false)} /></div>
           ) : null}
-          {!area || (showSearch && q.trim()) ? null : hotels.isLoading ? (
+          {locked ? (
+            <AgeGate onNo={() => setKind("hotel")} />
+          ) : !area || (showSearch && q.trim()) ? null : hotels.isLoading ? (
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
               {[0, 1, 2].map((i) => (
                 <Skeleton key={i} className="aspect-[16/12] rounded-2xl" />
@@ -287,7 +308,7 @@ export function HomePage() {
             hotels.data!.length === 0 ? (
               <div className="flex flex-col items-center gap-2 rounded-2xl border border-dashed border-line bg-surface px-6 py-12 text-center">
                 <span className="text-5xl">🍽️</span>
-                <p className="text-lg font-semibold">{t("No hotels near {place} yet", { place: area.label })}</p>
+                <p className="text-lg font-semibold">{kind === "liquor" ? t("No liquor stores near {place} yet", { place: area.label }) : t("No hotels near {place} yet", { place: area.label })}</p>
                 <p className="max-w-xs text-sm text-muted">{t("We're growing. Try another town, or check back soon.")}</p>
                 <button type="button" onClick={() => setChanging(true)} className="mt-1 text-sm font-semibold text-brand">{t("Change location")}</button>
               </div>

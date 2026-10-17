@@ -88,6 +88,7 @@ def public_hotel(
     return PublicHotel(
         slug=hotel.slug,
         name=hotel.name,
+        kind=hotel.kind,
         phone=hotel.phone,
         accent_color=hotel.accent_color,
         cover_url=_url(storage, hotel.cover_image_key),

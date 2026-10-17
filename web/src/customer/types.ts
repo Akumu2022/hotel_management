@@ -3,6 +3,7 @@
 export type PublicHotel = {
   slug: string;
   name: string;
+  kind?: "hotel" | "liquor";
   phone: string;
   accent_color: string | null;
   cover_url: string | null;

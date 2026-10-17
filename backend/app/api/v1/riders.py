@@ -310,6 +310,7 @@ class JobOut(Schema):
     fee_not_paid: bool = False
     code_attempts_left: int | None = None
     pickup_pin: str | None = None  # show to the hotel to get the food
+    age_check: bool = False  # liquor: check the customer's ID (18+) before handing over
 
 
 async def _jobs_out(session, orders: list[Order], rider_id: uuid.UUID) -> list[JobOut]:
@@ -364,6 +365,7 @@ async def _jobs_out(session, orders: list[Order], rider_id: uuid.UUID) -> list[J
                 status=o.status,
                 hotel_name=h.name,
                 hotel_phone=h.phone,
+                age_check=h.kind == "liquor",
                 hotel_lat=h.lat,
                 hotel_lng=h.lng,
                 distance_km=o.distance_km,

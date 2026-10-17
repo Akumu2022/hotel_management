@@ -189,6 +189,8 @@ async def patch_hotel(hotel_id: uuid.UUID, body: HotelPatch, admin: SuperAdmin, 
     elif verified is False and hotel.verified_at is not None:
         changes["verified"] = {"old": True, "new": False}
         hotel.verified_at = None
+    if hotel.kind == "liquor" and (not hotel.liquor_licence_no or hotel.liquor_licence_expires is None):
+        raise AppError(422, "licence_required", "A liquor store needs its licence number and expiry date")
     try:
         await session.flush()
     except IntegrityError as e:

@@ -5,6 +5,7 @@ USER_ROLES = ("super_admin", "hotel_admin", "cashier", "rider")
 KYC_STATUSES = ("draft", "pending", "approved", "rejected", "suspended")
 HOTEL_ROLES = ("hotel_admin", "cashier")
 HOTEL_STATUSES = ("active", "paused")
+HOTEL_KINDS = ("hotel", "liquor")
 PAYOUT_MODES = ("instant", "weekly")
 
 DISCOUNT_SCOPES = ("item", "order")
