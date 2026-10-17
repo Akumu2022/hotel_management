@@ -5,9 +5,10 @@ import { api } from "../lib/api";
 import { hhmm } from "../lib/format";
 import type { Category } from "../lib/types";
 import { CATEGORY_SUGGESTIONS } from "./categorySuggestions";
-import { keys, useSave } from "./hooks";
+import { keys, useIsLiquor, useSave } from "./hooks";
 
 export function CategorySheet({ category, existing = [], onClose }: { category: Category | null; existing?: string[]; onClose: () => void }) {
+  const liquor = useIsLiquor();
   const taken = new Set(existing.map((n) => n.toLowerCase()));
   const [name, setName] = useState(category?.name ?? "");
   const [sortOrder, setSortOrder] = useState(String(category?.sort_order ?? existing.length));
@@ -55,7 +56,7 @@ export function CategorySheet({ category, existing = [], onClose }: { category: 
       }
     >
       <form id="category-form" onSubmit={submit} className="flex flex-col gap-4">
-        {!category ? (
+        {!category && !liquor ? (
           <div>
             <p className="mb-2 text-sm font-medium">Tap one to start, or type your own below</p>
             <div className="flex flex-wrap gap-2">
@@ -82,6 +83,8 @@ export function CategorySheet({ category, existing = [], onClose }: { category: 
         <Field label="Name">
           {(id) => <Input id={id} value={name} onChange={(e) => setName(e.target.value)} required maxLength={80} />}
         </Field>
+        {liquor ? null : (
+          <>
         <Field label="Position" hint="Lower numbers are shown first.">
           {(id) => (
             <Input id={id} inputMode="numeric" value={sortOrder} onChange={(e) => setSortOrder(e.target.value.replace(/\D/g, ""))} />
@@ -97,6 +100,8 @@ export function CategorySheet({ category, existing = [], onClose }: { category: 
             <Field label="To">{(id) => <Input id={id} type="time" value={to} onChange={(e) => setTo(e.target.value)} />}</Field>
           </div>
         ) : null}
+          </>
+        )}
         <ErrorNote error={save.error ?? remove.error} />
       </form>
     </Sheet>

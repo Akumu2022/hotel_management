@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSyncExternalStore } from "react";
 
+import { toast } from "../components/toast";
 import { api, auth } from "../lib/api";
 import type { Category, Discount, HotelSettings, Offer, Product } from "../lib/types";
 
@@ -49,7 +50,14 @@ export function toDrinks(s: string): string {
     .replace(/\bDish\b/g, "Drink")
     .replace(/\bdish\b/g, "drink")
     .replace(/\bFood\b/g, "Drinks")
-    .replace(/\bfood\b/g, "drinks");
+    .replace(/\bfood\b/g, "drinks")
+    .replace(/\bhotel\b/g, "store")
+    .replace(/\bHotel\b/g, "Store");
+}
+
+/** True when the signed-in store is a liquor store: no prep time, deals, kitchen or meal categories. */
+export function useIsLiquor(): boolean {
+  return useHotelSettings().data?.kind === "liquor";
 }
 
 export function useW(): (s: string) => string {
@@ -64,10 +72,14 @@ export const useHotelSettings = () =>
 export function useSave<TArgs, TResult = unknown>(
   fn: (args: TArgs) => Promise<TResult>,
   invalidate: readonly (readonly string[])[],
+  saved: string | false = "Saved",
 ) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: fn,
-    onSuccess: () => Promise.all(invalidate.map((k) => qc.invalidateQueries({ queryKey: k }))),
+    onSuccess: async () => {
+      await Promise.all(invalidate.map((k) => qc.invalidateQueries({ queryKey: k })));
+      if (saved) toast(saved);
+    },
   });
 }

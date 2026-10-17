@@ -400,7 +400,7 @@ export function TrackPage() {
                 🍽️ {tt("Eat in · arriving about {time}", { time: new Intl.DateTimeFormat("en-KE", { hour: "numeric", minute: "2-digit", timeZone: "Africa/Nairobi" }).format(new Date(t.arrive_at)) })}
               </p>
             ) : null}
-            {t.prep_minutes && ["accepted", "preparing"].includes(t.status) ? <p className="mt-1 text-sm text-white/85">{tt("Ready in about {min} min", { min: t.prep_minutes })}</p> : null}
+            {t.prep_minutes && t.hotel_kind !== "liquor" && ["accepted", "preparing"].includes(t.status) ? <p className="mt-1 text-sm text-white/85">{tt("Ready in about {min} min", { min: t.prep_minutes })}</p> : null}
             <span className="pointer-events-none absolute -right-2 -bottom-4 hidden opacity-25 sm:block">
               {ended ? <XCircle className="size-28" /> : <ChefHat className="size-28" />}
             </span>

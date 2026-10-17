@@ -445,7 +445,7 @@ class _HotelCard extends StatelessWidget {
                   Pill(tr(_labels[h['state']] ?? ''),
                       bg: open ? const Color(0xFFDCFCE7) : const Color(0xFFF1F1F1), fg: open ? const Color(0xFF15803D) : mutedOf(context)),
                   if (rating != null) Pill('${(rating as num).toStringAsFixed(1)} (${h['rating_count']})', icon: Icons.star_rounded),
-                  Pill('${h['prep_minutes']} min', icon: Icons.timer_outlined),
+                  if (h['kind'] != 'liquor') Pill('${h['prep_minutes']} min', icon: Icons.timer_outlined),
                 ]),
               ),
               const SizedBox(width: 8),

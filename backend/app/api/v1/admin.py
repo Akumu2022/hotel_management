@@ -4,7 +4,7 @@ from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, File, UploadFile
 from pydantic import ValidationError
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.exc import IntegrityError
 
 from app.api.deps import Session, SuperAdmin
@@ -12,9 +12,10 @@ from app.api.pagination import paginate
 from app.core.errors import AppError, not_found
 from app.core.time import utcnow
 from app.core.security import hash_password
-from app.models import Hotel, User
+from app.models import Hotel, HotelHours, User
 from app.schemas.admin import (
     HotelCreate,
+    HotelHoursIn,
     HotelOut,
     HotelPatch,
     SettingsIn,
@@ -111,13 +112,31 @@ def _unique_violation(e: IntegrityError) -> AppError:
     return AppError(409, "conflict", "That conflicts with an existing record")
 
 
+async def _hours_set(session, hotel_ids: list[uuid.UUID]) -> set[uuid.UUID]:
+    """Which of these hotels have opening hours at all."""
+    if not hotel_ids:
+        return set()
+    rows = await session.execute(
+        select(HotelHours.hotel_id).where(HotelHours.hotel_id.in_(hotel_ids)).distinct()
+    )
+    return set(rows.scalars().all())
+
+
+async def _hotel_out(session, hotel: Hotel) -> HotelOut:
+    out = HotelOut.model_validate(hotel)
+    out.has_hours = hotel.id in await _hours_set(session, [hotel.id])
+    return out
+
+
 @router.get("/hotels", response_model=Page[HotelOut])
 async def list_hotels(_: SuperAdmin, session: Session, cursor: str | None = None, limit: int = 50):
     rows, next_cursor = await paginate(session, select(Hotel), Hotel, cursor, limit)
     stars = await ratings.hotel_stars(session, [r.id for r in rows])
     items = []
+    with_hours = await _hours_set(session, [r.id for r in rows])
     for r in rows:
         out = HotelOut.model_validate(r)
+        out.has_hours = r.id in with_hours
         out.rating, out.rating_count = stars[r.id].average, stars[r.id].count
         items.append(out)
     return Page[HotelOut](items=items, next_cursor=next_cursor)
@@ -133,6 +152,11 @@ async def create_hotel(body: HotelCreate, admin: SuperAdmin, session: Session):
     session.add(hotel)
     try:
         await session.flush()
+        if body.opens_at is not None and body.closes_at is not None:
+            session.add_all(
+                HotelHours(hotel_id=hotel.id, weekday=d, opens_at=body.opens_at, closes_at=body.closes_at)
+                for d in range(7)
+            )
         if body.admin is not None:
             session.add(
                 User(
@@ -157,7 +181,7 @@ async def create_hotel(body: HotelCreate, admin: SuperAdmin, session: Session):
     )
     await session.commit()
     await session.refresh(hotel)
-    return HotelOut.model_validate(hotel)
+    return await _hotel_out(session, hotel)
 
 
 @router.get("/hotels/{hotel_id}/overview")
@@ -167,7 +191,7 @@ async def hotel_overview(hotel_id: uuid.UUID, _: SuperAdmin, session: Session):
     if hotel is None:
         raise not_found("Hotel not found")
     stars = await ratings.hotel_stars(session, [hotel.id])
-    out = HotelOut.model_validate(hotel)
+    out = await _hotel_out(session, hotel)
     out.rating, out.rating_count = stars[hotel.id].average, stars[hotel.id].count
     return {"hotel": out, **await hotel_watch.overview(session, hotel, utcnow())}
 
@@ -199,8 +223,8 @@ async def patch_hotel(hotel_id: uuid.UUID, body: HotelPatch, admin: SuperAdmin, 
     elif verified is False and hotel.verified_at is not None:
         changes["verified"] = {"old": True, "new": False}
         hotel.verified_at = None
-    if hotel.kind == "liquor" and (not hotel.liquor_licence_no or hotel.liquor_licence_expires is None):
-        raise AppError(422, "licence_required", "A liquor store needs its licence number and expiry date")
+    if (hotel.liquor_licence_no is None) != (hotel.liquor_licence_expires is None):
+        raise AppError(422, "licence_incomplete", "Give the licence number and its expiry date together")
     try:
         await session.flush()
     except IntegrityError as e:
@@ -216,7 +240,27 @@ async def patch_hotel(hotel_id: uuid.UUID, body: HotelPatch, admin: SuperAdmin, 
         )
     await session.commit()
     await session.refresh(hotel)
-    return HotelOut.model_validate(hotel)
+    return await _hotel_out(session, hotel)
+
+
+@router.put("/hotels/{hotel_id}/hours", response_model=HotelOut)
+async def set_hotel_hours(hotel_id: uuid.UUID, body: HotelHoursIn, admin: SuperAdmin, session: Session):
+    """The owner sets opening hours for a hotel or store (replaces all days)."""
+    hotel = await session.get(Hotel, hotel_id, with_for_update=True)
+    if hotel is None:
+        raise not_found("Hotel not found")
+    await session.execute(delete(HotelHours).where(HotelHours.hotel_id == hotel.id))
+    session.add_all(HotelHours(hotel_id=hotel.id, **h.model_dump()) for h in body.hours)
+    await audit.log(
+        session,
+        actor_id=admin.id,
+        action="hotel.hours",
+        target_type="hotel",
+        target_id=hotel.id,
+        details={"days": len(body.hours)},
+    )
+    await session.commit()
+    return await _hotel_out(session, hotel)
 
 
 # --- Users ------------------------------------------------------------------------------------

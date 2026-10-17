@@ -6,7 +6,7 @@ import { api } from "../lib/api";
 import { compressImage, money } from "../lib/format";
 import type { Category, Product, Upload } from "../lib/types";
 import { CATEGORY_SUGGESTIONS } from "./categorySuggestions";
-import { keys, useProducts, useSave, useW } from "./hooks";
+import { keys, useIsLiquor, useProducts, useSave, useW } from "./hooks";
 
 function PhotoPicker({
   url,
@@ -166,6 +166,7 @@ export function ProductSheet({
   onClose: () => void;
 }) {
   const w = useW();
+  const liquor = useIsLiquor();
   // After creating a dish the sheet stays open in edit mode so options can be added.
   const [created, setCreated] = useState<Product | null>(product);
   const { data: all } = useProducts(true);
@@ -259,15 +260,17 @@ export function ProductSheet({
         <Field label={w("Dish name")}>
           {(id) => <Input id={id} value={name} onChange={(e) => setName(e.target.value)} required maxLength={120} />}
         </Field>
-        <div className="grid grid-cols-2 gap-3">
+        <div className={liquor ? "grid gap-3" : "grid grid-cols-2 gap-3"}>
           <Field label="Price" hint="Same as your walk-in price">
             {(id) => <MoneyInput id={id} value={price} onChange={setPrice} required />}
           </Field>
-          <Field label="Prep time (min)">
-            {(id) => (
-              <Input id={id} inputMode="numeric" value={prep} onChange={(e) => setPrep(e.target.value.replace(/\D/g, ""))} />
-            )}
-          </Field>
+          {liquor ? null : (
+            <Field label="Prep time (min)">
+              {(id) => (
+                <Input id={id} inputMode="numeric" value={prep} onChange={(e) => setPrep(e.target.value.replace(/\D/g, ""))} />
+              )}
+            </Field>
+          )}
         </div>
         <Field label="Category">
           {(id) => (

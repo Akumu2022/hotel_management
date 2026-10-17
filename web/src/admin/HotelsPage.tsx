@@ -7,6 +7,7 @@ import { type FormEvent, useState } from "react";
 
 import { Badge, Button, ErrorNote, Field, Input, PasswordInput, Sheet, Skeleton } from "../components/ui";
 import { ResetPassword, Stars } from "../components/accounts";
+import { toast } from "../components/toast";
 import { api, getAllPages } from "../lib/api";
 
 export type Hotel = {
@@ -23,6 +24,7 @@ export type Hotel = {
   kind?: "hotel" | "liquor";
   liquor_licence_no?: string | null;
   liquor_licence_expires?: string | null;
+  has_hours?: boolean;
   rating: number | null;
   rating_count: number;
 };
@@ -56,7 +58,10 @@ export function VerifyPanel({ hotel }: { hotel: Hotel }) {
   const [checked, setChecked] = useState(hotel.verified);
   const save = useMutation({
     mutationFn: () => api.patch(`/admin/hotels/${hotel.id}`, { till_name: name.trim() || null, verified: checked }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "hotels"] }),
+    onSuccess: () => {
+      toast("Saved");
+      return qc.invalidateQueries({ queryKey: ["admin", "hotels"] });
+    },
   });
   return (
     <div className="rounded-2xl border border-line p-4">
@@ -84,7 +89,10 @@ function LicencePanel({ hotel }: { hotel: Hotel }) {
   const [expires, setExpires] = useState(hotel.liquor_licence_expires ?? "");
   const save = useMutation({
     mutationFn: () => api.patch(`/admin/hotels/${hotel.id}`, { liquor_licence_no: no.trim(), liquor_licence_expires: expires }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "hotels"] }),
+    onSuccess: () => {
+      toast("Licence saved");
+      return qc.invalidateQueries({ queryKey: ["admin", "hotels"] });
+    },
   });
   return (
     <div className="rounded-2xl border border-line p-4">
@@ -100,12 +108,54 @@ function LicencePanel({ hotel }: { hotel: Hotel }) {
   );
 }
 
+/** The owner can set opening hours for a hotel or store: without hours it always reads closed. */
+function HoursPanel({ hotel }: { hotel: Hotel }) {
+  const qc = useQueryClient();
+  const [opens, setOpens] = useState("08:00");
+  const [closes, setCloses] = useState("22:00");
+  const save = useMutation({
+    mutationFn: () =>
+      api.put(`/admin/hotels/${hotel.id}/hours`, { hours: [0, 1, 2, 3, 4, 5, 6].map((weekday) => ({ weekday, opens_at: `${opens}:00`, closes_at: `${closes}:00` })) }),
+    onSuccess: () => {
+      toast("Opening hours saved");
+      return qc.invalidateQueries({ queryKey: ["admin", "hotels"] });
+    },
+  });
+  return (
+    <div className="rounded-2xl border border-line p-4">
+      <p className="text-sm font-bold">Opening hours</p>
+      <p className="mt-1 text-xs text-muted">
+        {hotel.has_hours ? "Hours are set. Saving here replaces them with the same times every day." : "No hours are set, so customers see this as closed."} The store can fine-tune each day in its own Settings.
+      </p>
+      <div className="mt-3 grid grid-cols-2 gap-3">
+        <Field label="Opens">{(id) => <Input id={id} type="time" value={opens} onChange={(e) => setOpens(e.target.value)} />}</Field>
+        <Field label="Closes">{(id) => <Input id={id} type="time" value={closes} onChange={(e) => setCloses(e.target.value)} />}</Field>
+      </div>
+      <ErrorNote error={save.error} />
+      <Button className="mt-3" onClick={() => save.mutate()} busy={save.isPending} disabled={!opens || !closes || opens === closes}>Save hours (every day)</Button>
+    </div>
+  );
+}
+
+/** Why a hotel or store is closed to customers right now, in plain words. */
+function closedReasons(h: Hotel): string[] {
+  const out: string[] = [];
+  if (h.status === "paused") out.push("Paused");
+  if (!h.has_hours) out.push("No opening hours set");
+  if (h.kind === "liquor") {
+    if (!h.liquor_licence_no || !h.liquor_licence_expires) out.push("No liquor licence");
+    else if (h.liquor_licence_expires < new Date().toISOString().slice(0, 10)) out.push("Liquor licence expired");
+  }
+  return out;
+}
+
 function NewHotel({ onDone, kind }: { onDone: () => void; kind: "hotel" | "liquor" }) {
   const qc = useQueryClient();
   const [f, setF] = useState({ name: "", slug: "", phone: "", till_number: "", till_name: "", admin_name: "", admin_phone: "", admin_password: "" });
   const [verified, setVerified] = useState(false);
   const [licence, setLicence] = useState({ no: "", expires: "" });
   const [rates, setRates] = useState({ commission: "", service_fee: "" });
+  const [hours, setHours] = useState(kind === "liquor" ? { opens: "08:00", closes: "22:00" } : { opens: "", closes: "" });
   const set = (k: keyof typeof f) => (e: { target: { value: string } }) =>
     setF((v) => ({ ...v, [k]: e.target.value, ...(k === "name" && (!v.slug || v.slug === slugify(v.name)) ? { slug: slugify(e.target.value) } : {}) }));
   const create = useMutation({
@@ -115,20 +165,22 @@ function NewHotel({ onDone, kind }: { onDone: () => void; kind: "hotel" | "liquo
         slug: f.slug,
         phone: f.phone,
         till_number: f.till_number,
-        till_name: f.till_name.trim() || null,
+        ...(f.till_name.trim() ? { till_name: f.till_name.trim() } : {}),
         verified,
         ...(kind === "liquor"
           ? {
               kind,
-              liquor_licence_no: licence.no.trim(),
-              liquor_licence_expires: licence.expires,
-              commission_percent: Number(rates.commission),
+              ...(licence.no.trim() ? { liquor_licence_no: licence.no.trim() } : {}),
+              ...(licence.expires ? { liquor_licence_expires: licence.expires } : {}),
+              ...(rates.commission.trim() ? { commission_percent: Number(rates.commission) } : {}),
               ...(rates.service_fee.trim() ? { service_fee: Number(rates.service_fee) } : {}),
             }
           : {}),
+        ...(hours.opens && hours.closes && hours.opens !== hours.closes ? { opens_at: `${hours.opens}:00`, closes_at: `${hours.closes}:00` } : {}),
         admin: { name: f.admin_name, phone: f.admin_phone, password: f.admin_password },
       }),
     onSuccess: () => {
+      toast(kind === "liquor" ? "Liquor store created" : "Hotel created");
       qc.invalidateQueries({ queryKey: ["admin", "hotels"] });
       onDone();
     },
@@ -141,12 +193,16 @@ function NewHotel({ onDone, kind }: { onDone: () => void; kind: "hotel" | "liquo
     <form onSubmit={submit} className="flex flex-col gap-3">
       {kind === "liquor" ? (
         <div className="grid grid-cols-2 gap-3">
-          <Field label="Liquor licence number">{(id) => <Input id={id} value={licence.no} onChange={(e) => setLicence((v) => ({ ...v, no: e.target.value }))} required minLength={2} />}</Field>
-          <Field label="Licence valid until">{(id) => <Input id={id} type="date" value={licence.expires} onChange={(e) => setLicence((v) => ({ ...v, expires: e.target.value }))} required />}</Field>
-          <Field label="Commission %" hint="Liquor has its own rate, not the food fee bands">{(id) => <Input id={id} inputMode="decimal" value={rates.commission} onChange={(e) => setRates((v) => ({ ...v, commission: e.target.value }))} required pattern="[0-9]+(\.[0-9]+)?" placeholder="e.g. 5" />}</Field>
-          <Field label="Service fee (KES)" hint="Blank = platform default">{(id) => <Input id={id} inputMode="numeric" value={rates.service_fee} onChange={(e) => setRates((v) => ({ ...v, service_fee: e.target.value }))} />}</Field>
+          <Field label="Liquor licence number" hint="Optional. The store stays closed until a licence is added.">{(id) => <Input id={id} value={licence.no} onChange={(e) => setLicence((v) => ({ ...v, no: e.target.value }))} required={!!licence.expires} minLength={2} />}</Field>
+          <Field label="Licence valid until">{(id) => <Input id={id} type="date" value={licence.expires} onChange={(e) => setLicence((v) => ({ ...v, expires: e.target.value }))} required={!!licence.no.trim()} />}</Field>
+          <Field label="Commission %" hint="Optional. Blank uses the liquor default in Fees & bonuses.">{(id) => <Input id={id} inputMode="decimal" value={rates.commission} onChange={(e) => setRates((v) => ({ ...v, commission: e.target.value }))} pattern="[0-9]*[.]?[0-9]*" placeholder="e.g. 5" />}</Field>
+          <Field label="Service fee (KES)" hint="Optional. Blank uses the default.">{(id) => <Input id={id} inputMode="numeric" value={rates.service_fee} onChange={(e) => setRates((v) => ({ ...v, service_fee: e.target.value.replace(/[^0-9]/g, "") }))} />}</Field>
         </div>
       ) : null}
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Opens" hint="Optional. Without hours it reads closed.">{(id) => <Input id={id} type="time" value={hours.opens} onChange={(e) => setHours((v) => ({ ...v, opens: e.target.value }))} />}</Field>
+        <Field label="Closes">{(id) => <Input id={id} type="time" value={hours.closes} onChange={(e) => setHours((v) => ({ ...v, closes: e.target.value }))} />}</Field>
+      </div>
       <Field label={kind === "liquor" ? "Store name" : "Hotel name"}>{(id) => <Input id={id} value={f.name} onChange={set("name")} required minLength={2} />}</Field>
       <Field label="Web address" hint={`chakula…/h/${f.slug || "name"}`}>{(id) => <Input id={id} value={f.slug} onChange={set("slug")} required pattern="[a-z0-9-]{2,80}" />}</Field>
       <div className="grid grid-cols-2 gap-3">
@@ -194,6 +250,11 @@ export function HotelsPage({ kind = "hotel" }: { kind?: "hotel" | "liquor" }) {
             <div className="flex flex-wrap items-start justify-between gap-2">
               <div>
                 <p className="font-bold">{h.name} {h.kind === "liquor" ? <Badge tone="warn">Liquor</Badge> : null} {h.status === "paused" ? <Badge tone="warn">Paused</Badge> : null} {h.verified ? <Badge tone="ok">Checked</Badge> : <Badge tone="warn">Not checked</Badge>}</p>
+                {closedReasons(h).length ? (
+                  <p className="mt-1 text-xs font-semibold text-bad">Closed to customers: {closedReasons(h).join(" · ")}</p>
+                ) : (
+                  <p className="mt-1 text-xs font-semibold text-ok">Ready for orders</p>
+                )}
                 <p className="text-sm text-muted">
                   Till <span className="money">{h.till_number}</span>{h.till_name ? <> ({h.till_name})</> : <span className="text-warn"> (name not recorded)</span>} · <span className="money">{h.phone}</span> ·{" "}
                   {h.lat != null ? <span className="text-ok">location pinned</span> : <span className="text-warn">location not pinned yet</span>}
@@ -212,6 +273,7 @@ export function HotelsPage({ kind = "hotel" }: { kind?: "hotel" | "liquor" }) {
             {open === h.id ? (
               <div className="mt-3 flex flex-col gap-3">
                 <VerifyPanel key={`${h.till_number}-${h.till_name}-${h.verified}`} hotel={h} />
+                <HoursPanel key={`hours-${h.has_hours}`} hotel={h} />
                 {h.kind === "liquor" ? <LicencePanel key={`${h.liquor_licence_no}-${h.liquor_licence_expires}`} hotel={h} /> : null}
                 <StaffList hotel={h} />
               </div>

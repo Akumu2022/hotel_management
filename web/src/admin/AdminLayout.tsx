@@ -9,6 +9,7 @@ import { ThemeToggle } from "../customer/CustomerLayout";
 import { AlarmBanner } from "../components/AlarmBanner";
 import { useAlarm } from "../lib/alarm";
 import { api, auth } from "../lib/api";
+import { Toaster } from "../components/toast";
 import { useLive } from "../lib/live";
 
 const NAV = [
@@ -109,6 +110,7 @@ export function AdminLayout() {
 
   return (
     <div className="min-h-dvh bg-page md:p-5">
+      <Toaster />
       <AdminAlarms />
       <div className="sticky top-0 z-40 md:-mx-5 md:-mt-5 md:mb-5"><AlarmBanner /></div>
       <div className="mx-auto flex min-h-dvh max-w-[90rem] overflow-clip bg-surface md:min-h-[calc(100dvh-2.5rem)] md:rounded-[1.75rem] md:shadow-sm">

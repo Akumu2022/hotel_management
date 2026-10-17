@@ -65,28 +65,68 @@ async def test_expired_licence_stops_orders_and_shows_closed(client, db):
     assert card["is_open"] is False
 
 
-async def test_admin_makes_a_liquor_store_with_its_licence(client, headers):  # noqa: F811
+async def test_admin_makes_a_liquor_store_with_nothing_but_the_basics(client, headers):  # noqa: F811
+    # No commission, no licence, no hours are needed to onboard a store.
+    r = await client.post("/api/v1/admin/hotels", headers=headers, json={**HOTEL, "kind": "liquor"})
+    assert r.status_code == 201, r.text
+    out = r.json()
+    assert out["kind"] == "liquor" and out["commission_percent"] is None
+    assert out["liquor_licence_no"] is None and out["has_hours"] is False
+    # The store reads closed until it has hours and a licence: that is visible on the owner's list.
+    cards = (await client.get("/api/v1/hotels?kind=liquor")).json()
+    assert next(h for h in cards if h["slug"] == HOTEL["slug"])["is_open"] is False
+
+
+async def test_licence_number_and_expiry_go_together(client, headers):  # noqa: F811
     r = await client.post(
-        "/api/v1/admin/hotels", headers=headers, json={**HOTEL, "kind": "liquor"}
+        "/api/v1/admin/hotels",
+        headers=headers,
+        json={**HOTEL, "kind": "liquor", "liquor_licence_no": "BG/777"},
     )
     assert r.status_code == 422
+    r = await client.post(
+        "/api/v1/admin/hotels",
+        headers=headers,
+        json={**HOTEL, "kind": "liquor", "liquor_licence_no": "BG/777", "liquor_licence_expires": "2030-06-30"},
+    )
+    assert r.status_code == 201, r.text
+    hid = r.json()["id"]
+    r = await client.patch(
+        f"/api/v1/admin/hotels/{hid}", headers=headers, json={"liquor_licence_no": None}
+    )
+    assert r.status_code == 422  # clearing only one half is refused
+
+
+async def test_owner_can_set_opening_hours_at_creation_and_later(client, headers):  # noqa: F811
+    day = {"opens_at": "00:00:00", "closes_at": "23:59:00"}
     r = await client.post(
         "/api/v1/admin/hotels",
         headers=headers,
         json={
             **HOTEL,
             "kind": "liquor",
-            "liquor_licence_no": "BG/777",
-            "liquor_licence_expires": "2030-06-30",
+            "liquor_licence_no": "BG/1",
+            "liquor_licence_expires": "2031-01-01",
+            **day,
         },
     )
     assert r.status_code == 201, r.text
-    assert r.json()["kind"] == "liquor" and r.json()["liquor_licence_no"] == "BG/777"
+    assert r.json()["has_hours"] is True
     hid = r.json()["id"]
-    r = await client.patch(
-        f"/api/v1/admin/hotels/{hid}", headers=headers, json={"liquor_licence_no": None}
+    card = next(h for h in (await client.get("/api/v1/hotels?kind=liquor")).json() if h["slug"] == HOTEL["slug"])
+    assert card["is_open"] is True
+    r = await client.put(f"/api/v1/admin/hotels/{hid}/hours", headers=headers, json={"hours": []})
+    assert r.status_code == 200 and r.json()["has_hours"] is False
+    r = await client.put(
+        f"/api/v1/admin/hotels/{hid}/hours",
+        headers=headers,
+        json={"hours": [{"weekday": d, **day} for d in range(7)]},
     )
-    assert r.status_code == 422
+    assert r.status_code == 200 and r.json()["has_hours"] is True
+    dup = {"hours": [{"weekday": 1, **day}, {"weekday": 1, **day}]}
+    assert (await client.put(f"/api/v1/admin/hotels/{hid}/hours", headers=headers, json=dup)).status_code == 422
+    one = {**HOTEL, "slug": "other-store", "phone": "0712000999", "till_number": "888888", "opens_at": "08:00:00"}
+    assert (await client.post("/api/v1/admin/hotels", headers=headers, json=one)).status_code == 422
 
 
 async def test_liquor_has_its_own_fees_and_delivery(client, db, headers):  # noqa: F811

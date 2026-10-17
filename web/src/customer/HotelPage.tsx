@@ -292,9 +292,11 @@ export function HotelPage() {
               <StatusChip hotel={hotel} />
               {hotel.verified ? <VerifiedBadge /> : null}
               {hotel.busy_extra_minutes ? <span className="rounded-full bg-warn-soft px-2.5 py-1 text-xs font-semibold text-warn">{t("Busy right now")}</span> : null}
-              <span className="flex items-center gap-1.5 rounded-full bg-surface px-2.5 py-1 text-xs font-semibold text-ink">
-                <Timer className="size-3.5" /> {t("{min} min", { min: etaText(hotel.prep_minutes, mode) })}
-              </span>
+              {hotel.kind === "liquor" ? null : (
+                <span className="flex items-center gap-1.5 rounded-full bg-surface px-2.5 py-1 text-xs font-semibold text-ink">
+                  <Timer className="size-3.5" /> {t("{min} min", { min: etaText(hotel.prep_minutes, mode) })}
+                </span>
+              )}
               <span className="flex items-center gap-1.5 rounded-full bg-white/15 px-2.5 py-1 text-xs font-medium text-white backdrop-blur"><Bike className="size-3.5" /> {t("Delivery")}</span>
               <span className="flex items-center gap-1.5 rounded-full bg-white/15 px-2.5 py-1 text-xs font-medium text-white backdrop-blur"><Store className="size-3.5" /> {t("Pickup")}</span>
               <a href={`tel:+${hotel.phone}`} className="flex items-center gap-1.5 rounded-full bg-surface px-3 py-1 text-xs font-semibold text-ink"><Phone className="size-3.5" /> {t("Call")}</a>

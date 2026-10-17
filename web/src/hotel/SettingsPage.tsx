@@ -67,6 +67,7 @@ function Panel({ icon, title, sub, children, action }: { icon: ReactNode; title:
 // --- Identity -----------------------------------------------------------------------------------
 
 function IdentitySheet({ name, phone, till, onClose }: { name: string; phone: string; till: string; onClose: () => void }) {
+  const w = useW();
   const [n, setN] = useState(name);
   const [p, setP] = useState(`0${phone.slice(3)}`);
   const [t, setT] = useState(till);
@@ -78,7 +79,7 @@ function IdentitySheet({ name, phone, till, onClose }: { name: string; phone: st
   return (
     <Sheet
       open
-      title="Edit hotel details"
+      title={w("Edit hotel details")}
       onClose={onClose}
       footer={
         <Button className="w-full" type="submit" form="identity" busy={save.isPending}>
@@ -88,7 +89,7 @@ function IdentitySheet({ name, phone, till, onClose }: { name: string; phone: st
     >
       <form id="identity" onSubmit={submit} className="flex flex-col gap-4">
         <label className="flex flex-col gap-1.5">
-          <span className="text-sm font-semibold">Hotel name</span>
+          <span className="text-sm font-semibold">{w("Hotel name")}</span>
           <Input value={n} onChange={(e) => setN(e.target.value)} required minLength={2} maxLength={120} />
           <span className="text-xs text-muted">Shown to customers in capitals on your cover.</span>
         </label>
@@ -102,7 +103,7 @@ function IdentitySheet({ name, phone, till, onClose }: { name: string; phone: st
           </p>
         ) : null}
         <label className="flex flex-col gap-1.5">
-          <span className="text-sm font-semibold">Hotel phone</span>
+          <span className="text-sm font-semibold">{w("Hotel phone")}</span>
           <Input value={p} onChange={(e) => setP(e.target.value)} inputMode="tel" required />
           <span className="text-xs text-muted">Customers and riders call this number.</span>
         </label>
@@ -194,6 +195,7 @@ function HoursSheet({ hours, onClose }: { hours: DayHours[]; onClose: () => void
 // --- Location ----------------------------------------------------------------------------------
 
 function LocationPanel({ lat, lng, canEdit }: { lat: number | null; lng: number | null; canEdit: boolean }) {
+  const w = useW();
   const [pin, setPin] = useState(lat != null && lng != null ? { lat, lng } : null);
   useEffect(() => setPin(lat != null && lng != null ? { lat, lng } : null), [lat, lng]);
   const save = useSave(
@@ -206,7 +208,7 @@ function LocationPanel({ lat, lng, canEdit }: { lat: number | null; lng: number 
   );
   const changed = pin && (pin.lat !== lat || pin.lng !== lng);
   return (
-    <Panel icon={<MapPin className="size-5" />} title="Hotel location" sub="Where riders collect orders. Delivery fees are measured from here.">
+    <Panel icon={<MapPin className="size-5" />} title={w("Hotel location")} sub="Where riders collect orders. Delivery fees are measured from here.">
       {lat == null ? <p className="mb-3 rounded-xl bg-warn-soft px-3 py-2 text-sm font-medium text-warn">Not set yet: customers can't get delivery until you drop your pin.</p> : null}
       <Suspense fallback={<Skeleton className="h-72" />}>
         <ErrorBoundary fallback={(retry) => <MapFailed retry={retry} />}>
@@ -384,7 +386,7 @@ export function SettingsPage() {
             <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 rounded-[1.25rem] border border-line px-5 py-4">
               <span>
                 <span className="flex items-center gap-2 text-sm font-semibold text-muted">
-                  <Phone className="size-4" /> Hotel phone
+                  <Phone className="size-4" /> {w("Hotel phone")}
                 </span>
                 <span className="text-sm text-muted">Customers and riders call this.</span>
               </span>

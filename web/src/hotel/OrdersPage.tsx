@@ -97,7 +97,7 @@ function OrderCard({ o, onAction, canCancel }: { o: BoardOrder; onAction: (o: Bo
   const isNew = o.status === "paid" || o.status === "awaiting_payment";
   const waited = minutesSince(o.paid_at ?? o.created_at);
   const left = TIMEOUT_MIN - waited;
-  const readyIn = o.accepted_at && o.prep_minutes ? o.prep_minutes - minutesSince(o.accepted_at) : null;
+  const readyIn = !liquor && o.accepted_at && o.prep_minutes ? o.prep_minutes - minutesSince(o.accepted_at) : null;
 
   return (
     <li className={clsx("rounded-2xl border bg-surface p-4 transition-shadow", isNew ? "border-brand shadow-lg shadow-brand/15 ring-2 ring-brand/20" : "border-line")}>
@@ -280,6 +280,15 @@ export function OrdersPage() {
       refresh();
     },
   });
+  // Drinks need no prep time: accepting goes straight to packing.
+  const quickAccept = async (o: BoardOrder) => {
+    try {
+      await act.mutateAsync({ o, action: "accept", body: { prep_minutes: 5 } });
+      act.mutate({ o, action: "preparing" });
+    } catch {
+      /* the board shows the error */
+    }
+  };
   const onAction = (o: BoardOrder, a: string) => {
     if (a === "handed-to-rider") {
       setRiderPin("");
@@ -289,8 +298,10 @@ export function OrdersPage() {
       setPin("");
       collect.reset();
       setHanding(o);
-    } else if (a === "accept") setAccepting(o);
-    else if (a === "reject") {
+    } else if (a === "accept") {
+      if (settings?.kind === "liquor") void quickAccept(o);
+      else setAccepting(o);
+    } else if (a === "reject") {
       setNote("");
       setRejecting(o);
     } else if (a === "cancel") {

@@ -9,7 +9,7 @@ import type { Category, Product } from "../lib/types";
 import { CategorySheet } from "./CategorySheet";
 import { FoodImage } from "../customer/FoodImage";
 import { ProductSheet } from "./ProductSheet";
-import { keys, useCategories, useHotelSettings, useIsAdmin, useProducts, useSave, useW } from "./hooks";
+import { keys, useCategories, useHotelSettings, useIsAdmin, useProducts, useSave, useW, useIsLiquor } from "./hooks";
 
 /** Onboarding checklist (Bonfol "Setup store 6/7"), hidden once complete. */
 function SetupChecklist({ categories, products }: { categories: Category[]; products: Product[] }) {
@@ -102,6 +102,7 @@ function ProductTile({ product, onEdit }: { product: Product; onEdit?: () => voi
 
 export function MenuPage() {
   const w = useW();
+  const liquor = useIsLiquor();
   const isAdmin = useIsAdmin();
   const [showArchived, setShowArchived] = useState(false);
   const categories = useCategories();
@@ -154,7 +155,7 @@ export function MenuPage() {
       {cats.length === 0 ? (
         <EmptyState
           title="No categories yet"
-          body={w("Start with categories such as Breakfast, Mains or Drinks, then add dishes to them.")}
+          body={liquor ? "Add your own categories, then add your drinks to them." : w("Start with categories such as Breakfast, Mains or Drinks, then add dishes to them.")}
           action={isAdmin ? <Button onClick={() => setEditingCat("new")}>Add a category</Button> : null}
         />
       ) : (

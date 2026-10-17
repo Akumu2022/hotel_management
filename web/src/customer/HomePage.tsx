@@ -50,9 +50,11 @@ function HotelCard({ hotel }: { hotel: PublicHotel }) {
               <Star className="size-3.5 fill-warn text-warn" /> {hotel.rating?.toFixed(1)}
             </span>
           ) : null}
-          <span className="flex items-center gap-1 rounded-full bg-subtle px-2.5 py-1 text-xs font-semibold text-ink" title={mode === "delivery" ? t("Delivery") : t("Pickup")}>
-            <Timer className="size-3.5" /> {t("{min} min", { min: etaText(hotel.prep_minutes, mode) })}
-          </span>
+          {hotel.kind === "liquor" ? null : (
+            <span className="flex items-center gap-1 rounded-full bg-subtle px-2.5 py-1 text-xs font-semibold text-ink" title={mode === "delivery" ? t("Delivery") : t("Pickup")}>
+              <Timer className="size-3.5" /> {t("{min} min", { min: etaText(hotel.prep_minutes, mode) })}
+            </span>
+          )}
           {hotel.distance_km != null ? (
             <span className="flex items-center gap-1 rounded-full bg-subtle px-2.5 py-1 text-xs font-semibold text-ink">
               <MapPin className="size-3.5" /> {t("{km} km", { km: hotel.distance_km })}

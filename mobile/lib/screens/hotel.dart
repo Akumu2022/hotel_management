@@ -390,7 +390,7 @@ class _Cover extends StatelessWidget {
             right: 16,
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text(hotel['name'], style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w800)),
-              Text(open ? tr('Open · ~{min} min prep', {'min': hotel['prep_minutes']}) : tr('Not taking orders right now'), style: const TextStyle(color: Colors.white70)),
+              Text(open ? (hotel['kind'] == 'liquor' ? tr('Open now') : tr('Open · ~{min} min prep', {'min': hotel['prep_minutes']})) : tr('Not taking orders right now'), style: const TextStyle(color: Colors.white70)),
             ]),
           ),
         ]),

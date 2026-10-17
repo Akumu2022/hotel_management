@@ -1,5 +1,5 @@
 import uuid
-from datetime import date, datetime
+from datetime import date, datetime, time
 from typing import Annotated, Literal
 
 from pydantic import AfterValidator, ConfigDict, Field, field_validator, model_validator
@@ -7,6 +7,7 @@ from pydantic import AfterValidator, ConfigDict, Field, field_validator, model_v
 from app.core.errors import AppError
 from app.core.phone import normalize_phone
 from app.models.enums import USER_ROLES
+from app.schemas.catalogue import DayHours
 from app.schemas.common import Phone, Schema
 from app.services.settings import (
     MAX_COMMISSION_BP,
@@ -188,6 +189,7 @@ class HotelOut(Schema):
     kind: str = "hotel"
     liquor_licence_no: str | None = None
     liquor_licence_expires: date | None = None
+    has_hours: bool = False  # opening hours are set (a store with none is always closed)
     created_at: datetime
     rating: float | None = None
     rating_count: int = 0
@@ -233,15 +235,33 @@ class HotelCreate(Schema):
     kind: Literal["hotel", "liquor"] = "hotel"
     liquor_licence_no: str | None = Field(None, min_length=2, max_length=60)
     liquor_licence_expires: date | None = None
+    # Optional: the same opening and closing time every day. Without hours a store is closed.
+    opens_at: time | None = None
+    closes_at: time | None = None
     admin: HotelLoginIn | None = None
 
     @model_validator(mode="after")
     def _location_pair(self):
         if (self.lat is None) != (self.lng is None):
             raise ValueError("Set both latitude and longitude, or neither")
-        licensed = bool(self.liquor_licence_no) and self.liquor_licence_expires is not None
-        if self.kind == "liquor" and not licensed:
-            raise ValueError("A liquor store needs its licence number and expiry date")
+        if (self.liquor_licence_no is None) != (self.liquor_licence_expires is None):
+            raise ValueError("Give the licence number and its expiry date together, or neither")
+        if (self.opens_at is None) != (self.closes_at is None):
+            raise ValueError("Give the opening and closing time together, or neither")
+        if self.opens_at is not None and self.opens_at == self.closes_at:
+            raise ValueError("Opening and closing times cannot be the same")
+        return self
+
+
+class HotelHoursIn(Schema):
+    """Replace a hotel's opening hours (the owner sets them when the hotel's own admin has not)."""
+
+    hours: list[DayHours] = Field(max_length=7)
+
+    @model_validator(mode="after")
+    def _unique_days(self):
+        if len({h.weekday for h in self.hours}) != len(self.hours):
+            raise ValueError("Each weekday can appear once")
         return self
 
 
@@ -285,7 +305,7 @@ _NULLABLE_HOTEL_FIELDS = {
 
 def hotel_values(body: HotelCreate | HotelPatch) -> dict:
     """Request fields -> model column values, converting % to basis points."""
-    data = body.model_dump(exclude_unset=True, exclude={"admin"})
+    data = body.model_dump(exclude_unset=True, exclude={"admin", "opens_at", "closes_at"})
     for key, value in data.items():
         if value is None and key not in _NULLABLE_HOTEL_FIELDS:
             raise AppError(422, "validation_error", f"{key} cannot be empty")

@@ -6,6 +6,7 @@ import { Link, NavLink, Navigate, Outlet, useLocation } from "react-router-dom";
 
 import { Button, Switch } from "../components/ui";
 import { NotificationBell } from "../components/NotificationBell";
+import { Toaster } from "../components/toast";
 import { ThemeToggle } from "../customer/CustomerLayout";
 import { AlarmBanner } from "../components/AlarmBanner";
 import { useAlarm } from "../lib/alarm";
@@ -43,7 +44,7 @@ function AcceptingToggle() {
   const on = save.isPending ? !!save.variables : data.accepting_orders;
   return (
     <>
-    <BusySelect />
+    {data.kind === "liquor" ? null : <BusySelect />}
     <label className={clsx("flex h-11 items-center gap-3 rounded-xl border px-3.5 text-sm font-semibold", on ? "border-ok/30 bg-ok-soft text-ok" : "border-bad/30 bg-bad-soft text-bad")}>
       <span className={clsx("size-2 rounded-full", on ? "animate-pulse bg-ok" : "bg-bad")} />
       <span className="hidden sm:inline">{on ? "Accepting orders" : "Not accepting"}</span>
@@ -175,7 +176,9 @@ export function HotelLayout() {
   const section = pathname.split("/")[2] ?? "orders";
   const isAdmin = me?.role === "hotel_admin";
   const other = isAdmin ? [BILLING, ...OTHER] : OTHER;
-  const tabs = [...MAIN, ...other];
+  const liquor = settings?.kind === "liquor";
+  const main = liquor ? MAIN.filter((n) => n.to !== "offers") : MAIN; // no deals banner for drinks
+  const tabs = [...main, ...other];
 
   if (!me) return <Navigate to="/login" replace />;
   if (me.must_change_password) return <Navigate to="/password" replace />;
@@ -189,8 +192,11 @@ export function HotelLayout() {
     );
   }
 
+  if (liquor && section === "offers") return <Navigate to="/hotel/dashboard" replace />;
+
   return (
     <div className="min-h-dvh bg-page md:p-5">
+      <Toaster />
       <HotelAlarms />
       <div className="sticky top-0 z-40 -mx-0 md:-mx-5 md:-mt-5 md:mb-5"><AlarmBanner /></div>
       <div className="mx-auto flex min-h-dvh max-w-[90rem] gap-5 md:min-h-[calc(100dvh-2.5rem)]">
@@ -213,7 +219,7 @@ export function HotelLayout() {
           </div>
 
           <p className="px-1 pb-1.5 text-xs font-medium text-muted">Menu</p>
-          <nav className="flex flex-col gap-1">{MAIN.map((n) => <NavItem key={n.to} {...n} />)}</nav>
+          <nav className="flex flex-col gap-1">{main.map((n) => <NavItem key={n.to} {...n} />)}</nav>
           <div className="my-4 border-t border-line" />
           <p className="px-1 pb-1.5 text-xs font-medium text-muted">Others</p>
           <nav className="flex flex-col gap-1">{other.map((n) => <NavItem key={n.to} {...n} />)}</nav>
@@ -250,9 +256,14 @@ export function HotelLayout() {
             </div>
           </header>
           <main className="min-w-0 flex-1 px-4 pb-24 md:px-0 md:pb-0">
+            {isAdmin && settings && settings.hours.length === 0 && section !== "settings" ? (
+              <Link to="/hotel/settings" className="mb-5 flex items-center gap-2 rounded-2xl bg-warn-soft px-4 py-3 text-sm font-semibold text-warn">
+                <AlertTriangle className="size-4 shrink-0" /> Customers see your {liquor ? "store" : "hotel"} as closed because no opening hours are set. Tap to set them.
+              </Link>
+            ) : null}
             {isAdmin && settings && settings.lat == null && section !== "settings" ? (
               <Link to="/hotel/settings" className="mb-5 flex items-center gap-2 rounded-2xl bg-warn-soft px-4 py-3 text-sm font-semibold text-warn">
-                <AlertTriangle className="size-4 shrink-0" /> Pin your hotel on the map so customers can order delivery. Tap to set it now.
+                <AlertTriangle className="size-4 shrink-0" /> Pin your {liquor ? "store" : "hotel"} on the map so customers can order delivery. Tap to set it now.
               </Link>
             ) : null}
             <div className="mb-5 empty:hidden"><TillStrip /></div>

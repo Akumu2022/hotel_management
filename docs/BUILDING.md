@@ -44,7 +44,7 @@ SMS app: `cd forwarder; .\build-apk.ps1 -Server http://10.10.47.75:8000 -Out <wh
 
 ## Version numbers
 
-An Android phone refuses an update whose internal version number (`+N` in `mobile/pubspec.yaml`) is lower than the installed one. It is `1.2.0+3001`. Raise `N` for every build you hand out. If you hit `INSTALL_FAILED_VERSION_DOWNGRADE`, uninstall the old app or raise `N`.
+An Android phone refuses an update whose internal version number (`+N` in `mobile/pubspec.yaml`) is lower than the installed one. It is `1.2.1+3002`. Raise `N` for every build you hand out. If you hit `INSTALL_FAILED_VERSION_DOWNGRADE`, uninstall the old app or raise `N`.
 
 ## Emulator notes
 
