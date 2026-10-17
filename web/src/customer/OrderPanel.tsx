@@ -10,7 +10,19 @@ import { useT } from "../lib/i18n";
 import { BonusLine, BonusNudges, ConfirmDialog, ModePicker } from "./bits";
 import { FoodImage } from "./FoodImage";
 import { cart, orderMode, useCart, useOrderMode } from "./store";
-import type { PublicConfig, Quote } from "./types";
+import type { Menu, PublicConfig, Quote } from "./types";
+
+/** hotel or liquor for what is in the cart. Carts saved before liquor existed don't say, so the store's menu is asked. */
+export function useCartKind(): "hotel" | "liquor" {
+  const c = useCart();
+  const menu = useQuery({
+    queryKey: ["menu", c.hotel_slug],
+    queryFn: () => api.get<Menu>(`/hotels/${c.hotel_slug}/menu`),
+    enabled: !!c.hotel_slug && !c.hotel_kind,
+    staleTime: 60_000,
+  });
+  return c.hotel_kind ?? menu.data?.hotel.kind ?? "hotel";
+}
 
 export function useConfig(opts: { fresh?: boolean; kind?: "hotel" | "liquor" } = {}) {
   const liquor = opts.kind === "liquor"; // liquor stores have their own delivery prices
@@ -64,8 +76,9 @@ export function OrderPanel({ onProceed }: { onProceed?: () => void }) {
   const mode = useOrderMode();
   const navigate = useNavigate();
   const quote = useCartQuote();
-  const liquor = c.hotel_kind === "liquor";
-  const config = useConfig({ kind: c.hotel_kind });
+  const kind = useCartKind();
+  const liquor = kind === "liquor";
+  const config = useConfig({ kind });
   useEffect(() => {
     if (liquor && mode === "eat_in") orderMode.set("delivery");
   }, [liquor, mode]);
@@ -98,7 +111,7 @@ export function OrderPanel({ onProceed }: { onProceed?: () => void }) {
           <div className="flex h-full min-h-40 flex-col items-center justify-center gap-2 text-center">
             <span className="text-5xl">🍽️</span>
             <p className="font-semibold">{t("Your order is empty")}</p>
-            <p className="max-w-56 text-sm text-muted">{t("Tap “Add” on any dish to start your order.")}</p>
+            <p className="max-w-56 text-sm text-muted">{liquor ? t("Tap “Add” on any drink to start your order.") : t("Tap “Add” on any dish to start your order.")}</p>
           </div>
         ) : (
           <ol className="flex flex-col gap-4">
@@ -143,7 +156,7 @@ export function OrderPanel({ onProceed }: { onProceed?: () => void }) {
 
       <SectionLabel>{t("Payment details")}</SectionLabel>
       <div className="flex flex-col gap-2.5 px-5 py-4 text-sm">
-        <div className="flex justify-between"><span className="text-muted">{t("Food")}</span><span className="money font-medium">{money(q?.items_total ?? 0)}</span></div>
+        <div className="flex justify-between"><span className="text-muted">{liquor ? t("Drinks") : t("Food")}</span><span className="money font-medium">{money(q?.items_total ?? 0)}</span></div>
         {q?.order_discount ? <div className="flex justify-between"><span className="text-muted">{t("Discount")}</span><span className="money font-medium text-ok">−{money(q.order_discount)}</span></div> : null}
         <div className="flex justify-between"><span className="text-muted">{t("Service fee")}</span><span className="money font-medium">{money(empty ? 0 : (q?.service_fee ?? 0) - (q?.eat_in_fee ?? 0))}</span></div>
         {!empty && q?.eat_in_fee ? <div className="flex justify-between"><span className="text-muted">{t("Eat-in booking")}</span><span className="money font-medium">{money(q.eat_in_fee)}</span></div> : null}

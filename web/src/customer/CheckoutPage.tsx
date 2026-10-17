@@ -19,7 +19,7 @@ import { BonusLine, BonusNudges, ConfirmDialog, HelpButton, JourneySteps, ModePi
 import { ageConfirmed } from "./age";
 import { TopBar } from "./CustomerLayout";
 import { FoodImage } from "./FoodImage";
-import { useConfig } from "./OrderPanel";
+import { useCartKind, useConfig } from "./OrderPanel";
 import { type PlaceLabel, cart, orderMode, places, profile, rememberOrder, useCart, useOrderMode, usePlaces, useProfile } from "./store";
 import type { Menu, OrderPlaced, Quote, RiderFeeMode } from "./types";
 
@@ -103,8 +103,9 @@ export function CheckoutPage() {
   const c = useCart();
   const saved = useProfile();
   const type = useOrderMode();
-  const liquor = c.hotel_kind === "liquor";
-  const config = useConfig({ fresh: true, kind: c.hotel_kind });
+  const kind = useCartKind();
+  const liquor = kind === "liquor";
+  const config = useConfig({ fresh: true, kind });
   useEffect(() => {
     if (liquor && orderMode.get() === "eat_in") orderMode.set("delivery");
   }, [liquor]);
@@ -488,7 +489,7 @@ export function CheckoutPage() {
                     disabled={q ? !q.option_b_allowed : false}
                     onClick={() => setFeeMode("cash")}
                     emoji="📱"
-                    title={t("Food by M-Pesa now. You pay the rider {fee} yourself", { fee: money(riderFee) })}
+                    title={liquor ? t("Drinks by M-Pesa now. You pay the rider {fee} yourself", { fee: money(riderFee) }) : t("Food by M-Pesa now. You pay the rider {fee} yourself", { fee: money(riderFee) })}
                     body={q && !q.option_b_allowed ? t("Delivery is not available for this number. Choose pickup or contact support.") : t("The hotel never handles the delivery fee. Pay the rider directly when the food arrives.")}
                   />
                 </>
@@ -574,7 +575,7 @@ export function CheckoutPage() {
                 {q ? (
                   <div className="flex flex-col gap-2">
                     <div className="flex justify-between">
-                      <span className="text-muted">{t("Food")}</span>
+                      <span className="text-muted">{liquor ? t("Drinks") : t("Food")}</span>
                       <span className="money font-medium">{money(q.items_total)}</span>
                     </div>
                     {q.order_discount ? (

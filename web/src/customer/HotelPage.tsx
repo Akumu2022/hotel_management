@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import clsx from "clsx";
 import { ArrowLeft, Bike, ChevronDown, Clock, Minus, Phone, Plus, Search, Store, Timer, X } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 
 import { ErrorNote, Skeleton } from "../components/ui";
@@ -11,6 +11,7 @@ import { tr, useT } from "../lib/i18n";
 import { OfferCarousel } from "./OfferCarousel";
 import { ConfirmDialog, HotelCover, JourneySteps, VerifiedBadge, categoryEmoji, etaText, toast } from "./bits";
 import { AgeGate, useAgeConfirmed } from "./age";
+import { setSection } from "./section";
 import { TopBar } from "./CustomerLayout";
 import { FoodImage } from "./FoodImage";
 import { cart, useCart, useOrderMode } from "./store";
@@ -235,6 +236,10 @@ export function HotelPage() {
   const t = useT();
   const aged = useAgeConfirmed();
   const liquor = menu.data?.hotel.kind === "liquor";
+  const kindNow = menu.data?.hotel.kind;
+  useEffect(() => {
+    if (kindNow) setSection(kindNow === "liquor" ? "liquor" : "hotel"); // the header shows where you are
+  }, [kindNow]);
   const navigate = useNavigate();
   const mode = useOrderMode();
   const offers = useQuery({ queryKey: ["offers", "all"], queryFn: () => api.get<PublicOffer[]>("/offers") });

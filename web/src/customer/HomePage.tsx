@@ -8,6 +8,7 @@ import { ErrorNote, Skeleton } from "../components/ui";
 import { api } from "../lib/api";
 import { useT } from "../lib/i18n";
 import { AgeGate, useAgeConfirmed } from "./age";
+import { setSection, useSection } from "./section";
 import { TopBar } from "./CustomerLayout";
 import { HotelCover, VerifiedBadge, etaText } from "./bits";
 import { TOWNS, areaQuery, locate, setArea, townArea, useArea, type Area } from "./area";
@@ -167,7 +168,8 @@ export function HomePage() {
   const area = useArea();
   const [changing, setChanging] = useState(false);
   // Food hotels, or liquor stores (18+ only: the customer confirms once before the stores are shown).
-  const [kind, setKind] = useState<"hotel" | "liquor">("hotel");
+  const kind = useSection();
+  useEffect(() => { setQ(""); setSearching(false); }, [kind]);
   const aged = useAgeConfirmed();
   const locked = kind === "liquor" && !aged;
   // Nothing is fetched until we know where the customer is.
@@ -237,21 +239,8 @@ export function HomePage() {
           </section>
         ) : null}
 
-        <div role="tablist" className="mt-6 grid grid-cols-2 gap-1 rounded-xl bg-subtle p-1">
-          {([["hotel", t("Chakula")], ["liquor", t("Drinks")]] as const).map(([k, label]) => (
-            <button
-              key={k}
-              role="tab"
-              aria-selected={kind === k}
-              onClick={() => { setKind(k); setQ(""); setSearching(false); }}
-              className={clsx("h-10 rounded-lg text-sm font-semibold", kind === k ? "bg-surface shadow-sm" : "text-muted")}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
 
-        <section className="mt-4">
+        <section className="mt-6">
           <div className="mb-3 flex items-center justify-between gap-3">
             <h2 className="min-w-0 text-lg font-semibold">
               {kind === "liquor" ? t("Drinks near you") : t("Hotels near you")}
@@ -295,7 +284,7 @@ export function HomePage() {
             <div className="mb-4"><LocationPicker current={area} onDone={() => setChanging(false)} /></div>
           ) : null}
           {locked ? (
-            <AgeGate onNo={() => setKind("hotel")} />
+            <AgeGate onNo={() => setSection("hotel")} />
           ) : !area || (showSearch && q.trim()) ? null : hotels.isLoading ? (
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
               {[0, 1, 2].map((i) => (
