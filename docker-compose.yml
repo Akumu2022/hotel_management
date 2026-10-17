@@ -57,17 +57,6 @@ services:
     depends_on:
       - api
 
-  # Optional: your own road-routing server (README, "Road routing"). Needs osrm-data/ prepared once.
-  #   docker compose --profile routing up -d osrm   and set OSRM_URL=http://osrm:5000/route/v1/driving in .env
-  osrm:
-    profiles: ["routing"]
-    image: ghcr.io/project-osrm/osrm-backend:latest
-    command: osrm-routed --algorithm mld /data/kenya-latest.osrm
-    volumes:
-      - ./osrm-data:/data:ro
-    ports:
-      - "5000:5000"
-
   # Optional: shared rate limits when the API runs as several processes. Start with
   #   docker compose --profile scale up -d redis   and set REDIS_URL=redis://redis:6379/0
   redis:
