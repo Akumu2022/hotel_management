@@ -191,18 +191,32 @@ async def summary(
     out = {"totals": totals, "series": series, "top_items": top_items, "by_hour": by_hour}
     if hotel_id is None:
         hotel_q = (
-            select(Hotel.id, Hotel.name, *_totals_columns())
+            select(Hotel.id, Hotel.name, Hotel.kind, *_totals_columns())
             .select_from(LedgerEntry)
             .join(Order, Order.id == LedgerEntry.order_id)
             .join(Hotel, Hotel.id == Order.hotel_id)
             .where(LedgerEntry.created_at >= r.start, LedgerEntry.created_at < r.end)
-            .group_by(Hotel.id, Hotel.name)
+            .group_by(Hotel.id, Hotel.name, Hotel.kind)
         )
         rows = (await session.execute(hotel_q)).all()
         out["per_hotel"] = sorted(
-            ({"hotel_id": str(row.id), "hotel": row.name, **_row(row)} for row in rows),
-            key=lambda d: -d["earnings"],
+            (
+                {"hotel_id": str(row.id), "hotel": row.name, "kind": row.kind, **_row(row)}
+                for row in rows
+            ),
+            key=lambda d: -d["net_received"],
         )
+        # Hotels against liquor stores, so the two sides of the business can be compared.
+        out["by_kind"] = {
+            kind: {
+                "stores": sum(1 for d in out["per_hotel"] if d["kind"] == kind),
+                **{
+                    k: sum(d[k] for d in out["per_hotel"] if d["kind"] == kind)
+                    for k in (*TOTAL_KEYS, "received", "net_received")
+                },
+            }
+            for kind in ("hotel", "liquor")
+        }
     return out
 
 

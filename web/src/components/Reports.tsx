@@ -34,7 +34,8 @@ type Report = {
   series: Point[];
   top_items: { name: string; quantity: number; sales: number }[];
   by_hour: number[];
-  per_hotel?: (Totals & { hotel_id: string; hotel: string })[];
+  per_hotel?: (Totals & { hotel_id: string; hotel: string; kind: "hotel" | "liquor" })[];
+  by_kind?: Record<"hotel" | "liquor", Totals & { stores: number }>;
 };
 type PaymentRow = { at: string; kind: "mpesa" | "cash" | "refund"; amount: number; reference: string | null; order_code: string; customer: string; order_type: string; hotel: string };
 
@@ -184,6 +185,7 @@ export function Reports({ scope, foodLabel = "Food sales" }: { scope: "hotel" | 
   const [group, setGroup] = useState<"day" | "week" | "month">("day");
   const [hotelId, setHotelId] = useState("");
   const [method, setMethod] = useState<"" | "mpesa" | "cash" | "refund">("");
+  const [rankBy, setRankBy] = useState<"net_received" | "earnings">("net_received");
   const range = rangeFor(preset, custom);
 
   const hotels = useQuery({
@@ -276,6 +278,28 @@ export function Reports({ scope, foodLabel = "Food sales" }: { scope: "hotel" | 
         </div>
       )}
 
+      {admin && report.data?.by_kind ? (
+        <Panel title="Hotels vs liquor stores" sub="Money received and platform earnings, side by side">
+          <div className="grid gap-3 sm:grid-cols-2">
+            {(["hotel", "liquor"] as const).map((k) => {
+              const b = report.data!.by_kind![k];
+              const all = report.data!.by_kind!.hotel.net_received + report.data!.by_kind!.liquor.net_received;
+              return (
+                <div key={k} className="rounded-2xl bg-subtle p-4">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span className="font-bold">{k === "hotel" ? "Hotels (food)" : "Liquor stores (drinks)"}</span>
+                    <span className="text-xs text-muted">{b.stores} active · {b.orders} orders</span>
+                  </div>
+                  <p className="money mt-1 text-2xl font-bold">{money(b.net_received)}</p>
+                  <p className="text-xs text-muted">Platform earnings <span className="money font-semibold text-ok">{money(b.earnings)}</span> · {all ? Math.round((b.net_received / all) * 100) : 0}% of money received</p>
+                  <div className="mt-2 h-2 rounded-full bg-surface"><div className="h-2 rounded-full bg-brand" style={{ width: `${all ? (b.net_received / all) * 100 : 0}%` }} /></div>
+                </div>
+              );
+            })}
+          </div>
+        </Panel>
+      ) : null}
+
       <div className="grid gap-5 xl:grid-cols-[1fr_360px]">
         <Panel
           title={admin ? "Earnings over time" : "Money received over time"}
@@ -325,19 +349,24 @@ export function Reports({ scope, foodLabel = "Food sales" }: { scope: "hotel" | 
         </Panel>
 
         {admin ? (
-          <Panel title="By hotel" sub="Commission and fees each hotel brought in">
+          <Panel
+            title="Hotels and stores ranked"
+            sub="Highest to lowest"
+            action={<Chips label="Rank by" value={rankBy} onChange={setRankBy} options={[{ id: "net_received", label: "Revenue" }, { id: "earnings", label: "Our earnings" }] as const} />}
+          >
             {report.data?.per_hotel?.length ? (
-              <div className="-mx-1 overflow-x-auto">
-                <table className="w-full min-w-[26.25rem] text-sm">
+              <div className="-mx-1 max-h-[30rem] overflow-auto">
+                <table className="w-full min-w-[30rem] text-sm">
                   <thead className="text-left text-xs text-muted uppercase">
-                    <tr><th className="px-1 py-2 font-semibold">Hotel</th><th className="px-1 py-2 text-right font-semibold">Orders</th><th className="px-1 py-2 text-right font-semibold">Received</th><th className="px-1 py-2 text-right font-semibold">Commission</th><th className="px-1 py-2 text-right font-semibold">Earnings</th></tr>
+                    <tr><th className="px-1 py-2 font-semibold">#</th><th className="px-1 py-2 font-semibold">Name</th><th className="px-1 py-2 text-right font-semibold">Orders</th><th className="px-1 py-2 text-right font-semibold">Revenue</th><th className="px-1 py-2 text-right font-semibold">Commission</th><th className="px-1 py-2 text-right font-semibold">Earnings</th></tr>
                   </thead>
                   <tbody className="divide-y divide-line">
-                    {report.data.per_hotel.map((h) => (
+                    {[...report.data.per_hotel].sort((a, b) => b[rankBy] - a[rankBy]).map((h, i) => (
                       <tr key={h.hotel_id}>
-                        <td className="px-1 py-2.5 font-semibold">{h.hotel}</td>
+                        <td className="px-1 py-2.5 text-muted">{i + 1}</td>
+                        <td className="px-1 py-2.5 font-semibold">{h.hotel} <span className={clsx("ml-1 rounded-full px-2 py-0.5 text-xs font-semibold", h.kind === "liquor" ? "bg-warn-soft text-warn" : "bg-ok-soft text-ok")}>{h.kind === "liquor" ? "Liquor" : "Hotel"}</span></td>
                         <td className="money px-1 py-2.5 text-right">{h.orders}</td>
-                        <td className="money px-1 py-2.5 text-right">{money(h.received)}</td>
+                        <td className="money px-1 py-2.5 text-right font-bold">{money(h.net_received)}</td>
                         <td className="money px-1 py-2.5 text-right">{money(h.commission)}</td>
                         <td className="money px-1 py-2.5 text-right font-bold text-ok">{money(h.earnings)}</td>
                       </tr>
