@@ -60,6 +60,10 @@ async def test_hotel_dashboard_totals_and_scoping(client, db):
     assert body["top_items"] == [{"name": "Pilau", "quantity": 1, "sales": 650}]
     assert sum(body["by_hour"]) == 2
     assert "per_hotel" not in body
+    assert len(body["by_weekday"]) == 7 and sum(d["orders"] for d in body["by_weekday"]) == 2
+    assert sum(body["by_hour_sales"]) == 1850 and sum(d["sales"] for d in body["by_weekday"]) == 1850
+    assert body["item_ranking"] == [{"name": "Pilau", "quantity": 1, "sales": 650}]
+    assert isinstance(body["unsold_items"], list)
 
     rows = (await client.get("/api/v1/hotel/reports/payments", headers=admin)).json()
     assert sorted(r["kind"] for r in rows) == ["mpesa", "mpesa", "refund"]

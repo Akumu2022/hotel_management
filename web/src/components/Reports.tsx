@@ -5,7 +5,7 @@
  */
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import clsx from "clsx";
-import { Banknote, Download, Gift, HandCoins, Percent, ReceiptText, ShoppingBag, Smartphone, TrendingUp } from "lucide-react";
+import { Banknote, Download, Gift, HandCoins, Percent, Printer, ReceiptText, ShoppingBag, Smartphone, TrendingUp } from "lucide-react";
 import { useMemo, useState, type ReactNode } from "react";
 
 import { api, auth, getAllPages, request } from "../lib/api";
@@ -34,6 +34,10 @@ type Report = {
   series: Point[];
   top_items: { name: string; quantity: number; sales: number }[];
   by_hour: number[];
+  by_hour_sales: number[];
+  by_weekday: { orders: number; sales: number }[];
+  item_ranking: { name: string; quantity: number; sales: number }[];
+  unsold_items: string[];
   per_hotel?: (Totals & { hotel_id: string; hotel: string; kind: "hotel" | "liquor" })[];
   by_kind?: Record<"hotel" | "liquor", Totals & { stores: number }>;
 };
@@ -176,6 +180,147 @@ function Chips<T extends string>({ value, options, onChange, label }: { value: T
 
 const KIND = { mpesa: { label: "M-Pesa", cls: "bg-ok-soft text-ok" }, cash: { label: "Cash", cls: "bg-warn-soft text-warn" }, refund: { label: "Refund", cls: "bg-bad-soft text-bad" } } as const;
 
+
+// --- Planning insights, printing and the full CSV -------------------------------------------------
+
+const WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+const orderWord = (n: number) => `${n} order${n === 1 ? "" : "s"}`;
+const hourRange = (h: number) => `${hourLabel(h)} – ${hourLabel((h + 1) % 24)}`;
+
+/** Best and worst of each kind. Slow hours are judged only between the first and last hour that had orders. */
+function insightsOf(d: Report) {
+  const orders = d.by_weekday.reduce((n, x) => n + x.orders, 0);
+  if (!orders) return null;
+  const pick = <T,>(xs: T[], val: (x: T) => number, best: boolean) =>
+    xs.reduce((a, b) => (best ? (val(b) > val(a) ? b : a) : val(b) < val(a) ? b : a));
+  const days = d.by_weekday.map((x, i) => ({ i, ...x }));
+  const active = d.by_hour.map((n, h) => ({ h, n })).filter((x) => x.n > 0);
+  const open = d.by_hour.map((n, h) => ({ h, n })).filter((x) => x.h >= active[0].h && x.h <= active[active.length - 1].h);
+  const items = d.item_ranking;
+  return {
+    orders,
+    busyDay: pick(days, (x) => x.orders, true),
+    slowDay: pick(days, (x) => x.orders, false),
+    busyHour: pick(open, (x) => x.n, true),
+    slowHour: pick(open, (x) => x.n, false),
+    best: items[0],
+    worst: items.length > 1 ? items[items.length - 1] : null,
+  };
+}
+
+/** Daily rows rolled up into weeks (Monday start) or months. */
+function rollup(series: Point[], group: "week" | "month", admin: boolean) {
+  const out = new Map<string, { orders: number; value: number }>();
+  for (const p of series) {
+    const key = group === "month" ? `${p.period.slice(0, 8)}01` : addDays(p.period, -((new Date(`${p.period}T12:00:00Z`).getUTCDay() + 6) % 7));
+    const cur = out.get(key) ?? { orders: 0, value: 0 };
+    out.set(key, { orders: cur.orders + p.orders, value: cur.value + (admin ? p.earnings : p.net_received) });
+  }
+  return [...out.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([period, v]) => ({ period, ...v }));
+}
+
+function csvOf(rows: (string | number)[][]) {
+  return "\ufeff" + rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\r\n");
+}
+
+function PlanningInsights({ data }: { data: Report }) {
+  const x = insightsOf(data);
+  if (!x) return null;
+  const cards: [string, string, string][] = [
+    ["Best seller", x.best.name, `${x.best.quantity} sold · ${money(x.best.sales)}`],
+    ["Slowest seller", x.worst?.name ?? "—", x.worst ? `${x.worst.quantity} sold · ${money(x.worst.sales)}` : "Only one item sold"],
+    ["Busiest day", WEEKDAYS[x.busyDay.i], `${orderWord(x.busyDay.orders)} · ${money(x.busyDay.sales)}`],
+    ["Slowest day", WEEKDAYS[x.slowDay.i], `${orderWord(x.slowDay.orders)} · ${money(x.slowDay.sales)}`],
+    ["Busiest hour", hourRange(x.busyHour.h), orderWord(x.busyHour.n)],
+    ["Slowest hour", hourRange(x.slowHour.h), orderWord(x.slowHour.n)],
+  ];
+  return (
+    <Panel title="Plan with this" sub={`From ${orderWord(x.orders)} that went through. Pick 30 days or more for patterns you can rely on.`}>
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+        {cards.map(([label, value, sub]) => (
+          <div key={label} className="min-w-0 rounded-2xl bg-subtle p-3">
+            <p className="text-xs font-medium text-muted">{label}</p>
+            <p className="truncate font-bold">{value}</p>
+            <p className="money truncate text-xs text-muted">{sub}</p>
+          </div>
+        ))}
+      </div>
+      <div className="mt-5 grid gap-5 lg:grid-cols-2">
+        <div>
+          <h3 className="mb-2 text-sm font-bold">Orders by day of the week</h3>
+          <Bars data={data.by_weekday.map((d, i) => ({ label: WEEKDAYS[i].slice(0, 3), value: d.orders }))} format={(n) => `${n} order${n === 1 ? "" : "s"}`} color="#6366f1" tick={(i) => WEEKDAYS[i].slice(0, 3)} />
+        </div>
+        <div>
+          <h3 className="mb-2 text-sm font-bold">Never sold in this period</h3>
+          {data.unsold_items.length ? (
+            <p className="text-sm text-muted">{data.unsold_items.join(", ")}</p>
+          ) : (
+            <p className="text-sm text-muted">Nothing to list. Choose one hotel to see menu items that did not sell.</p>
+          )}
+        </div>
+      </div>
+    </Panel>
+  );
+}
+
+/** The sheet that prints (or saves as PDF). Hidden on screen; the print style shows only this. */
+function PrintReport({ data, daily, range, title, admin, foodLabel }: { data: Report; daily: Point[]; range: { start: string; end: string }; title: string; admin: boolean; foodLabel: string }) {
+  const t = data.totals;
+  const x = insightsOf(data);
+  const money2 = admin ? "Earnings" : "Revenue";
+  const table = (head: string[], body: (string | number)[][], right = 1) => (
+    <table className="mb-4 w-full text-[0.8rem]">
+      <thead><tr className="border-b border-black text-left">{head.map((h, i) => <th key={h} className={clsx("py-1 pr-2 font-semibold", i >= right && "text-right")}>{h}</th>)}</tr></thead>
+      <tbody>{body.map((r, i) => <tr key={i} className="break-inside-avoid border-b border-gray-300">{r.map((c, j) => <td key={j} className={clsx("py-1 pr-2", j >= right && "text-right")}>{c}</td>)}</tr>)}</tbody>
+    </table>
+  );
+  const h2 = (s: string) => <h2 className="mt-5 mb-1 text-base font-bold break-after-avoid">{s}</h2>;
+  const days = daily.map((p) => [periodLabel(p.period, "day"), p.orders, money(admin ? p.earnings : p.net_received)]);
+  const weeks = rollup(daily, "week", admin).map((r) => [`Week of ${periodLabel(r.period, "day")}`, r.orders, money(r.value)]);
+  const months = rollup(daily, "month", admin).map((r) => [new Date(`${r.period}T12:00:00+03:00`).toLocaleDateString("en-KE", { month: "long", year: "numeric" }), r.orders, money(r.value)]);
+  const activeHours = data.by_hour.map((n, h) => ({ h, n })).filter((r) => r.n > 0);
+  return (
+    <div id="print-report" style={{ color: "#111", background: "#fff", padding: "0.5rem", fontSize: "0.85rem" }}>
+      <h1 className="text-2xl font-bold">{title}</h1>
+      <p className="mb-3">Sales and planning report · {periodLabel(range.start, "day")} to {periodLabel(range.end, "day")} · printed {new Date().toLocaleDateString("en-KE", { day: "numeric", month: "short", year: "numeric" })}</p>
+      <div className="mb-2 grid grid-cols-4 gap-3">
+        {([
+          ["Money received", money(t.net_received)],
+          ["Orders", String(t.orders)],
+          ["Average order", money(t.average_order)],
+          [foodLabel, money(t.food_sales)],
+        ] as const).map(([k, v]) => <div key={k} className="rounded border border-gray-400 p-2"><p className="text-xs">{k}</p><p className="font-bold">{v}</p></div>)}
+      </div>
+      <p>{t.deliveries} deliveries · {t.pickups} pickups · M-Pesa {money(t.mpesa)} · cash {money(t.cash)}{admin ? ` · platform earnings ${money(t.earnings)}` : ""}</p>
+      {x ? (
+        <>
+          {h2("What the numbers say")}
+          <ul className="list-disc pl-5">
+            <li>Best seller: <strong>{x.best.name}</strong> ({x.best.quantity} sold, {money(x.best.sales)}).</li>
+            {x.worst ? <li>Slowest seller: <strong>{x.worst.name}</strong> ({x.worst.quantity} sold, {money(x.worst.sales)}).</li> : null}
+            <li>Busiest day: <strong>{WEEKDAYS[x.busyDay.i]}</strong> ({orderWord(x.busyDay.orders)}). Slowest day: <strong>{WEEKDAYS[x.slowDay.i]}</strong> ({orderWord(x.slowDay.orders)}).</li>
+            <li>Busiest hour: <strong>{hourRange(x.busyHour.h)}</strong> ({orderWord(x.busyHour.n)}). Slowest hour: <strong>{hourRange(x.slowHour.h)}</strong> ({orderWord(x.slowHour.n)}).</li>
+          </ul>
+        </>
+      ) : null}
+      {h2(`${money2} by month`)}
+      {table(["Month", "Orders", money2], months)}
+      {h2(`${money2} by week`)}
+      {table(["Week", "Orders", money2], weeks)}
+      {h2(`${money2} by day`)}
+      {table(["Day", "Orders", money2], days)}
+      {h2("Day of the week")}
+      {table(["Day", "Orders", foodLabel], data.by_weekday.map((d, i) => [WEEKDAYS[i], d.orders, money(d.sales)]))}
+      {h2("Hour of the day")}
+      {table(["Hour", "Orders", foodLabel], activeHours.map((r) => [hourRange(r.h), r.n, money(data.by_hour_sales[r.h])]))}
+      {h2("All items, most sold to least sold")}
+      {table(["Item", "Sold", "Sales"], data.item_ranking.map((it) => [it.name, it.quantity, money(it.sales)]))}
+      {data.unsold_items.length ? <>{h2("Not sold at all in this period")}<p>{data.unsold_items.join(", ")}</p></> : null}
+      <p className="mt-6 text-xs">Figures come from the payment ledger, so they match the weekly statements.</p>
+    </div>
+  );
+}
+
 // --- Main --------------------------------------------------------------------------------------
 
 export function Reports({ scope, foodLabel = "Food sales" }: { scope: "hotel" | "admin"; foodLabel?: string }) {
@@ -201,6 +346,11 @@ export function Reports({ scope, foodLabel = "Food sales" }: { scope: "hotel" | 
   const report = useQuery({
     queryKey: [scope, "reports", qs.toString(), group],
     queryFn: () => api.get<Report>(`${base}?${qs}&group=${group}`),
+    refetchInterval: 60_000,
+  });
+  const daily = useQuery({
+    queryKey: [scope, "reports", qs.toString(), "day"],
+    queryFn: () => api.get<Report>(`${base}?${qs}&group=day`),
     refetchInterval: 60_000,
   });
   const payQs = `${qs}${method ? `&method=${method}` : ""}`;
@@ -235,6 +385,28 @@ export function Reports({ scope, foodLabel = "Food sales" }: { scope: "hotel" | 
 
   const t = report.data?.totals;
   const admin = scope === "admin";
+  const title = admin ? (hotelId ? (hotels.data?.items.find((h) => h.id === hotelId)?.name ?? "Report") : "All hotels and stores") : "Sales report";
+  const downloadReport = () => {
+    const d = daily.data;
+    if (!d) return;
+    const m = admin ? "Earnings" : "Revenue";
+    const rows: (string | number)[][] = [
+      [title], ["Period", range.start, "to", range.end], [],
+      ["Money received", d.totals.net_received], ["Orders", d.totals.orders], ["Average order", d.totals.average_order], [],
+      ["Month", "Orders", m], ...rollup(d.series, "month", admin).map((r) => [r.period.slice(0, 7), r.orders, r.value]), [],
+      ["Week starting", "Orders", m], ...rollup(d.series, "week", admin).map((r) => [r.period, r.orders, r.value]), [],
+      ["Day", "Orders", m], ...d.series.map((p) => [p.period, p.orders, admin ? p.earnings : p.net_received]), [],
+      ["Day of week", "Orders", "Sales"], ...d.by_weekday.map((w, i) => [WEEKDAYS[i], w.orders, w.sales]), [],
+      ["Hour", "Orders", "Sales"], ...d.by_hour.map((n, h) => [hourRange(h), n, d.by_hour_sales[h]]).filter((r) => r[1]), [],
+      ["Item", "Sold", "Sales"], ...d.item_ranking.map((i) => [i.name, i.quantity, i.sales]),
+      ...(d.unsold_items.length ? [[], ["Not sold at all", ...d.unsold_items]] : []),
+    ];
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([csvOf(rows)], { type: "text/csv;charset=utf-8" }));
+    a.download = `report-${range.start}-to-${range.end}.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
   const series = report.data?.series ?? [];
 
   return (
@@ -250,6 +422,12 @@ export function Reports({ scope, foodLabel = "Food sales" }: { scope: "hotel" | 
               <input type="date" aria-label="To" value={custom.end} min={custom.start} onChange={(e) => setCustom((c) => ({ ...c, end: e.target.value }))} className="h-10 rounded-xl border border-line bg-surface px-3 text-sm" />
             </>
           ) : null}
+          <button onClick={() => window.print()} disabled={!daily.data} className="flex h-10 items-center gap-2 rounded-xl border border-line px-3 text-sm font-semibold hover:bg-subtle disabled:opacity-60">
+            <Printer className="size-4" /> Print report
+          </button>
+          <button onClick={downloadReport} disabled={!daily.data} className="flex h-10 items-center gap-2 rounded-xl border border-line px-3 text-sm font-semibold hover:bg-subtle disabled:opacity-60">
+            <Download className="size-4" /> Report CSV
+          </button>
           {admin ? (
             <select aria-label="Hotel" value={hotelId} onChange={(e) => setHotelId(e.target.value)} className="h-10 rounded-xl border border-line bg-surface px-3 text-sm font-medium">
               <option value="">All hotels</option>
@@ -325,6 +503,8 @@ export function Reports({ scope, foodLabel = "Food sales" }: { scope: "hotel" | 
           )}
         </Panel>
       </div>
+
+      {report.data ? <PlanningInsights data={report.data} /> : null}
 
       <div className="grid gap-5 xl:grid-cols-2">
         <Panel title="Best sellers" sub="By sales in this period">
@@ -446,6 +626,17 @@ export function Reports({ scope, foodLabel = "Food sales" }: { scope: "hotel" | 
           <p className="py-8 text-center text-sm text-muted">No payments in this period.</p>
         )}
       </Panel>
+
+      <style>{`
+        #print-report { display: none; }
+        @media print {
+          @page { margin: 12mm; }
+          body * { visibility: hidden !important; }
+          #print-report, #print-report * { visibility: visible !important; }
+          #print-report { display: block !important; position: absolute; left: 0; top: 0; width: 100%; }
+        }
+      `}</style>
+      {daily.data ? <PrintReport data={daily.data} daily={daily.data.series} range={range} title={title} admin={admin} foodLabel={foodLabel} /> : null}
     </div>
   );
 }

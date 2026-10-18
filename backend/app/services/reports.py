@@ -12,7 +12,7 @@ from sqlalchemy import Select, and_, case, func, literal, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import AppError
-from app.models import Hotel, LedgerEntry, Order, OrderItem
+from app.models import Hotel, LedgerEntry, Order, OrderItem, Product
 
 EAT = timedelta(hours=3)
 MAX_DAYS = 366
@@ -171,11 +171,52 @@ async def summary(
         for n, qty, s in (await session.execute(top_q)).all()
     ]
 
+    # Every item sold, most to least, for planning (the top ten above is just the head of this).
+    rank_q = (
+        select(
+            OrderItem.name_snapshot,
+            func.sum(OrderItem.quantity),
+            func.sum(OrderItem.line_total),
+        )
+        .join(Order, Order.id == OrderItem.order_id)
+        .where(live)
+        .group_by(OrderItem.name_snapshot)
+        .order_by(func.sum(OrderItem.quantity).desc(), OrderItem.name_snapshot)
+        .limit(500)
+    )
+    item_ranking = [
+        {"name": n, "quantity": int(qty), "sales": int(sales)}
+        for n, qty, sales in (await session.execute(rank_q)).all()
+    ]
+    # Menu items that did not sell at all in the period (one hotel at a time).
+    unsold: list[str] = []
+    if hotel_id is not None:
+        sold = {i["name"] for i in item_ranking}
+        names = (
+            await session.scalars(
+                select(Product.name)
+                .where(Product.hotel_id == hotel_id, Product.is_archived.is_(False))
+                .order_by(Product.name)
+            )
+        ).all()
+        unsold = [n for n in names if n not in sold]
+
     hour = func.extract("hour", _local(Order.created_at)).label("hour")
-    hours_q = select(hour, func.count()).where(live).group_by(hour)
+    hours_q = select(hour, func.count(), func.coalesce(func.sum(Order.food_net), 0)).where(live)
+    hours_q = hours_q.group_by(hour)
     by_hour = [0] * 24
-    for h, n in (await session.execute(hours_q)).all():
+    by_hour_sales = [0] * 24
+    for h, n, sales in (await session.execute(hours_q)).all():
         by_hour[int(h)] = int(n)
+        by_hour_sales[int(h)] = int(sales)
+
+    # Monday = 0 ... Sunday = 6 (Kenya days).
+    dow = (func.extract("isodow", _local(Order.created_at)) - 1).label("dow")
+    dow_q = select(dow, func.count(), func.coalesce(func.sum(Order.food_net), 0)).where(live)
+    dow_q = dow_q.group_by(dow)
+    by_weekday = [{"orders": 0, "sales": 0} for _ in range(7)]
+    for d, n, sales in (await session.execute(dow_q)).all():
+        by_weekday[int(d)] = {"orders": int(n), "sales": int(sales)}
 
     food_q = select(
         func.coalesce(func.sum(Order.food_net), 0),
@@ -188,7 +229,16 @@ async def summary(
     totals["deliveries"] = deliveries
     totals["pickups"] = count - deliveries
 
-    out = {"totals": totals, "series": series, "top_items": top_items, "by_hour": by_hour}
+    out = {
+        "totals": totals,
+        "series": series,
+        "top_items": top_items,
+        "by_hour": by_hour,
+        "by_hour_sales": by_hour_sales,
+        "by_weekday": by_weekday,
+        "item_ranking": item_ranking,
+        "unsold_items": unsold,
+    }
     if hotel_id is None:
         hotel_q = (
             select(Hotel.id, Hotel.name, Hotel.kind, *_totals_columns())
