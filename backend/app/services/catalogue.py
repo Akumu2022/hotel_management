@@ -1,7 +1,7 @@
 """Read models for the catalogue: product lists with options (no N+1) and the public menu."""
 
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime, time, timedelta
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -48,6 +48,7 @@ def product_out(p: Product, options: list[ProductOption], storage: Storage) -> P
         price=p.price,
         prep_minutes=p.prep_minutes,
         is_sold_out=p.is_sold_out,
+        sold_out_until=p.sold_out_until,
         is_archived=p.is_archived,
         image_url=_url(storage, p.image_key),
         thumb_url=_url(storage, p.thumb_key),
@@ -63,6 +64,21 @@ async def hotel_hours(session: AsyncSession, hotel_ids: list[uuid.UUID]):
     for h in rows:
         out[h.hotel_id].append(h)
     return out
+
+
+def next_opening(hours: list[HotelHours], now: datetime) -> datetime:
+    """When the store next opens after today (Kenya time): the start of "back tomorrow".
+
+    Falls back to 04:00 tomorrow when no opening hours are set.
+    """
+    eat = timedelta(hours=3)
+    today = (now + eat).date()
+    by_day = {h.weekday: h.opens_at for h in hours}
+    for ahead in range(1, 8):
+        day = today + timedelta(days=ahead)
+        if day.weekday() in by_day:
+            return datetime.combine(day, by_day[day.weekday()], tzinfo=UTC) - eat
+    return datetime.combine(today + timedelta(days=1), time(4), tzinfo=UTC) - eat
 
 
 async def typical_prep(session: AsyncSession, hotel_ids: list[uuid.UUID]) -> dict[uuid.UUID, int]:

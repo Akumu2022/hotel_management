@@ -47,6 +47,8 @@ class Product(Base):
     price: Mapped[int] = mapped_column(Integer)
     prep_minutes: Mapped[int] = mapped_column(Integer, default=15, server_default="15")
     is_sold_out: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    # "Back tomorrow": the item goes back on sale by itself at this time (see jobs.restock_products).
+    sold_out_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     is_archived: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     image_key: Mapped[str | None] = mapped_column(String(200))
     thumb_key: Mapped[str | None] = mapped_column(String(200))

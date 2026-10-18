@@ -13,7 +13,7 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core.time import utcnow
-from app.models import Hotel, Order, OrderEvent, Payment, ReviewItem
+from app.models import Hotel, Order, OrderEvent, Payment, Product, ReviewItem
 from app.services import (
     billing,
     catalogue,
@@ -129,6 +129,16 @@ async def refund_late_payments_at_closing(session: AsyncSession, now: datetime) 
     return done
 
 
+async def restock_products(session: AsyncSession, now: datetime) -> int:
+    """Put items marked "back tomorrow" back on sale once their time has come."""
+    res = await session.execute(
+        update(Product)
+        .where(Product.sold_out_until.is_not(None), Product.sold_out_until <= now)
+        .values(is_sold_out=False, sold_out_until=None)
+    )
+    return res.rowcount or 0
+
+
 async def run_all(sessionmaker: async_sessionmaker, now: datetime | None = None) -> dict[str, int]:
     now = now or utcnow()
     out = {}
@@ -139,6 +149,7 @@ async def run_all(sessionmaker: async_sessionmaker, now: datetime | None = None)
         ("auto_rejected", order_flow.auto_reject_late),
         ("fee_answers_timed_out", delivery.answer_timeouts),
         ("billing", billing.weekly_job),
+        ("restocked", restock_products),
         ("nonces_pruned", forwarder.prune_nonces),
         ("pings_pruned", tracking.prune),
     ):

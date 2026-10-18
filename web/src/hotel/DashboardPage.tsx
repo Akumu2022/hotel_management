@@ -142,8 +142,8 @@ export function DashboardPage() {
   const noPhoto = list.filter((p) => !p.image_url);
   const pct = (a: number, b: number) => (b ? Math.round((a / b) * 100) : 0);
 
-  return (
-    <div className="flex flex-col gap-5">
+  const overview = (
+    <>
       <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
         <Stat
           icon={<UtensilsCrossed className="size-4" />}
@@ -173,8 +173,6 @@ export function DashboardPage() {
           to="/hotel/discounts"
         />
       </div>
-
-      {isAdmin ? <Reports scope="hotel" foodLabel={w("Food sales")} /> : null}
 
       <div className="grid items-start gap-5 lg:grid-cols-2">
         <section className="rounded-[1.5rem] bg-surface p-5 shadow-sm">
@@ -243,6 +241,12 @@ export function DashboardPage() {
           </div>
         </section>
       ) : null}
-    </div>
+    </>
+  );
+
+  return isAdmin ? (
+    <Reports scope="hotel" foodLabel={w("Food sales")} overview={<div className="flex flex-col gap-5">{overview}</div>} />
+  ) : (
+    <div className="flex flex-col gap-5">{overview}</div>
   );
 }

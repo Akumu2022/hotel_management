@@ -90,6 +90,7 @@ class ProductOut(Schema):
     price: int
     prep_minutes: int
     is_sold_out: bool
+    sold_out_until: datetime | None = None
     is_archived: bool
     image_url: str | None = None
     thumb_url: str | None = None
@@ -112,6 +113,7 @@ class ProductPatch(Input):
     price: Money | None = None
     prep_minutes: int | None = Field(None, ge=1, le=240)
     is_sold_out: bool | None = None
+    back_tomorrow: bool | None = None  # with is_sold_out: back on sale at the next opening
     is_archived: bool | None = None
     image_key: str | None = Field(None, max_length=200)  # explicit null removes the photo
 

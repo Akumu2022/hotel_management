@@ -4,7 +4,7 @@
  */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import clsx from "clsx";
-import { Bell, BellOff, Bike, Check, ChefHat, Clock, PackageCheck, Phone, Store, UtensilsCrossed, X } from "lucide-react";
+import { Bell, BellOff, Bike, Check, ChefHat, Clock, PackageCheck, PackageX, Phone, Store, UtensilsCrossed, X } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
 import { OrderTag } from "../components/OrderTag";
@@ -12,6 +12,7 @@ import { Badge, ErrorNote, Skeleton } from "../components/ui";
 import { api } from "../lib/api";
 import { money } from "../lib/format";
 import { useAlarmUnlocked } from "../lib/alarm";
+import { StockSheet } from "./StockSheet";
 import { useHotelSettings, useIsAdmin, useW } from "./hooks";
 
 /** Who paid, from the Till SMS, and whether it's the name given at checkout. Someone
@@ -247,6 +248,7 @@ export function OrdersPage() {
   const [handingRider, setHandingRider] = useState<BoardOrder | null>(null); // delivery: waiting for the rider's pickup PIN
   const [riderPin, setRiderPin] = useState("");
   const [note, setNote] = useState("");
+  const [stockOpen, setStockOpen] = useState(false);
 
   const refresh = useCallback(() => {
     void qc.invalidateQueries({ queryKey: ["hotel", "orders"] });
@@ -312,6 +314,12 @@ export function OrdersPage() {
 
   return (
     <div className="flex flex-col gap-5">
+      <div className="flex justify-end">
+        <button onClick={() => setStockOpen(true)} className="flex h-10 items-center gap-2 rounded-xl border border-line bg-surface px-4 text-sm font-semibold hover:bg-subtle">
+          <PackageX className="size-4" /> {w("Mark dishes finished")}
+        </button>
+      </div>
+      <StockSheet open={stockOpen} onClose={() => setStockOpen(false)} />
       {soundOn ? (
         <p className="flex items-center gap-2 text-sm font-medium text-ok">
           <Bell className="size-4" /> Alarm on: new orders keep ringing until someone accepts or rejects them.

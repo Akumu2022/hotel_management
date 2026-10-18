@@ -55,6 +55,7 @@ from app.schemas.catalogue import (
     ProductPatch,
     UploadOut,
 )
+from app.core.time import utcnow
 from app.services import audit, catalogue, media
 from app.services.auth import reset_password, revoke_all
 from app.services.media import Storage
@@ -183,7 +184,7 @@ async def create_product(body: ProductIn, user: HotelAdmin, session: Session, st
     return await _product_out(session, product, storage)
 
 
-_CASHIER_PRODUCT_FIELDS = {"is_sold_out"}
+_CASHIER_PRODUCT_FIELDS = {"is_sold_out", "back_tomorrow"}
 
 
 @router.patch("/products/{product_id}", response_model=ProductOut)
@@ -198,6 +199,14 @@ async def patch_product(
     if user.role != "hotel_admin" and set(data) - _CASHIER_PRODUCT_FIELDS:
         raise AppError(403, "forbidden", "Only the hotel admin can edit products")
     product = await get_scoped(session, Product, product_id, user.hotel_id)
+    back_tomorrow = data.pop("back_tomorrow", None)
+    if "is_sold_out" in data:
+        # Finished for today comes back at the next opening; switching on or off by hand clears it.
+        if data["is_sold_out"] and back_tomorrow:
+            hrs = (await catalogue.hotel_hours(session, [user.hotel_id]))[user.hotel_id]
+            product.sold_out_until = catalogue.next_opening(hrs, utcnow())
+        else:
+            product.sold_out_until = None
     if data.get("category_id"):
         await get_scoped(session, Category, data["category_id"], user.hotel_id)
     if "image_key" in data:

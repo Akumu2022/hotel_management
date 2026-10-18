@@ -25,6 +25,7 @@ export type Product = {
   price: number;
   prep_minutes: number;
   is_sold_out: boolean;
+  sold_out_until: string | null;
   is_archived: boolean;
   image_url: string | null;
   thumb_url: string | null;

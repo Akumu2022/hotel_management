@@ -9,6 +9,7 @@ import type { Category, Product } from "../lib/types";
 import { CategorySheet } from "./CategorySheet";
 import { FoodImage } from "../customer/FoodImage";
 import { ProductSheet } from "./ProductSheet";
+import { backAt } from "./StockSheet";
 import { keys, useCategories, useHotelSettings, useIsAdmin, useProducts, useSave, useW, useIsLiquor } from "./hooks";
 
 /** Onboarding checklist (Bonfol "Setup store 6/7"), hidden once complete. */
@@ -62,7 +63,7 @@ function SoldOutSwitch({ product }: { product: Product }) {
         disabled={save.isPending}
       />
       <span className={clsx("order-first text-xs font-semibold", soldOut ? "text-bad" : "text-ok")}>
-        {soldOut ? "Sold out" : "Available"}
+        {soldOut ? (product.sold_out_until ? backAt(product.sold_out_until) : "Sold out") : "Available"}
       </span>
     </label>
   );

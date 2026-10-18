@@ -166,11 +166,11 @@ function Panel({ title, sub, children, action }: { title: string; sub?: string; 
   );
 }
 
-function Chips<T extends string>({ value, options, onChange, label }: { value: T; options: readonly { id: T; label: string }[]; onChange: (v: T) => void; label: string }) {
+function Chips<T extends string>({ value, options, onChange, label, fill }: { value: T; options: readonly { id: T; label: string }[]; onChange: (v: T) => void; label: string; fill?: boolean }) {
   return (
-    <div role="radiogroup" aria-label={label} className="flex flex-wrap gap-1 rounded-xl bg-subtle p-1">
+    <div role="radiogroup" aria-label={label} className={clsx("gap-1 rounded-xl bg-subtle p-1", fill ? "grid grid-flow-col auto-cols-fr" : "flex flex-wrap")}>
       {options.map((o) => (
-        <button key={o.id} role="radio" aria-checked={value === o.id} onClick={() => onChange(o.id)} className={clsx("h-9 rounded-lg px-3 text-sm font-semibold", value === o.id ? "bg-surface shadow-sm" : "text-muted hover:text-ink")}>
+        <button key={o.id} role="radio" aria-checked={value === o.id} onClick={() => onChange(o.id)} className={clsx("rounded-lg text-sm font-semibold", fill ? "min-h-10 px-1 py-1.5 leading-tight" : "h-9 px-3", value === o.id ? "bg-surface shadow-sm" : "text-muted hover:text-ink")}>
           {o.label}
         </button>
       ))}
@@ -323,13 +323,14 @@ function PrintReport({ data, daily, range, title, admin, foodLabel }: { data: Re
 
 // --- Main --------------------------------------------------------------------------------------
 
-export function Reports({ scope, foodLabel = "Food sales" }: { scope: "hotel" | "admin"; foodLabel?: string }) {
+export function Reports({ scope, foodLabel = "Food sales", overview }: { scope: "hotel" | "admin"; foodLabel?: string; overview?: ReactNode }) {
   const base = scope === "admin" ? "/admin/reports" : "/hotel/reports";
   const [preset, setPreset] = useState<Preset>("7d");
   const [custom, setCustom] = useState(() => ({ start: addDays(iso(new Date()), -6), end: iso(new Date()) }));
   const [group, setGroup] = useState<"day" | "week" | "month">("day");
   const [hotelId, setHotelId] = useState("");
   const [method, setMethod] = useState<"" | "mpesa" | "cash" | "refund">("");
+  const [tab, setTab] = useState<string>(overview ? "overview" : "sales");
   const [rankBy, setRankBy] = useState<"net_received" | "earnings">("net_received");
   const range = rangeFor(preset, custom);
 
@@ -411,8 +412,25 @@ export function Reports({ scope, foodLabel = "Food sales" }: { scope: "hotel" | 
 
   return (
     <div className="flex flex-col gap-5">
+      <div className="rounded-[1.5rem] bg-surface p-2 shadow-sm sm:p-3">
+        <Chips
+          label="Dashboard section"
+          fill
+          value={tab}
+          onChange={setTab}
+          options={[
+            ...(overview ? [{ id: "overview", label: "Overview" }] : []),
+            { id: "sales", label: "Sales" },
+            ...(admin ? [{ id: "hotels", label: "Hotels & stores" }] : []),
+            { id: "planning", label: "Planning" },
+            { id: "payments", label: "Payments" },
+          ]}
+        />
+      </div>
+      {tab === "overview" ? overview : null}
+
       {/* Filters */}
-      <div className="flex flex-col gap-3 rounded-[1.5rem] bg-surface p-4 shadow-sm lg:flex-row lg:items-center lg:justify-between">
+      <div className={clsx("flex flex-col gap-3 rounded-[1.5rem] bg-surface p-4 shadow-sm lg:flex-row lg:items-center lg:justify-between", tab === "overview" && "hidden")}>
         <Chips label="Period" value={preset} options={PRESETS} onChange={setPreset} />
         <div className="flex flex-wrap items-center gap-2">
           {preset === "custom" ? (
@@ -438,7 +456,7 @@ export function Reports({ scope, foodLabel = "Food sales" }: { scope: "hotel" | 
       </div>
       <ErrorNote error={report.error} />
 
-      {!t ? (
+      {tab !== "sales" ? null : !t ? (
         <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">{[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-32 rounded-[1.5rem]" />)}</div>
       ) : admin ? (
         <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
@@ -456,7 +474,7 @@ export function Reports({ scope, foodLabel = "Food sales" }: { scope: "hotel" | 
         </div>
       )}
 
-      {admin && report.data?.by_kind ? (
+      {admin && tab === "hotels" && report.data?.by_kind ? (
         <Panel title="Hotels vs liquor stores" sub="Money received and platform earnings, side by side">
           <div className="grid gap-3 sm:grid-cols-2">
             {(["hotel", "liquor"] as const).map((k) => {
@@ -478,6 +496,7 @@ export function Reports({ scope, foodLabel = "Food sales" }: { scope: "hotel" | 
         </Panel>
       ) : null}
 
+      {tab === "sales" ? (
       <div className="grid gap-5 xl:grid-cols-[1fr_360px]">
         <Panel
           title={admin ? "Earnings over time" : "Money received over time"}
@@ -503,10 +522,12 @@ export function Reports({ scope, foodLabel = "Food sales" }: { scope: "hotel" | 
           )}
         </Panel>
       </div>
+      ) : null}
 
-      {report.data ? <PlanningInsights data={report.data} /> : null}
+      {tab === "planning" && report.data ? <PlanningInsights data={report.data} /> : null}
 
       <div className="grid gap-5 xl:grid-cols-2">
+        {tab === "planning" ? (
         <Panel title="Best sellers" sub="By sales in this period">
           {report.data?.top_items.length ? (
             <ol className="flex flex-col gap-3">
@@ -527,9 +548,10 @@ export function Reports({ scope, foodLabel = "Food sales" }: { scope: "hotel" | 
             <p className="py-8 text-center text-sm text-muted">No sales in this period yet.</p>
           )}
         </Panel>
+        ) : null}
 
-        {admin ? (
-          <Panel
+        {admin ? (tab === "hotels" ? (
+          <div className="xl:col-span-2"><Panel
             title="Hotels and stores ranked"
             sub="Highest to lowest"
             action={<Chips label="Rank by" value={rankBy} onChange={setRankBy} options={[{ id: "net_received", label: "Revenue" }, { id: "earnings", label: "Our earnings" }] as const} />}
@@ -557,8 +579,8 @@ export function Reports({ scope, foodLabel = "Food sales" }: { scope: "hotel" | 
             ) : (
               <p className="py-8 text-center text-sm text-muted">No orders in this period yet.</p>
             )}
-          </Panel>
-        ) : (
+          </Panel></div>
+        ) : null) : tab === "sales" ? (
           <Panel title="Payment methods" sub="How customers paid">
             {t && t.received ? (
               <div className="flex flex-col gap-4">
@@ -573,9 +595,10 @@ export function Reports({ scope, foodLabel = "Food sales" }: { scope: "hotel" | 
               <p className="py-8 text-center text-sm text-muted">No payments in this period yet.</p>
             )}
           </Panel>
-        )}
+        ) : null}
       </div>
 
+      {tab === "payments" ? (
       <Panel
         title="Payments history"
         sub="Every payment and refund, newest first"
@@ -626,6 +649,7 @@ export function Reports({ scope, foodLabel = "Food sales" }: { scope: "hotel" | 
           <p className="py-8 text-center text-sm text-muted">No payments in this period.</p>
         )}
       </Panel>
+      ) : null}
 
       <style>{`
         #print-report { display: none; }
