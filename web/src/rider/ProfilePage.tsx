@@ -2,7 +2,7 @@
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import clsx from "clsx";
 import { Bike, Star } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { HelpButton } from "../customer/bits";
 import { useConfig } from "../customer/OrderPanel";
@@ -10,7 +10,7 @@ import { api } from "../lib/api";
 import { money } from "../lib/format";
 import type { RiderMe } from "./RiderHome";
 
-type Group = "waiting" | "on_the_way" | "delivered" | "failed" | "cancelled";
+export type Group = "waiting" | "on_the_way" | "delivered" | "failed" | "cancelled";
 type SummaryOrder = { code: string; hotel_name: string; status: string; group: Group; rider_fee: number; at: string };
 type Summary = { counts: Record<Group, number>; earned: number; open_now: number; orders: SummaryOrder[]; has_more: boolean };
 type Earnings = { owed: number; payouts: { id: string; amount: number; mpesa_code: string; paid_at: string }[] };
@@ -48,7 +48,7 @@ const PERIODS = [
   { id: "month", label: "This month" },
   { id: "all", label: "All time" },
 ] as const;
-type Period = (typeof PERIODS)[number]["id"];
+export type Period = (typeof PERIODS)[number]["id"];
 
 const GROUPS: { id: Group; label: string; tone: string }[] = [
   { id: "delivered", label: "Delivered", tone: "bg-ok-soft text-ok" },
@@ -155,40 +155,168 @@ function Breakdown({ owed }: { owed: number | undefined }) {
   );
 }
 
+const PAGE_SIZE = 10;
+
+/** Period tabs, earnings and outcome tiles. The tile you tap filters the list under it. */
+export function OrdersSummary({ owed, period, setPeriod, only, setOnly }: { owed: number | undefined; period: Period; setPeriod: (p: Period) => void; only: Group | null; setOnly: (g: Group | null) => void }) {
+  const q = useQuery({
+    queryKey: ["rider", "summary", period, "counts"],
+    queryFn: () => api.get<Summary>(`/rider/summary?period=${period}&limit=1`),
+    refetchInterval: 30_000,
+    placeholderData: (prev) => prev,
+  });
+  const s = q.data;
+  return (
+    <section className="rounded-3xl bg-surface p-5 shadow-sm">
+      <h2 className="mb-3 text-sm font-bold">My orders</h2>
+      <div role="tablist" className="mb-4 grid grid-cols-4 gap-1 rounded-xl bg-subtle p-1">
+        {PERIODS.map((p) => (
+          <button
+            key={p.id}
+            role="tab"
+            aria-selected={period === p.id}
+            onClick={() => setPeriod(p.id)}
+            className={clsx("h-9 rounded-lg text-xs font-semibold sm:text-sm", period === p.id ? "bg-surface shadow-sm" : "text-muted")}
+          >
+            {p.label}
+          </button>
+        ))}
+      </div>
+      <div className="mb-3 grid grid-cols-2 gap-3">
+        <div className="rounded-2xl bg-ok-soft/60 p-4">
+          <p className="text-xs text-muted">Earned from deliveries</p>
+          <p className="money text-xl font-extrabold text-ok">{s ? money(s.earned) : "…"}</p>
+        </div>
+        <div className="rounded-2xl bg-subtle p-4">
+          <p className="text-xs text-muted">Owed to you</p>
+          <p className="money text-xl font-extrabold">{owed == null ? "…" : money(owed)}</p>
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+        {GROUPS.map((g) => (
+          <button
+            key={g.id}
+            onClick={() => setOnly(only === g.id ? null : g.id)}
+            aria-pressed={only === g.id}
+            className={clsx("rounded-2xl p-3 text-left ring-2 transition", g.tone, only === g.id ? "ring-current" : "ring-transparent")}
+          >
+            <span className="money block text-2xl font-extrabold">{s ? s.counts[g.id] : "–"}</span>
+            <span className="block text-xs font-semibold">{g.label}</span>
+          </button>
+        ))}
+        <div className="rounded-2xl bg-subtle p-3 text-muted">
+          <span className="money block text-2xl font-extrabold">{s ? s.open_now : "–"}</span>
+          <span className="block text-xs font-semibold">Open to take now</span>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/** The orders behind the tile picked above (delivered by default), ten a page with page numbers. */
+export function OrdersList({ period, only }: { period: Period; only: Group | null }) {
+  const [page, setPage] = useState(0);
+  useEffect(() => setPage(0), [period, only]);
+  const q = useQuery({
+    queryKey: ["rider", "summary", period, only, "page", page],
+    queryFn: () => api.get<Summary>(`/rider/summary?period=${period}&limit=${PAGE_SIZE}&offset=${page * PAGE_SIZE}${only ? `&group=${only}` : ""}`),
+    refetchInterval: 30_000,
+    placeholderData: (prev) => prev,
+  });
+  const s = q.data;
+  const total = s ? (only ? s.counts[only] : Object.values(s.counts).reduce((a, b) => a + b, 0)) : 0;
+  const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const label = only ? GROUPS.find((g) => g.id === only)!.label : "All orders";
+  // Up to five page numbers around the current one.
+  const first = Math.min(Math.max(0, page - 2), Math.max(0, pages - 5));
+  const numbers = Array.from({ length: Math.min(5, pages) }, (_, i) => first + i);
+
+  return (
+    <section className="rounded-3xl bg-surface p-5 shadow-sm">
+      <h2 className="mb-1 flex items-baseline justify-between text-lg font-bold">
+        Recent deliveries <span className="text-xs font-semibold text-muted">{label} · {total}</span>
+      </h2>
+      <ul className="divide-y divide-line text-sm">
+        {(s?.orders ?? []).map((o) => {
+          const g = GROUPS.find((x) => x.id === o.group)!;
+          return (
+            <li key={o.code} className="flex items-center justify-between gap-3 py-2.5">
+              <span className="min-w-0">
+                <span className="money block font-bold">#{o.code} <span className="font-normal text-muted">· {o.hotel_name}</span></span>
+                <span className="block text-xs text-muted">{when.format(new Date(o.at))}</span>
+              </span>
+              <span className="flex shrink-0 flex-col items-end gap-1">
+                <span className={clsx("rounded-full px-2.5 py-0.5 text-xs font-semibold", g.tone)}>{g.label}</span>
+                {o.group === "delivered" ? <span className="money text-xs font-bold text-ok">{money(o.rider_fee)}</span> : null}
+              </span>
+            </li>
+          );
+        })}
+        {s && s.orders.length === 0 ? <li className="py-6 text-center text-muted">No orders here for this time.</li> : null}
+        {!s ? <li className="py-6 text-center text-muted">Loading…</li> : null}
+      </ul>
+      {pages > 1 ? (
+        <nav aria-label="Pages" className="mt-3 flex items-center justify-center gap-1.5">
+          <button onClick={() => setPage(page - 1)} disabled={page === 0} className="h-10 rounded-xl border border-line px-3 text-sm font-semibold disabled:opacity-40">Prev</button>
+          {numbers.map((n) => (
+            <button
+              key={n}
+              onClick={() => setPage(n)}
+              aria-current={n === page ? "page" : undefined}
+              className={clsx("money size-10 rounded-xl text-sm font-bold", n === page ? "bg-brand text-white" : "border border-line")}
+            >
+              {n + 1}
+            </button>
+          ))}
+          <button onClick={() => setPage(page + 1)} disabled={page >= pages - 1} className="h-10 rounded-xl border border-line px-3 text-sm font-semibold disabled:opacity-40">Next</button>
+        </nav>
+      ) : null}
+    </section>
+  );
+}
+
+/** Name, photo, status, online and rating. */
+export function ProfileCard({ me }: { me: RiderMe }) {
+  const approved = me.kyc_status === "approved";
+  const status = STATUS[me.kyc_status];
+  return (
+    <section className="flex items-center gap-4 rounded-3xl bg-surface p-5 shadow-sm">
+      {me.photo_url ? (
+        <img src={me.photo_url} alt="" className="size-20 shrink-0 rounded-full object-cover ring-2 ring-brand/30" />
+      ) : (
+        <span className="flex size-20 shrink-0 items-center justify-center rounded-full bg-brand-soft text-brand"><Bike className="size-9" /></span>
+      )}
+      <div className="min-w-0">
+        <h1 className="truncate text-xl font-bold">{me.name}</h1>
+        <p className="money text-sm text-muted">{localPhone(me.phone)}</p>
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <span className={clsx("rounded-full px-2.5 py-1 text-xs font-semibold", status.tone)}>{status.text}</span>
+          {approved ? (
+            <span className={clsx("rounded-full px-2.5 py-1 text-xs font-semibold", me.is_online ? "bg-ok-soft text-ok" : "bg-subtle text-muted")}>
+              {me.is_online ? "Online" : "Offline"}
+            </span>
+          ) : null}
+          {me.rating != null ? (
+            <span className="flex items-center gap-1 rounded-full bg-warn-soft px-2.5 py-1 text-xs font-semibold text-warn">
+              <Star className="size-3.5 fill-current" /> {me.rating.toFixed(1)} ({me.rating_count})
+            </span>
+          ) : null}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export function ProfileView({ me }: { me: RiderMe }) {
   const config = useConfig();
   const approved = me.kyc_status === "approved";
   const earnings = useQuery({ queryKey: ["rider", "earnings"], queryFn: () => api.get<Earnings>("/rider/earnings"), enabled: approved });
 
-  const status = STATUS[me.kyc_status];
   const idShown = me.national_id ? `${"•".repeat(Math.max(me.national_id.length - 3, 0))}${me.national_id.slice(-3)}` : "";
 
   return (
     <div className="flex flex-col gap-4">
-      <section className="flex items-center gap-4 rounded-3xl bg-surface p-5 shadow-sm">
-        {me.photo_url ? (
-          <img src={me.photo_url} alt="" className="size-20 shrink-0 rounded-full object-cover ring-2 ring-brand/30" />
-        ) : (
-          <span className="flex size-20 shrink-0 items-center justify-center rounded-full bg-brand-soft text-brand"><Bike className="size-9" /></span>
-        )}
-        <div className="min-w-0">
-          <h1 className="truncate text-xl font-bold">{me.name}</h1>
-          <p className="money text-sm text-muted">{localPhone(me.phone)}</p>
-          <div className="mt-2 flex flex-wrap items-center gap-2">
-            <span className={clsx("rounded-full px-2.5 py-1 text-xs font-semibold", status.tone)}>{status.text}</span>
-            {approved ? (
-              <span className={clsx("rounded-full px-2.5 py-1 text-xs font-semibold", me.is_online ? "bg-ok-soft text-ok" : "bg-subtle text-muted")}>
-                {me.is_online ? "Online" : "Offline"}
-              </span>
-            ) : null}
-            {me.rating != null ? (
-              <span className="flex items-center gap-1 rounded-full bg-warn-soft px-2.5 py-1 text-xs font-semibold text-warn">
-                <Star className="size-3.5 fill-current" /> {me.rating.toFixed(1)} ({me.rating_count})
-              </span>
-            ) : null}
-          </div>
-        </div>
-      </section>
+      <ProfileCard me={me} />
 
       {me.kyc_note && me.kyc_status !== "approved" ? (
         <p className="rounded-2xl bg-bad-soft p-4 text-sm text-bad">{me.kyc_note}</p>

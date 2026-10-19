@@ -2,8 +2,10 @@
  * customer's 4-digit code. Big buttons for one-handed use on a bike. */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import clsx from "clsx";
-import { AlertTriangle, Banknote, Bike, CheckCircle2, MapPin, Navigation, Phone, Power, Store } from "lucide-react";
+import { AlertTriangle, Banknote, Bell, Bike, CheckCircle2, MapPin, Navigation, Phone, Power, Store } from "lucide-react";
 import { useEffect, useState } from "react";
+
+import { type Group, OrdersList, OrdersSummary, type Period, ProfileCard } from "./ProfilePage";
 
 import { useAlarm } from "../lib/alarm";
 
@@ -410,7 +412,8 @@ export function JobsPage({ me }: { me: RiderMe }) {
 
   const qc = useQueryClient();
   const jobs = useQuery({ queryKey: ["rider", "jobs"], queryFn: () => api.get<Job[]>("/rider/jobs"), refetchInterval: 20_000 });
-  const history = useQuery({ queryKey: ["rider", "history"], queryFn: () => api.get<Job[]>("/rider/jobs/history") });
+  const [period, setPeriod] = useState<Period>("today");
+  const [only, setOnly] = useState<Group | null>("delivered");
   const onTheRoad = (jobs.data ?? []).some((j) => j.mine && (j.status === "picked_up" || j.status === "on_the_way"));
   const location = useShareLocation(me.is_online, onTheRoad);
   useKeepAwake(onTheRoad);
@@ -444,11 +447,34 @@ export function JobsPage({ me }: { me: RiderMe }) {
   // you're online and free until you (or another rider) take one.
   useAlarm("rider-assigned", assignedNew.length, "job", "New job for you");
   useAlarm("rider-open", me.is_online && mine.length === 0 ? open.length : 0, "job", "Delivery job waiting");
-  const today = new Date().toDateString();
-  const doneToday = (history.data ?? []).filter((j) => j.status === "delivered" && j.closed_at && new Date(j.closed_at).toDateString() === today);
+  const openWaiting = me.is_online && mine.length === 0 ? open.length : 0;
 
   return (
     <div className="flex flex-col gap-5">
+      {/* Needs you now: tap to jump to the jobs */}
+      {assignedNew.length || mine.length || openWaiting ? (
+        <a
+          href="#jobs"
+          role="alert"
+          className={clsx(
+            "flex animate-pulse items-center gap-3 rounded-2xl px-4 py-3 text-white shadow-lg",
+            assignedNew.length || openWaiting ? "bg-bad shadow-bad/30" : "bg-brand shadow-brand/30",
+          )}
+        >
+          <Bell className="size-6 shrink-0" />
+          <span className="flex-1 text-[0.9375rem] font-extrabold">
+            {assignedNew.length
+              ? `New job for you: #${assignedNew[0].code}`
+              : mine.length
+                ? `Active order #${mine[0].code}: keep going`
+                : `${openWaiting} open job${openWaiting === 1 ? "" : "s"} waiting. Take one now`}
+          </span>
+          <span className="text-sm font-bold">View ↓</span>
+        </a>
+      ) : null}
+
+      <ProfileCard me={me} />
+
       {/* Online switch */}
       <button
         onClick={() => online.mutate(!me.is_online)}
@@ -485,19 +511,9 @@ export function JobsPage({ me }: { me: RiderMe }) {
         </div>
       ) : null}
 
-      <div className="grid grid-cols-2 gap-3">
-        <div className="rounded-2xl bg-surface p-4 text-center shadow-sm">
-          <p className="text-2xl font-extrabold">{doneToday.length}</p>
-          <p className="text-sm text-muted">Deliveries today</p>
-        </div>
-        <div className="rounded-2xl bg-surface p-4 text-center shadow-sm">
-          <p className="money text-2xl font-extrabold">{money(doneToday.reduce((s, j) => s + j.rider_fee, 0))}</p>
-          <p className="text-sm text-muted">Earned today</p>
-        </div>
-      </div>
+      <OrdersSummary owed={earnings.data?.owed} period={period} setPeriod={setPeriod} only={only} setOnly={setOnly} />
 
-      {earnings.data ? <EarningsCard e={earnings.data} /> : null}
-
+      <div id="jobs" className="flex scroll-mt-24 flex-col gap-5">
       {jobs.isLoading ? <Skeleton className="h-48 rounded-3xl" /> : null}
       {assignedNew.map((j) => (
         <div key={`ack-${j.id}`} className="flex animate-pulse items-center gap-3 rounded-3xl bg-brand p-5 text-white shadow-lg">
@@ -511,9 +527,13 @@ export function JobsPage({ me }: { me: RiderMe }) {
       ))}
       {mine.map((j) => <MyJob key={j.id} j={j} act={act} />)}
 
-      <section>
+      <section className={clsx(openWaiting ? "rounded-3xl bg-bad-soft p-3 ring-2 ring-bad" : "")}>
         <h2 className="mb-3 flex items-center justify-between text-lg font-bold">
-          Open jobs <span className="rounded-full bg-subtle px-2.5 py-0.5 text-sm">{open.length}</span>
+          <span className="flex items-center gap-2">
+            {openWaiting ? <span className="size-3 animate-ping rounded-full bg-bad" /> : null}
+            Open jobs
+          </span>
+          <span className={clsx("rounded-full px-2.5 py-0.5 text-sm", openWaiting ? "bg-bad text-white" : "bg-subtle")}>{open.length}</span>
         </h2>
         {!me.is_online ? (
           <p className="rounded-2xl border border-dashed border-line py-8 text-center text-sm text-muted">Go online to see and take jobs.</p>
@@ -543,19 +563,11 @@ export function JobsPage({ me }: { me: RiderMe }) {
         <ErrorNote error={claim.error} />
       </section>
 
-      {history.data?.length ? (
-        <section>
-          <h2 className="mb-3 text-lg font-bold">Recent deliveries</h2>
-          <ul className="divide-y divide-line rounded-3xl bg-surface px-5 shadow-sm">
-            {history.data.slice(0, 10).map((j) => (
-              <li key={j.id} className="flex items-center justify-between gap-2 py-3 text-sm">
-                <span><strong>#{j.code}</strong> · {j.hotel_name}{j.fee_not_paid ? <span className="text-bad"> · fee not paid (reported)</span> : null}</span>
-                <span className={clsx("money font-bold", j.status === "delivered" ? "text-ok" : "text-bad")}>{j.status === "delivered" ? money(j.rider_fee) : "Failed"}</span>
-              </li>
-            ))}
-          </ul>
-        </section>
-      ) : null}
+      </div>
+
+      <OrdersList period={period} only={only} />
+
+      {earnings.data ? <EarningsCard e={earnings.data} /> : null}
     </div>
   );
 }

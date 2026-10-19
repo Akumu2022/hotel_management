@@ -75,12 +75,8 @@ async def list_hotels(
             card.distance_km = round(near[h.id], 1)
             card.pickup_only = near[h.id] > values.max_delivery_km
         out.append((card, stars[h.id].rank_score))
-    if near is not None:
-        # Near you: open hotels first, then the closest, then the best rated.
-        out.sort(key=lambda c: (not c[0].is_open, c[0].distance_km, -c[1], c[0].name))
-    else:
-        # Open hotels first, then the best rated, then by name.
-        out.sort(key=lambda c: (not c[0].is_open, -c[1], c[0].name))
+    # Open hotels first, then the best rated; near you, distance only breaks ties.
+    out.sort(key=lambda c: (not c[0].is_open, -c[1], c[0].distance_km or 0, c[0].name))
     return [c for c, _ in out]
 
 
