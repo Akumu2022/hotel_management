@@ -59,6 +59,8 @@ export type PublicOffer = {
   ends_at: string | null;
 };
 
+export type PublicPromo = { code: string; worth: string; ends_at: string | null };
+
 export type OrderType = "delivery" | "pickup" | "eat_in";
 export type RiderFeeMode = "included" | "cash" | "none";
 

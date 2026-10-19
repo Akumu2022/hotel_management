@@ -109,6 +109,8 @@ class Discount(Base):
     ends_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     max_uses: Mapped[int | None] = mapped_column(Integer)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
+    # A promo code shown to customers as a coupon card; private codes are shared by the hotel.
+    is_public: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     # Happy hour, Kenya time: weekdays bitmask (Mon = 1 ... Sun = 64) and a
     # daily window in minutes from midnight. NULL = every day / all day.
     days_mask: Mapped[int | None] = mapped_column(Integer)

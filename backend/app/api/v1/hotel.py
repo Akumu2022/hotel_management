@@ -8,7 +8,7 @@ import uuid
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, UploadFile
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.exc import IntegrityError
 
 from app.api.deps import (
@@ -323,6 +323,7 @@ async def create_discount(body: DiscountIn, user: HotelAdmin, session: Session):
         ends_at=body.ends_at,
         max_uses=body.max_uses,
         is_active=body.is_active,
+        is_public=body.is_public and body.promo_code is not None,
         days_mask=body.days_mask,
         daily_from=body.daily_from,
         daily_to=body.daily_to,
@@ -342,16 +343,43 @@ async def patch_discount(
 ):
     discount = await get_scoped(session, Discount, discount_id, user.hotel_id)
     data = body.model_dump(exclude_unset=True)
-    if data.get("is_active") is None:
-        data.pop("is_active", None)
+    for key in ("is_active", "starts_at", "is_public"):
+        if data.get(key, True) is None:
+            data.pop(key)
     for key, value in data.items():
         setattr(discount, key, value)
     if discount.ends_at is not None and discount.ends_at <= discount.starts_at:
         raise AppError(422, "validation_error", "The end must be after the start")
     if discount.max_uses is not None and discount.promo_code is None:
         raise AppError(422, "validation_error", "A total use limit only applies to promo codes")
+    if discount.is_public and discount.promo_code is None:
+        raise AppError(422, "validation_error", "Only promo codes can be shown to customers")
     await session.commit()
     return (await _discount_out(session, [discount]))[0]
+
+
+@router.delete("/discounts/{discount_id}", status_code=204)
+async def delete_discount(discount_id: uuid.UUID, user: HotelAdmin, session: Session):
+    discount = await get_scoped(session, Discount, discount_id, user.hotel_id)
+    used = (
+        await session.execute(select(Order.id).where(Order.discount_id == discount.id).limit(1))
+    ).first() or (
+        await session.execute(
+            select(PromoRedemption.id).where(PromoRedemption.discount_id == discount.id).limit(1)
+        )
+    ).first()
+    if used:
+        raise AppError(
+            409,
+            "in_use",
+            "This discount is on past orders, so it can't be deleted. Switch it off instead.",
+        )
+    # Banners that pointed at it keep working, just without the link.
+    await session.execute(
+        update(Offer).where(Offer.discount_id == discount.id).values(discount_id=None)
+    )
+    await session.delete(discount)
+    await session.commit()
 
 
 # --- Offers -----------------------------------------------------------------------------------
@@ -435,6 +463,7 @@ async def _settings_out(session, hotel: Hotel, storage: Storage) -> HotelSetting
     )
     return HotelSettingsOut(
         name=hotel.name,
+        slug=hotel.slug,
         kind=hotel.kind,
         phone=hotel.phone,
         till_number=hotel.till_number,

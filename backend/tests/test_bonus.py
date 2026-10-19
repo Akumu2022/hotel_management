@@ -327,3 +327,71 @@ async def test_hotel_creates_happy_hour(client, db):
         },
     )
     assert r.status_code == 422
+
+
+async def test_hotel_edits_and_deletes_discount(client, db):
+    from tests.factories import auth_header
+
+    hotel = await make_hotel(db)
+    admin = auth_header(await make_user(db, "hotel_admin", hotel))
+    r = await client.post(
+        "/api/v1/hotel/discounts",
+        headers=admin,
+        json={"scope": "order", "kind": "percent", "percent": 10, "starts_at": "2026-10-01T00:00:00Z"},
+    )
+    assert r.status_code == 201, r.text
+    did = r.json()["id"]
+    r = await client.patch(
+        f"/api/v1/hotel/discounts/{did}",
+        headers=admin,
+        json={"starts_at": "2026-10-02T00:00:00Z", "ends_at": "2026-10-09T00:00:00Z"},
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["starts_at"].startswith("2026-10-02")
+    r = await client.patch(
+        f"/api/v1/hotel/discounts/{did}", headers=admin, json={"ends_at": "2026-10-01T00:00:00Z"}
+    )
+    assert r.status_code == 422
+    r = await client.delete(f"/api/v1/hotel/discounts/{did}", headers=admin)
+    assert r.status_code == 204
+    r = await client.delete(f"/api/v1/hotel/discounts/{did}", headers=admin)
+    assert r.status_code == 404
+
+
+def test_ten_percent_code_takes_100_off_1000():
+    p = DiscountInfo(
+        id=uuid.uuid4(),
+        scope="order",
+        kind="percent",
+        value=1000,  # 10 %
+        starts_at=NOW - timedelta(days=1),
+        promo_code="SAVE10",
+    )
+    q = price(1000, promo_code="save10", promo=p)
+    assert q.promo_error is None
+    assert q.order_discount == 100
+    assert q.food_net == 900  # what the client pays for food, the till gets it, commission is on it
+
+
+async def test_public_promo_cards(client, db):
+    from tests.factories import auth_header
+
+    hotel = await make_hotel(db)
+    admin = auth_header(await make_user(db, "hotel_admin", hotel))
+    base = {"scope": "order", "kind": "percent", "percent": 10, "starts_at": "2026-01-01T00:00:00Z"}
+    for code, public in (("SHOWN", True), ("HIDDEN", False)):
+        r = await client.post(
+            "/api/v1/hotel/discounts",
+            headers=admin,
+            json={**base, "promo_code": code, "is_public": public},
+        )
+        assert r.status_code == 201, r.text
+    got = (await client.get(f"/api/v1/hotels/{hotel.slug}/promos")).json()
+    assert [(p["code"], p["worth"]) for p in got] == [("SHOWN", "10% off your order")]
+    did = (await client.get("/api/v1/hotel/discounts", headers=admin)).json()
+    shown = next(d for d in did if d["promo_code"] == "SHOWN")
+    await client.patch(f"/api/v1/hotel/discounts/{shown['id']}", headers=admin, json={"is_active": False})
+    assert (await client.get(f"/api/v1/hotels/{hotel.slug}/promos")).json() == []
+    # A discount with no code can't be shown as a coupon.
+    r = await client.post("/api/v1/hotel/discounts", headers=admin, json={**base, "is_public": True})
+    assert r.json()["is_public"] is False

@@ -48,6 +48,7 @@ export type Discount = {
   max_uses: number | null;
   uses: number;
   is_active: boolean;
+  is_public?: boolean; // a promo code shown to customers as a coupon card
   days_mask?: number | null; // happy hour: Mon = 1 ... Sun = 64
   daily_from?: number | null; // minutes from midnight, Kenya time
   daily_to?: number | null;
@@ -69,6 +70,7 @@ export type DayHours = { weekday: number; opens_at: string; closes_at: string };
 export type HotelSettings = {
   kind?: "hotel" | "liquor";
   name: string;
+  slug?: string | null;
   phone: string;
   till_number: string;
   till_name: string | null;

@@ -154,6 +154,7 @@ class DiscountOut(Schema):
     max_uses: int | None
     uses: int = 0
     is_active: bool
+    is_public: bool = False
     days_mask: int | None = None
     daily_from: int | None = None
     daily_to: int | None = None
@@ -182,6 +183,7 @@ class DiscountIn(Input):
     ends_at: datetime | None = None
     max_uses: int | None = Field(None, ge=1, le=1_000_000)
     is_active: bool = True
+    is_public: bool = False
     # Happy hour, Kenya time: weekdays bitmask Mon = 1 ... Sun = 64, and a daily window
     # in minutes from midnight (15:00-17:00 = 900-1020). Leave out for every day / all day.
     days_mask: int | None = Field(None, ge=1, le=127)
@@ -211,9 +213,11 @@ class DiscountPatch(Input):
     """Terms of a discount are fixed once created (orders refer to it); only its dates, limit
     and on/off switch can change. Create a new discount to change the amount."""
 
+    starts_at: datetime | None = None
     ends_at: datetime | None = None
     max_uses: int | None = Field(None, ge=1, le=1_000_000)
     is_active: bool | None = None
+    is_public: bool | None = None
 
 
 class OfferOut(Schema):
@@ -270,6 +274,7 @@ class DayHours(Input):
 
 class HotelSettingsOut(Schema):
     name: str
+    slug: str | None = None
     kind: str = "hotel"
     phone: str
     till_number: str
@@ -394,4 +399,12 @@ class PublicOffer(Schema):
     title: str
     image_url: str | None
     product_id: uuid.UUID | None
+    ends_at: datetime | None
+
+
+class PublicPromo(Schema):
+    """A coupon card on the hotel's page: the code and what it is worth."""
+
+    code: str
+    worth: str  # "10% off your order over KES 500"
     ends_at: datetime | None

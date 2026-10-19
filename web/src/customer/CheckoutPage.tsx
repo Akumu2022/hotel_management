@@ -123,8 +123,15 @@ export function CheckoutPage() {
   const [phone, setPhone] = useState(saved.phone);
   const [landmark, setLandmark] = useState(saved.landmark);
   const [pin, setPin] = useState(saved.lat !== null && saved.lng !== null ? { lat: saved.lat, lng: saved.lng } : null);
-  const [promoInput, setPromoInput] = useState("");
-  const [promo, setPromo] = useState("");
+  const [shared] = useState(() => {
+    try {
+      return localStorage.getItem("hm.promo") ?? "";
+    } catch {
+      return "";
+    }
+  });
+  const [promoInput, setPromoInput] = useState(shared);
+  const [promo, setPromo] = useState(shared); // a code from a shared link is applied for them
   const [idemKey, setIdemKey] = useState(newKey);
   const [placing, setPlacing] = useState(false);
   const [placeError, setPlaceError] = useState<string | null>(null);
@@ -239,6 +246,11 @@ export function CheckoutPage() {
         at: new Date().toISOString(),
       });
       cart.clear();
+      try {
+        localStorage.removeItem("hm.promo");
+      } catch {
+        /* nothing stored */
+      }
       navigate(`/o/${placed.tracking_token}`, { replace: true });
     } catch (err) {
       if (err instanceof ApiError && err.code === "price_changed" && err.extra?.quote) setChangedTo(err.extra.quote as Quote);
@@ -557,7 +569,13 @@ export function CheckoutPage() {
                   className={clsx(inputCls, "h-11 uppercase placeholder:normal-case")}
                   placeholder={t("Promo code (optional)")}
                   value={promoInput}
-                  onChange={(e) => setPromoInput(e.target.value.toUpperCase())}
+                  onChange={(e) => setPromoInput(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""))}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      setPromo(promoInput.trim());
+                    }
+                  }}
                 />
                 <button
                   type="button"

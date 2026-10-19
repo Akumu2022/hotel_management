@@ -5,7 +5,7 @@ import { Badge, Button, Card, EmptyState, ErrorNote, Field, Input, MoneyInput, S
 import { api } from "../lib/api";
 import { isoToLocal, localToIso, money, when } from "../lib/format";
 import type { Discount, Product } from "../lib/types";
-import { keys, useDiscounts, useIsAdmin, useProducts, useSave, useW } from "./hooks";
+import { keys, useDiscounts, useHotelSettings, useIsAdmin, useProducts, useSave, useW } from "./hooks";
 
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const toMin = (hhmm: string) => Number(hhmm.slice(0, 2)) * 60 + Number(hhmm.slice(3, 5));
@@ -35,23 +35,69 @@ function status(d: Discount): { label: string; tone: "ok" | "warn" | "neutral" }
   return { label: "Live", tone: "ok" };
 }
 
-function NewDiscountSheet({ products, onClose }: { products: Product[]; onClose: () => void }) {
+/** A short, easy-to-type code like "SAVE10K7P" (no 0/O/1/I to mix up). */
+function suggestCode(percent: string): string {
+  const letters = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  const tail = Array.from({ length: 3 }, () => letters[Math.floor(Math.random() * letters.length)]).join("");
+  const n = Number(percent);
+  return `SAVE${n > 0 && n < 100 ? Math.round(n) : ""}${tail}`;
+}
+
+function ShareCode({ d }: { d: Discount }) {
+  const settings = useHotelSettings().data;
+  const [done, setDone] = useState(false);
+  if (!d.promo_code || !settings?.slug) return null;
+  const link = `${window.location.origin}/h/${settings.slug}?promo=${d.promo_code}`;
+  const off = d.kind === "percent" ? `${d.percent}% off` : `${money(d.value)} off`;
+  const text = `Get ${off} at ${settings.name}! Use code ${d.promo_code}, or tap: ${link}`;
+  async function share() {
+    try {
+      if (navigator.share) await navigator.share({ text });
+      else await navigator.clipboard.writeText(text);
+      setDone(true);
+      setTimeout(() => setDone(false), 1500);
+    } catch {
+      /* share sheet closed */
+    }
+  }
+  return (
+    <Button variant="ghost" size="sm" onClick={share}>
+      {done ? "Copied" : "Share"}
+    </Button>
+  );
+}
+
+/** Public: a coupon card on the menu page anyone can claim. Private: the hotel shares the code itself. */
+function ShowToggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <label className="flex items-start gap-2 rounded-xl border border-line p-3 text-sm">
+      <input type="checkbox" className="mt-1" checked={checked} onChange={(e) => onChange(e.target.checked)} />
+      <span>
+        <span className="block font-medium">Show to everyone as a coupon card</span>
+        <span className="text-muted">Customers see the code on your menu page and tap Claim. Leave off to share the code yourself with the Share button.</span>
+      </span>
+    </label>
+  );
+}
+
+function NewDiscountSheet({ products, copyOf, onClose }: { products: Product[]; copyOf?: Discount; onClose: () => void }) {
   const w = useW();
-  const [scope, setScope] = useState<"order" | "item">("order");
-  const [productId, setProductId] = useState(products[0]?.id ?? "");
-  const [kind, setKind] = useState<"percent" | "fixed">("percent");
-  const [percent, setPercent] = useState("10");
-  const [amount, setAmount] = useState<number | "">("");
-  const [minSpend, setMinSpend] = useState<number | "">("");
+  const [scope, setScope] = useState<"order" | "item">(copyOf?.scope ?? "order");
+  const [productId, setProductId] = useState(copyOf?.product_id ?? products[0]?.id ?? "");
+  const [kind, setKind] = useState<"percent" | "fixed">(copyOf?.kind ?? "percent");
+  const [percent, setPercent] = useState(String(copyOf?.percent ?? 10));
+  const [amount, setAmount] = useState<number | "">(copyOf?.kind === "fixed" ? copyOf.value : "");
+  const [minSpend, setMinSpend] = useState<number | "">(copyOf?.min_spend || "");
   const [isPromo, setIsPromo] = useState(false);
   const [code, setCode] = useState("");
   const [maxUses, setMaxUses] = useState("");
+  const [isPublic, setIsPublic] = useState(true);
   const [starts, setStarts] = useState(isoToLocal(new Date().toISOString()));
   const [ends, setEnds] = useState("");
-  const [happy, setHappy] = useState(false);
-  const [days, setDays] = useState(31); // Mon-Fri
-  const [from, setFrom] = useState("15:00");
-  const [to, setTo] = useState("17:00");
+  const [happy, setHappy] = useState(copyOf?.daily_from != null || (copyOf?.days_mask != null && copyOf.days_mask !== 127));
+  const [days, setDays] = useState(copyOf?.days_mask ?? 31); // Mon-Fri
+  const [from, setFrom] = useState(copyOf?.daily_from != null ? toHhmm(copyOf.daily_from) : "15:00");
+  const [to, setTo] = useState(copyOf?.daily_to != null ? toHhmm(copyOf.daily_to) : "17:00");
 
   const save = useSave(
     () =>
@@ -64,6 +110,7 @@ function NewDiscountSheet({ products, onClose }: { products: Product[]; onClose:
         min_spend: minSpend || 0,
         promo_code: isPromo ? code : null,
         max_uses: isPromo && maxUses ? Number(maxUses) : null,
+        is_public: isPromo && isPublic,
         starts_at: localToIso(starts),
         ends_at: ends ? localToIso(ends) : null,
         days_mask: happy ? days : null,
@@ -81,7 +128,7 @@ function NewDiscountSheet({ products, onClose }: { products: Product[]; onClose:
   return (
     <Sheet
       open
-      title="New discount"
+      title={copyOf ? "Copy of discount" : "New discount"}
       onClose={onClose}
       footer={
         <Button className="w-full" type="submit" form="discount-form" busy={save.isPending}>
@@ -178,7 +225,10 @@ function NewDiscountSheet({ products, onClose }: { products: Product[]; onClose:
           <div className="grid grid-cols-2 gap-3">
             <Field label="Promo code" hint="Letters and digits; one use per phone">
               {(id) => (
-                <Input id={id} value={code} onChange={(e) => setCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""))} required minLength={3} maxLength={20} />
+                <div className="flex gap-2">
+                  <Input id={id} value={code} onChange={(e) => setCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""))} required minLength={3} maxLength={20} />
+                  <Button type="button" variant="ghost" size="sm" onClick={() => setCode(suggestCode(kind === "percent" ? percent : ""))}>Suggest</Button>
+                </div>
               )}
             </Field>
             <Field label="Total uses" hint="Optional limit">
@@ -186,13 +236,76 @@ function NewDiscountSheet({ products, onClose }: { products: Product[]; onClose:
             </Field>
           </div>
         ) : null}
+        {isPromo ? <ShowToggle checked={isPublic} onChange={setIsPublic} /> : null}
         <ErrorNote error={save.error} />
       </form>
     </Sheet>
   );
 }
 
-function DiscountRow({ d, products, canEdit }: { d: Discount; products: Product[]; canEdit: boolean }) {
+function EditDiscountSheet({ d, products, onClose }: { d: Discount; products: Product[]; onClose: () => void }) {
+  const [starts, setStarts] = useState(isoToLocal(d.starts_at));
+  const [ends, setEnds] = useState(isoToLocal(d.ends_at));
+  const [maxUses, setMaxUses] = useState(d.max_uses ? String(d.max_uses) : "");
+  const [isPublic, setIsPublic] = useState(!!d.is_public);
+  const save = useSave(
+    () =>
+      api.patch(`/hotel/discounts/${d.id}`, {
+        starts_at: localToIso(starts),
+        ends_at: ends ? localToIso(ends) : null,
+        ...(d.promo_code ? { max_uses: maxUses ? Number(maxUses) : null, is_public: isPublic } : {}),
+      }),
+    [keys.discounts],
+  );
+  const remove = useSave(() => api.del(`/hotel/discounts/${d.id}`), [keys.discounts]);
+
+  function submit(e: FormEvent) {
+    e.preventDefault();
+    save.mutate(undefined, { onSuccess: onClose });
+  }
+
+  return (
+    <Sheet
+      open
+      title="Edit discount"
+      onClose={onClose}
+      footer={
+        <div className="flex gap-2">
+          <Button
+            variant="danger"
+            busy={remove.isPending}
+            onClick={() => window.confirm("Delete this discount? This can't be undone.") && remove.mutate(undefined, { onSuccess: onClose })}
+          >
+            Delete
+          </Button>
+          <Button className="flex-1" type="submit" form="discount-edit-form" busy={save.isPending}>
+            Save
+          </Button>
+        </div>
+      }
+    >
+      <form id="discount-edit-form" onSubmit={submit} className="flex flex-col gap-4">
+        <p className="font-medium">{describe(d, products)}</p>
+        <p className="rounded-lg bg-warn-soft px-3 py-2 text-sm text-warn">
+          The amount and what it applies to can't change, because past orders refer to them. To change them, use Copy to make a new discount and switch this one off. A discount already used on an order can't be deleted; switch it off instead.
+        </p>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Starts">{(id) => <Input id={id} type="datetime-local" value={starts} onChange={(e) => setStarts(e.target.value)} required />}</Field>
+          <Field label="Ends" hint="Optional">{(id) => <Input id={id} type="datetime-local" value={ends} onChange={(e) => setEnds(e.target.value)} />}</Field>
+        </div>
+        {d.promo_code ? (
+          <Field label="Total uses" hint={`Code ${d.promo_code}, used ${d.uses}. Empty means no limit`}>
+            {(id) => <Input id={id} inputMode="numeric" value={maxUses} onChange={(e) => setMaxUses(e.target.value.replace(/\D/g, ""))} />}
+          </Field>
+        ) : null}
+        {d.promo_code ? <ShowToggle checked={isPublic} onChange={setIsPublic} /> : null}
+        <ErrorNote error={save.error ?? remove.error} />
+      </form>
+    </Sheet>
+  );
+}
+
+function DiscountRow({ d, products, canEdit, onEdit, onCopy }: { d: Discount; products: Product[]; canEdit: boolean; onEdit: () => void; onCopy: () => void }) {
   const w = useW();
   const toggle = useSave((is_active: boolean) => api.patch(`/hotel/discounts/${d.id}`, { is_active }), [keys.discounts]);
   const s = status(d);
@@ -203,6 +316,7 @@ function DiscountRow({ d, products, canEdit }: { d: Discount; products: Product[
           <p className="font-medium">{w(describe(d, products))}</p>
           <Badge tone={s.tone}>{s.label}</Badge>
           {d.promo_code ? <Badge tone="brand">Code {d.promo_code}</Badge> : null}
+          {d.promo_code ? <Badge tone="neutral">{d.is_public ? "On menu page" : "Private"}</Badge> : null}
         </div>
         {happyHour(d) ? <p className="text-sm font-medium text-brand">{happyHour(d)}</p> : null}
         <p className="text-sm text-muted">
@@ -210,7 +324,14 @@ function DiscountRow({ d, products, canEdit }: { d: Discount; products: Product[
           {d.promo_code ? ` · used ${d.uses}${d.max_uses ? ` of ${d.max_uses}` : ""}` : ""}
         </p>
       </div>
-      {canEdit ? <Switch label="Discount on" checked={d.is_active} onChange={(v) => toggle.mutate(v)} disabled={toggle.isPending} /> : null}
+      {canEdit ? (
+        <div className="flex items-center gap-2">
+          <ShareCode d={d} />
+          <Button variant="ghost" size="sm" onClick={onCopy}>Copy</Button>
+          <Button variant="ghost" size="sm" onClick={onEdit}>Edit</Button>
+          <Switch label="Discount on" checked={d.is_active} onChange={(v) => toggle.mutate(v)} disabled={toggle.isPending} />
+        </div>
+      ) : null}
     </li>
   );
 }
@@ -221,6 +342,8 @@ export function DiscountsPage() {
   const discounts = useDiscounts();
   const products = useProducts();
   const [creating, setCreating] = useState(false);
+  const [copying, setCopying] = useState<Discount | null>(null);
+  const [editing, setEditing] = useState<Discount | null>(null);
 
   if (discounts.isLoading || products.isLoading) return <Skeleton className="h-40" />;
   if (discounts.error) return <ErrorNote error={discounts.error} />;
@@ -247,12 +370,13 @@ export function DiscountsPage() {
         <Card>
           <ul className="divide-y divide-line">
             {list.map((d) => (
-              <DiscountRow key={d.id} d={d} products={items} canEdit={isAdmin} />
+              <DiscountRow key={d.id} d={d} products={items} canEdit={isAdmin} onEdit={() => setEditing(d)} onCopy={() => setCopying(d)} />
             ))}
           </ul>
         </Card>
       )}
-      {creating ? <NewDiscountSheet products={items} onClose={() => setCreating(false)} /> : null}
+      {creating || copying ? <NewDiscountSheet products={items} copyOf={copying ?? undefined} onClose={() => { setCreating(false); setCopying(null); }} /> : null}
+      {editing ? <EditDiscountSheet d={editing} products={items} onClose={() => setEditing(null)} /> : null}
     </div>
   );
 }

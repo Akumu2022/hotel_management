@@ -5,14 +5,14 @@ import uuid
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, Header, Query, Response
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import Session
 from app.core.errors import AppError, not_found
 from app.core.time import utcnow
-from app.models import Category, Hotel, Offer, Product
-from app.schemas.catalogue import Menu, PublicHotel, PublicOffer, SearchHit
+from app.models import Category, Discount, Hotel, Offer, Product, PromoRedemption
+from app.schemas.catalogue import Menu, PublicHotel, PublicOffer, PublicPromo, SearchHit
 from app.services import catalogue, media, ratings, settings
 from app.services.media import Storage
 
@@ -157,6 +157,55 @@ async def search_dishes(
             thumb_url=storage.url(p.thumb_key) if p.thumb_key else None,
         )
         for p, c, h in rows
+    ]
+
+
+def _promo_worth(d: Discount) -> str:
+    """"10% off" / "KES 100 off", with the minimum spend when there is one."""
+    worth = f"{d.value / 100:g}% off" if d.kind == "percent" else f"KES {d.value:,} off"
+    target = " your order" if d.scope == "order" else ""
+    spend = f" over KES {d.min_spend:,}" if d.min_spend else ""
+    return f"{worth}{target}{spend}"
+
+
+@router.get("/hotels/{slug}/promos", response_model=list[PublicPromo])
+async def hotel_promos(slug: str, session: Session):
+    """Promo codes the hotel chose to show to everyone, while they can still be used."""
+    hotel = (await session.execute(select(Hotel).where(Hotel.slug == slug))).scalar_one_or_none()
+    if hotel is None:
+        raise not_found("Hotel not found")
+    now = utcnow()
+    rows = (
+        (
+            await session.execute(
+                select(Discount)
+                .where(
+                    Discount.hotel_id == hotel.id,
+                    Discount.is_public.is_(True),
+                    Discount.is_active.is_(True),
+                    Discount.promo_code.is_not(None),
+                    Discount.starts_at <= now,
+                    or_(Discount.ends_at.is_(None), Discount.ends_at > now),
+                )
+                .order_by(Discount.created_at.desc())
+            )
+        )
+        .scalars()
+        .all()
+    )
+    used = dict(
+        (
+            await session.execute(
+                select(PromoRedemption.discount_id, func.count())
+                .where(PromoRedemption.discount_id.in_([d.id for d in rows]))
+                .group_by(PromoRedemption.discount_id)
+            )
+        ).all()
+    ) if rows else {}
+    return [
+        PublicPromo(code=d.promo_code, worth=_promo_worth(d), ends_at=d.ends_at)
+        for d in rows
+        if not d.max_uses or used.get(d.id, 0) < d.max_uses
     ]
 
 

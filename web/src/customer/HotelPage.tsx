@@ -9,6 +9,7 @@ import { api } from "../lib/api";
 import { hhmm, money } from "../lib/format";
 import { isDrinks, tr, useT, useVariant } from "../lib/i18n";
 import { OfferCarousel } from "./OfferCarousel";
+import { PromoCards } from "./PromoCards";
 import { ConfirmDialog, HotelCover, JourneySteps, VerifiedBadge, categoryEmoji, etaText, toast } from "./bits";
 import { AgeGate, useAgeConfirmed } from "./age";
 import { setSection } from "./section";
@@ -238,6 +239,15 @@ export function HotelPage() {
   const liquor = menu.data?.hotel.kind === "liquor";
   const kindNow = menu.data?.hotel.kind;
   useVariant(kindNow);
+  const linkPromo = (params.get("promo") ?? "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 20);
+  useEffect(() => {
+    if (!linkPromo) return;
+    try {
+      localStorage.setItem("hm.promo", linkPromo); // applied for them at checkout
+    } catch {
+      /* private mode: they can still type it */
+    }
+  }, [linkPromo]);
   useEffect(() => {
     if (kindNow) setSection(kindNow === "liquor" ? "liquor" : "hotel"); // the header shows where you are
   }, [kindNow]);
@@ -312,12 +322,18 @@ export function HotelPage() {
           </div>
         ) : null}
 
+        {linkPromo ? (
+          <p className="mt-4 rounded-xl bg-ok-soft px-4 py-3 text-sm font-semibold text-ok">
+            🎉 Promo code {linkPromo} is saved. We'll apply it at checkout.
+          </p>
+        ) : null}
         {hotelOffers.length ? (
           <section className="mt-5">
             <h2 className="mb-3 flex items-center gap-2 text-lg font-extrabold">🔥 {t("Hot deals")}</h2>
             <OfferCarousel offers={hotelOffers} wide cta={t("Order now")} />
           </section>
         ) : null}
+        <PromoCards slug={slug} />
 
         {/* Search and sort */}
         <div className="mt-5 flex gap-2">
