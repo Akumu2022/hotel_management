@@ -20,6 +20,7 @@ from app.api.deps import (
 )
 from app.core.errors import AppError, not_found
 from app.core.security import hash_password
+from app.core.time import utcnow
 from app.models import (
     Category,
     Discount,
@@ -59,13 +60,12 @@ from app.schemas.catalogue import (
     OptionIn,
     OptionOut,
     OptionPatch,
-    ProductIn,
     ProductExtrasIn,
+    ProductIn,
     ProductOut,
     ProductPatch,
     UploadOut,
 )
-from app.core.time import utcnow
 from app.services import audit, catalogue, media
 from app.services.auth import reset_password, revoke_all
 from app.services.media import Storage
@@ -363,7 +363,9 @@ async def patch_extra_group(
             raise AppError(422, "validation_error", f"{key} cannot be empty")
         setattr(group, key, value)
     if group.max_picks is not None and group.max_picks < group.min_picks:
-        raise AppError(422, "validation_error", "The most they can pick can't be less than the fewest")
+        raise AppError(
+            422, "validation_error", "The most they can pick can't be less than the fewest"
+        )
     if product_ids is not None:
         await _attach(session, user.hotel_id, group.id, product_ids)
     try:
@@ -396,7 +398,11 @@ async def create_extra_item(
 
 @router.patch("/extras/{group_id}/items/{item_id}", response_model=ExtraGroupOut)
 async def patch_extra_item(
-    group_id: uuid.UUID, item_id: uuid.UUID, body: ExtraItemPatch, user: HotelStaff, session: Session
+    group_id: uuid.UUID,
+    item_id: uuid.UUID,
+    body: ExtraItemPatch,
+    user: HotelStaff,
+    session: Session,
 ):
     data = body.model_dump(exclude_unset=True)
     if user.role != "hotel_admin" and set(data) - {"is_sold_out"}:
@@ -445,7 +451,9 @@ async def set_product_extras(
         )
         if found != set(wanted):
             raise not_found()
-    await session.execute(delete(ProductExtraGroup).where(ProductExtraGroup.product_id == product.id))
+    await session.execute(
+        delete(ProductExtraGroup).where(ProductExtraGroup.product_id == product.id)
+    )
     for i, gid in enumerate(wanted):
         session.add(ProductExtraGroup(product_id=product.id, group_id=gid, sort_order=i))
     await session.commit()

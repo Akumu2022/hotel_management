@@ -89,7 +89,9 @@ async def setup(client, db):
 
 
 def lines(product, *option_ids):
-    return [{"product_id": str(product.id), "quantity": 1, "option_ids": [str(o) for o in option_ids]}]
+    return [
+        {"product_id": str(product.id), "quantity": 1, "option_ids": [str(o) for o in option_ids]}
+    ]
 
 
 async def ask(client, hotel, product, *option_ids):
@@ -113,7 +115,10 @@ async def test_group_is_built_once_and_attached_to_many_dishes(client, db):
             "name": "Sides",
             "min_picks": 1,
             "max_picks": 1,
-            "items": [{"name": "Kachumbari", "price_delta": 30}, {"name": "Beans", "price_delta": 40}],
+            "items": [
+                {"name": "Kachumbari", "price_delta": 30},
+                {"name": "Beans", "price_delta": 40},
+            ],
             "product_ids": [str(pilau.id), str(chapati.id)],
         },
     )
@@ -137,7 +142,9 @@ async def test_group_is_built_once_and_attached_to_many_dishes(client, db):
 
     # One price change reaches every dish.
     r = await client.patch(
-        f"{API}/extras/{group['id']}/items/{kachumbari['id']}", headers=admin, json={"price_delta": 35}
+        f"{API}/extras/{group['id']}/items/{kachumbari['id']}",
+        headers=admin,
+        json={"price_delta": 35},
     )
     assert r.status_code == 200
     assert (await ask(client, hotel, chapati, kachumbari["id"])).json()["items_total"] == 50 + 35
@@ -175,14 +182,20 @@ async def test_attach_from_the_dish_and_delete_the_group(client, db):
     hotel, pilau, chapati, admin = await setup(client, db)
     group = (
         await client.post(
-            f"{API}/extras", headers=admin, json={"name": "Drinks", "items": [{"name": "Soda", "price_delta": 60}]}
+            f"{API}/extras",
+            headers=admin,
+            json={"name": "Drinks", "items": [{"name": "Soda", "price_delta": 60}]},
         )
     ).json()
-    r = await client.put(f"{API}/products/{chapati.id}/extras", headers=admin, json={"group_ids": [group["id"]]})
+    r = await client.put(
+        f"{API}/products/{chapati.id}/extras", headers=admin, json={"group_ids": [group["id"]]}
+    )
     assert r.status_code == 200 and r.json() == [group["id"]]
     product = (await client.get(f"{API}/products/{chapati.id}", headers=admin)).json()
     assert product["extra_group_ids"] == [group["id"]]
-    assert (await client.get(f"{API}/extras", headers=admin)).json()[0]["product_ids"] == [str(chapati.id)]
+    assert (await client.get(f"{API}/extras", headers=admin)).json()[0]["product_ids"] == [
+        str(chapati.id)
+    ]
 
     assert (await client.delete(f"{API}/extras/{group['id']}", headers=admin)).status_code == 204
     assert (await client.get(f"{API}/extras", headers=admin)).json() == []
@@ -197,11 +210,17 @@ async def test_extras_are_private_to_their_hotel_and_rules_are_checked(client, d
     await db.commit()
     group = (await client.post(f"{API}/extras", headers=admin, json={"name": "Mine"})).json()
     assert (await client.get(f"{API}/extras", headers=other_admin)).json() == []
-    assert (await client.delete(f"{API}/extras/{group['id']}", headers=other_admin)).status_code == 404
+    assert (
+        await client.delete(f"{API}/extras/{group['id']}", headers=other_admin)
+    ).status_code == 404
     # A hotel cannot attach a group to another hotel's dish.
-    r = await client.put(f"{API}/products/{other_dish.id}/extras", headers=admin, json={"group_ids": [group["id"]]})
+    r = await client.put(
+        f"{API}/products/{other_dish.id}/extras", headers=admin, json={"group_ids": [group["id"]]}
+    )
     assert r.status_code == 404
-    bad = await client.post(f"{API}/extras", headers=admin, json={"name": "Bad", "min_picks": 3, "max_picks": 2})
+    bad = await client.post(
+        f"{API}/extras", headers=admin, json={"name": "Bad", "min_picks": 3, "max_picks": 2}
+    )
     assert bad.status_code == 422
     dup = await client.post(f"{API}/extras", headers=admin, json={"name": "Mine"})
     assert dup.status_code == 409

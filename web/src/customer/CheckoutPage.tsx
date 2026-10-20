@@ -609,6 +609,13 @@ export function CheckoutPage() {
                   {t("Apply")}
                 </button>
               </div>
+              {quote.error ? (
+                <p role="alert" className="text-sm font-medium text-bad">
+                  {quote.error instanceof ApiError && quote.error.code.startsWith("option_")
+                    ? `${quote.error.message}. Remove that dish from your order and add it again.`
+                    : quote.error.message}
+                </p>
+              ) : null}
               {dropped ? <p className="-mt-1 text-sm text-warn">{dropped}</p> : null}
               {promo && q?.promo_error ? <p className="-mt-1 text-sm text-bad">{PROMO_ERRORS[q.promo_error] ?? "That code can't be used"}</p> : null}
               {promo && q?.promo_applied ? <p className="-mt-1 text-sm font-medium text-ok">🎉 Promo {promo} applied</p> : null}
