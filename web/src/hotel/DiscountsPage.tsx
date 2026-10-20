@@ -287,7 +287,7 @@ function EditDiscountSheet({ d, products, onClose }: { d: Discount; products: Pr
       <form id="discount-edit-form" onSubmit={submit} className="flex flex-col gap-4">
         <p className="font-medium">{describe(d, products)}</p>
         <p className="rounded-lg bg-warn-soft px-3 py-2 text-sm text-warn">
-          The amount and what it applies to can't change, because past orders refer to them. To change them, use Copy to make a new discount and switch this one off. A discount already used on an order can't be deleted; switch it off instead.
+          The amount and what it applies to can't change, because past orders refer to them. To change them, use Copy to make a new discount and switch this one off. Delete removes it for good; past orders keep what they were charged.
         </p>
         <div className="grid grid-cols-2 gap-3">
           <Field label="Starts">{(id) => <Input id={id} type="datetime-local" value={starts} onChange={(e) => setStarts(e.target.value)} required />}</Field>

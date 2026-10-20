@@ -554,19 +554,11 @@ async def patch_discount(
 @router.delete("/discounts/{discount_id}", status_code=204)
 async def delete_discount(discount_id: uuid.UUID, user: HotelAdmin, session: Session):
     discount = await get_scoped(session, Discount, discount_id, user.hotel_id)
-    used = (
-        await session.execute(select(Order.id).where(Order.discount_id == discount.id).limit(1))
-    ).first() or (
-        await session.execute(
-            select(PromoRedemption.id).where(PromoRedemption.discount_id == discount.id).limit(1)
-        )
-    ).first()
-    if used:
-        raise AppError(
-            409,
-            "in_use",
-            "This discount is on past orders, so it can't be deleted. Switch it off instead.",
-        )
+    # Past orders keep the amount they were charged; they just stop pointing at the discount.
+    await session.execute(
+        update(Order).where(Order.discount_id == discount.id).values(discount_id=None)
+    )
+    await session.execute(delete(PromoRedemption).where(PromoRedemption.discount_id == discount.id))
     # Banners that pointed at it keep working, just without the link.
     await session.execute(
         update(Offer).where(Offer.discount_id == discount.id).values(discount_id=None)

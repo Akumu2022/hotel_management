@@ -196,6 +196,26 @@ export function CheckoutPage() {
   const q = quote.data;
   useEffect(() => setIdemKey(newKey()), [quoteBody]);
 
+  // A code remembered from an earlier visit that has since ended, run out or belongs to another
+  // hotel must never stop an order: let it go and say so.
+  const [dropped, setDropped] = useState<string | null>(null);
+  function dropPromo(code: string, reason: string) {
+    try {
+      localStorage.removeItem("hm.promo");
+    } catch {
+      /* nothing stored */
+    }
+    setPromo("");
+    setPromoInput("");
+    setDropped(`${code}: ${reason}. It was removed so you can order.`);
+  }
+  useEffect(() => {
+    if (promo && promo === shared && q?.promo_error && q.promo_error !== "promo_not_better" && q.promo_error !== "promo_min_spend") {
+      dropPromo(promo, (PROMO_ERRORS[q.promo_error] ?? "That code can't be used").toLowerCase());
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [q?.promo_error, promo]);
+
   if (!c.lines.length) {
     return (
       <>
@@ -254,7 +274,10 @@ export function CheckoutPage() {
       navigate(`/o/${placed.tracking_token}`, { replace: true });
     } catch (err) {
       if (err instanceof ApiError && err.code === "price_changed" && err.extra?.quote) setChangedTo(err.extra.quote as Quote);
-      else setPlaceError(err instanceof Error ? err.message : "Something went wrong");
+      else if (err instanceof ApiError && err.code.startsWith("promo_") && promo) {
+        dropPromo(promo, (PROMO_ERRORS[err.code] ?? "That code can't be used").toLowerCase());
+        setPlaceError("The promo code was removed. Please place your order again.");
+      } else setPlaceError(err instanceof Error ? err.message : "Something went wrong");
     } finally {
       setPlacing(false);
     }
@@ -586,6 +609,7 @@ export function CheckoutPage() {
                   {t("Apply")}
                 </button>
               </div>
+              {dropped ? <p className="-mt-1 text-sm text-warn">{dropped}</p> : null}
               {promo && q?.promo_error ? <p className="-mt-1 text-sm text-bad">{PROMO_ERRORS[q.promo_error] ?? "That code can't be used"}</p> : null}
               {promo && q?.promo_applied ? <p className="-mt-1 text-sm font-medium text-ok">🎉 Promo {promo} applied</p> : null}
 

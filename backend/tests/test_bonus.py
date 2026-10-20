@@ -395,3 +395,32 @@ async def test_public_promo_cards(client, db):
     # A discount with no code can't be shown as a coupon.
     r = await client.post("/api/v1/hotel/discounts", headers=admin, json={**base, "is_public": True})
     assert r.json()["is_public"] is False
+
+
+async def test_a_used_discount_can_still_be_deleted(client, db):
+    from app.models import PromoRedemption
+    from tests.factories import auth_header
+
+    hotel = await make_hotel(db)
+    admin = auth_header(await make_user(db, "hotel_admin", hotel))
+    r = await client.post(
+        "/api/v1/hotel/discounts",
+        headers=admin,
+        json={
+            "scope": "order",
+            "kind": "percent",
+            "percent": 10,
+            "starts_at": "2026-01-01T00:00:00Z",
+            "promo_code": "OLD10",
+        },
+    )
+    did = uuid.UUID(r.json()["id"])
+    order = await make_order(db, hotel)
+    order.discount_id = did
+    db.add(PromoRedemption(discount_id=did, phone=order.customer_phone, order_id=order.id))
+    await db.commit()
+
+    assert (await client.delete(f"/api/v1/hotel/discounts/{did}", headers=admin)).status_code == 204
+    await db.refresh(order)
+    assert order.discount_id is None  # the past order keeps its amounts, just not the link
+    assert (await client.get("/api/v1/hotel/discounts", headers=admin)).json() == []

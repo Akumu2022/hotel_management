@@ -19,6 +19,17 @@ String tr(String s, [Map<String, Object?>? vars]) {
 }
 
 const Map<String, String> _sw = {
+  "We don't recognise that code": 'Hatukitambui msimbo huo',
+  'That code is no longer active': 'Msimbo huo haufanyi kazi tena',
+  "That code isn't active yet": 'Msimbo huo bado haujaanza',
+  'That code has ended': 'Msimbo huo umeisha muda',
+  'Spend a little more to use that code': 'Nunua zaidi kidogo kutumia msimbo huo',
+  "You've already used that code": 'Umeshatumia msimbo huo',
+  'That code has been fully used': 'Msimbo huo umetumika wote',
+  'You already have a better deal': 'Tayari una ofa bora zaidi',
+  "That code can't be used": 'Msimbo huo hauwezi kutumika',
+  '{code}: {why}. It was removed so you can order.': '{code}: {why}. Umeondolewa ili uweze kuagiza.',
+  'The promo code was removed. Please place your order again.': 'Msimbo wa punguzo umeondolewa. Tafadhali agiza tena.',
   'Required': 'Lazima',
   'pick one': 'chagua moja',
   'up to {n}': 'hadi {n}',

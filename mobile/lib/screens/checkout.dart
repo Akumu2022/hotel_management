@@ -33,6 +33,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   double? lat, lng;
   Json? quote;
   String? error;
+  String? promoNote; // why a remembered code was let go
   bool quoting = false, placing = false, locating = false;
   int _quoteSeq = 0;
 
@@ -81,6 +82,12 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     try {
       final q = await apiPost('/quotes', _base) as Json;
       if (seq != _quoteSeq || !mounted) return;
+      // A code remembered from earlier that has ended or run out must never stop an order.
+      final why = q['promo_error'];
+      if (why != null && _promo.text.trim() == s.promo && why != 'promo_not_better' && why != 'promo_min_spend') {
+        _dropPromo('$why');
+        return _requote();
+      }
       setState(() {
         quote = q;
         if (q['cash_allowed'] != true && payment == 'cash') payment = 'mpesa';
@@ -90,6 +97,24 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     } finally {
       if (seq == _quoteSeq && mounted) setState(() => quoting = false);
     }
+  }
+
+  static const _promoWhy = {
+    'promo_unknown': "We don't recognise that code",
+    'promo_disabled': 'That code is no longer active',
+    'promo_not_started': "That code isn't active yet",
+    'promo_ended': 'That code has ended',
+    'promo_min_spend': 'Spend a little more to use that code',
+    'promo_already_used': "You've already used that code",
+    'promo_limit_reached': 'That code has been fully used',
+    'promo_not_better': 'You already have a better deal',
+  };
+
+  void _dropPromo(String why) {
+    final code = _promo.text.trim();
+    s.setPromo('');
+    _promo.clear();
+    promoNote = tr('{code}: {why}. It was removed so you can order.', {'code': code, 'why': tr(_promoWhy[why] ?? "That code can't be used")});
   }
 
   Future<void> _locate() async {
@@ -185,6 +210,10 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           ),
         );
         if (ok == true) return _place(expected: nq['till_amount']);
+      } else if (e.code.startsWith('promo_') && _promo.text.trim().isNotEmpty) {
+        _dropPromo(e.code);
+        setState(() => error = tr('The promo code was removed. Please place your order again.'));
+        _requote();
       } else {
         setState(() => error = e.message);
       }
@@ -392,7 +421,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             padding: const EdgeInsets.only(top: 8),
             child: Text(tr('Too far for delivery: {km} km away (max {max} km). Choose Pickup or a closer spot.', {'km': q!['distance_km'], 'max': q['max_delivery_km']}), style: const TextStyle(color: Colors.red)),
           ),
-        if (q?['promo_error'] != null) Text('${q!['promo_error']}', style: const TextStyle(color: Colors.red)),
+        if (promoNote != null) Padding(padding: const EdgeInsets.only(top: 8), child: Text(promoNote!, style: const TextStyle(color: Color(0xFFB45309)))),
+        if (q?['promo_error'] != null) Text(tr(_promoWhy['${q!['promo_error']}'] ?? "That code can't be used"), style: const TextStyle(color: Colors.red)),
         if (error != null) Padding(padding: const EdgeInsets.only(top: 8), child: Text(error!, style: const TextStyle(color: Colors.red))),
         HelpButton('Hello Chakula, I need help ordering from ${cart.hotelName ?? "a hotel"}.'),
         const SizedBox(height: 24),
