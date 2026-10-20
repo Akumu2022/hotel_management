@@ -65,6 +65,8 @@ class OptionOut(Schema):
     price_delta: int
     sort_order: int
     is_archived: bool
+    is_sold_out: bool = False
+    group_id: uuid.UUID | None = None  # set for a shared extra (managed in Extras)
 
 
 class OptionIn(Input):
@@ -82,6 +84,68 @@ class OptionPatch(Input):
     is_archived: bool | None = None
 
 
+class ExtraItemOut(Schema):
+    id: uuid.UUID
+    name: str
+    price_delta: int
+    sort_order: int
+    is_sold_out: bool
+    is_archived: bool
+
+
+class ExtraGroupOut(Schema):
+    id: uuid.UUID
+    name: str
+    min_picks: int
+    max_picks: int | None
+    sort_order: int
+    items: list[ExtraItemOut]
+    product_ids: list[uuid.UUID]  # dishes that offer this group
+
+
+def _picks_ok(obj):
+    if obj.max_picks is not None and obj.min_picks is not None and obj.max_picks < obj.min_picks:
+        raise ValueError("The most they can pick can't be less than the fewest")
+    return obj
+
+
+class ExtraItemIn(Input):
+    name: Name
+    price_delta: Money = 0
+    sort_order: int = Field(0, ge=0, le=10_000)
+
+
+class ExtraItemPatch(Input):
+    name: Name | None = None
+    price_delta: Money | None = None
+    sort_order: int | None = Field(None, ge=0, le=10_000)
+    is_sold_out: bool | None = None
+    is_archived: bool | None = None
+
+
+class ExtraGroupIn(Input):
+    name: Name
+    min_picks: int = Field(0, ge=0, le=20)
+    max_picks: int | None = Field(None, ge=1, le=20)
+    sort_order: int = Field(0, ge=0, le=10_000)
+    items: list[ExtraItemIn] = Field(default_factory=list, max_length=60)
+    product_ids: list[uuid.UUID] = Field(default_factory=list, max_length=500)
+
+    _check = model_validator(mode="after")(_picks_ok)
+
+
+class ExtraGroupPatch(Input):
+    name: Name | None = None
+    min_picks: int | None = Field(None, ge=0, le=20)
+    max_picks: int | None = Field(None, ge=1, le=20)
+    sort_order: int | None = Field(None, ge=0, le=10_000)
+    product_ids: list[uuid.UUID] | None = Field(None, max_length=500)
+
+
+class ProductExtrasIn(Input):
+    group_ids: list[uuid.UUID] = Field(max_length=30)
+
+
 class ProductOut(Schema):
     id: uuid.UUID
     category_id: uuid.UUID
@@ -95,6 +159,7 @@ class ProductOut(Schema):
     image_url: str | None = None
     thumb_url: str | None = None
     options: list[OptionOut] = []
+    extra_group_ids: list[uuid.UUID] = []  # shared extra groups attached to this dish
 
 
 class ProductIn(Input):
@@ -353,6 +418,17 @@ class MenuOption(Schema):
     group_name: str
     name: str
     price_delta: int
+    is_sold_out: bool = False
+
+
+class MenuExtraGroup(Schema):
+    """min_picks >= 1 means the customer must choose; max_picks 1 means pick one."""
+
+    id: uuid.UUID | None  # None for extras that belong to this dish alone
+    name: str
+    min_picks: int
+    max_picks: int | None
+    options: list[MenuOption]
 
 
 class MenuProduct(Schema):
@@ -364,7 +440,8 @@ class MenuProduct(Schema):
     is_sold_out: bool
     image_url: str | None
     thumb_url: str | None
-    options: list[MenuOption]
+    options: list[MenuOption]  # every extra in one list (older apps)
+    extra_groups: list[MenuExtraGroup] = []
     discount_price: int | None = None  # unit price after the best automatic item discount
 
 

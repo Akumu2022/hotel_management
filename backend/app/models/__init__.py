@@ -1,7 +1,16 @@
 """Import every model so Base.metadata is complete for Alembic and tests."""
 
 from app.models.base import Base
-from app.models.catalogue import Category, Discount, Offer, Product, ProductOption
+from app.models.catalogue import (
+    Category,
+    Discount,
+    ExtraGroup,
+    ExtraItem,
+    Offer,
+    Product,
+    ProductExtraGroup,
+    ProductOption,
+)
 from app.models.hotels import Hotel, HotelHours
 from app.models.ledger import ENTRY_TYPES, LedgerEntry, RiderPayout, Settlement, Statement
 from app.models.orders import (
@@ -40,6 +49,8 @@ __all__ = [
     "Customer",
     "DeviceNonce",
     "Discount",
+    "ExtraGroup",
+    "ExtraItem",
     "ForwarderDevice",
     "ForwarderPairing",
     "Hotel",
@@ -55,6 +66,7 @@ __all__ = [
     "Payment",
     "Rating",
     "Product",
+    "ProductExtraGroup",
     "ProductOption",
     "PromoRedemption",
     "PushSubscription",

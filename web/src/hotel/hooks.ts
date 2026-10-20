@@ -3,7 +3,7 @@ import { useSyncExternalStore } from "react";
 
 import { toast } from "../components/toast";
 import { api, auth } from "../lib/api";
-import type { Category, Discount, HotelSettings, Offer, Product } from "../lib/types";
+import type { Category, Discount, ExtraGroup, HotelSettings, Offer, Product } from "../lib/types";
 
 export function useMe() {
   return useSyncExternalStore(auth.subscribe, auth.user);
@@ -16,6 +16,7 @@ export function useIsAdmin() {
 export const keys = {
   categories: ["hotel", "categories"] as const,
   products: ["hotel", "products"] as const,
+  extras: ["hotel", "extras"] as const,
   discounts: ["hotel", "discounts"] as const,
   offers: ["hotel", "offers"] as const,
   settings: ["hotel", "settings"] as const,
@@ -29,6 +30,9 @@ export const useProducts = (includeArchived = false) =>
     queryKey: [...keys.products, includeArchived],
     queryFn: () => api.get<Product[]>(`/hotel/products?include_archived=${includeArchived}`),
   });
+
+export const useExtras = () =>
+  useQuery({ queryKey: keys.extras, queryFn: () => api.get<ExtraGroup[]>("/hotel/extras") });
 
 export const useDiscounts = () =>
   useQuery({ queryKey: keys.discounts, queryFn: () => api.get<Discount[]>("/hotel/discounts") });

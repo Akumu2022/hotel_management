@@ -15,6 +15,21 @@ export type ProductOption = {
   price_delta: number;
   sort_order: number;
   is_archived: boolean;
+  is_sold_out: boolean;
+  group_id: string | null; // set for a shared extra (managed on the Extras tab)
+};
+
+export type ExtraItem = { id: string; name: string; price_delta: number; sort_order: number; is_sold_out: boolean; is_archived: boolean };
+
+/** A hotel's shared set of extras. min_picks >= 1 = required; max_picks 1 = pick one, null = any number. */
+export type ExtraGroup = {
+  id: string;
+  name: string;
+  min_picks: number;
+  max_picks: number | null;
+  sort_order: number;
+  items: ExtraItem[];
+  product_ids: string[];
 };
 
 export type Product = {
@@ -30,6 +45,7 @@ export type Product = {
   image_url: string | null;
   thumb_url: string | null;
   options: ProductOption[];
+  extra_group_ids: string[];
 };
 
 export type Upload = { image_key: string; thumb_key: string; image_url: string; thumb_url: string };

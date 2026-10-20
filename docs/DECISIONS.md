@@ -484,6 +484,15 @@ Measured in Chrome:
 
 The visual style follows the owner's reference designs (Bonfol, D.CC, Epic Eats). The screen structure is adapted for mobile delivery and pickup ordering. See [UI.md](UI.md) for what is kept, removed and added.
 
+## Extras: shared groups per hotel (owner, 2026-10-20)
+
+- **A hotel builds a group of extras once** (Size, Toppings, Sides) on the menu page's **Extras** tab and attaches it to as many of its dishes as it likes. Groups are per hotel; there are no platform-wide extras.
+- **Rules per group (the standard in delivery apps):** optional or required, and pick one / up to N / any number. Required means at least one pick; pick one means exactly the radio behaviour. Checked on the server when quoting and placing an order, not only in the app.
+- **Each extra has a price and a Finished switch** (cashiers may flip it too). A finished extra is greyed for customers and refused by the server. If every extra in a required group is finished, the group stops being required so the dish can still be sold.
+- **Editing a price changes every dish that uses the group.** Placed orders keep their own snapshot (names and prices), so they never change.
+- **Dish-only extras** (the earlier per-dish options) still work, under "Only for this dish". The menu keeps a flat `options` list for older apps beside the new `extra_groups`.
+- Tables `extra_groups`, `extra_items`, `product_extra_groups` (migration 0033). The payments-module branch must renumber its migrations after 0033 when it is merged.
+
 ## Open inputs needed from the owner
 
 - [x] ~~Real M-Pesa Till SMS sample(s)~~: received 2 Oct 2026 (backend/tests/data). More samples (especially a reversal) are welcome; each becomes a test.

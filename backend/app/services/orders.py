@@ -79,7 +79,7 @@ async def _catalogue(
             .where(Product.hotel_id == hotel_id, Product.id.in_(product_ids))
         )
     ).all()
-    options = await catalogue.options_by_product(
+    extras = await catalogue.extras_by_product(
         session, [p.id for p, _ in rows], include_archived=True
     )
     out = {}
@@ -90,9 +90,19 @@ async def _catalogue(
             name=p.name,
             price=p.price,
             options={
-                o.id: pricing.OptionInfo(o.id, o.group_name, o.name, o.price_delta, o.is_archived)
-                for o in options[p.id]
+                o.id: pricing.OptionInfo(
+                    o.id, o.group_name, o.name, o.price_delta, o.is_archived, o.is_sold_out
+                )
+                for g in extras[p.id]
+                for o in g.options
             },
+            groups=tuple(
+                pricing.GroupRule(
+                    g.name, frozenset(o.id for o in g.options), g.required_now, g.max_picks
+                )
+                for g in extras[p.id]
+                if not g.is_archived and (g.min_picks or g.max_picks)
+            ),
             is_sold_out=p.is_sold_out,
             is_archived=p.is_archived or not in_window,
         )

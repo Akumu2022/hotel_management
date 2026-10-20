@@ -40,6 +40,17 @@ class OptionInfo:
     name: str
     price_delta: int
     is_archived: bool = False
+    is_sold_out: bool = False
+
+
+@dataclass(frozen=True)
+class GroupRule:
+    """How many of a group's extras a dish needs: min 1 = required, max 1 = pick one."""
+
+    name: str
+    option_ids: frozenset[uuid.UUID]
+    min_picks: int = 0
+    max_picks: int | None = None
 
 
 @dataclass(frozen=True)
@@ -48,6 +59,7 @@ class ProductInfo:
     name: str
     price: int
     options: dict[uuid.UUID, OptionInfo] = field(default_factory=dict)
+    groups: tuple[GroupRule, ...] = ()
     is_sold_out: bool = False
     is_archived: bool = False
 
@@ -201,7 +213,21 @@ def calculate(
             opt = product.options.get(oid)
             if opt is None or opt.is_archived:
                 raise PricingError("bad_option", f"An option for {product.name} is unavailable")
+            if opt.is_sold_out:
+                raise PricingError("option_sold_out", f"{opt.name} is finished")
             options.append(opt)
+        picked = {o.id for o in options}
+        for rule in product.groups:
+            count = len(picked & rule.option_ids)
+            if count < rule.min_picks:
+                raise PricingError(
+                    "option_required", f"Choose {rule.name} for {product.name}"
+                )
+            if rule.max_picks is not None and count > rule.max_picks:
+                raise PricingError(
+                    "option_too_many",
+                    f"Choose at most {rule.max_picks} from {rule.name} for {product.name}",
+                )
         options_price = sum(o.price_delta for o in options)
         gross = (product.price + options_price) * line.quantity
         priced.append((product, tuple(options), gross, line))

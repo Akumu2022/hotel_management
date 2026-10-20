@@ -6,7 +6,8 @@ import { api } from "../lib/api";
 import { compressImage, money } from "../lib/format";
 import type { Category, Product, Upload } from "../lib/types";
 import { CATEGORY_SUGGESTIONS } from "./categorySuggestions";
-import { keys, useIsLiquor, useProducts, useSave, useW } from "./hooks";
+import { ruleText } from "./ExtrasPanel";
+import { keys, useExtras, useIsLiquor, useProducts, useSave, useW } from "./hooks";
 
 function PhotoPicker({
   url,
@@ -71,8 +72,10 @@ function PhotoPicker({
   );
 }
 
+/** Extras that belong to this dish alone. Shared groups are chosen in ExtrasPicker above. */
 function OptionsEditor({ product }: { product: Product }) {
-  const [group, setGroup] = useState(product.options.at(-1)?.group_name ?? "Extras");
+  const own = product.options.filter((o) => !o.group_id);
+  const [group, setGroup] = useState(own.at(-1)?.group_name ?? "Extras");
   const [name, setName] = useState("");
   const [price, setPrice] = useState<number | "">("");
 
@@ -91,19 +94,19 @@ function OptionsEditor({ product }: { product: Product }) {
     [keys.products],
   );
 
-  const groups = [...new Set(product.options.map((o) => o.group_name))];
+  const groups = [...new Set(own.map((o) => o.group_name))];
 
   return (
     <section className="flex flex-col gap-3">
       <div>
-        <h3 className="font-semibold">Options and extras</h3>
-        <p className="text-sm text-muted">e.g. Size: Large +KES 100, Extras: Kachumbari +KES 30</p>
+        <h3 className="font-semibold">Only for this dish</h3>
+        <p className="text-sm text-muted">A one-off extra that no other dish needs, e.g. Kachumbari +KES 30</p>
       </div>
       {groups.map((g) => (
         <div key={g} className="rounded-lg border border-line">
           <p className="border-b border-line px-3 py-2 text-sm font-semibold">{g}</p>
           <ul className="divide-y divide-line">
-            {product.options
+            {own
               .filter((o) => o.group_name === g)
               .map((o) => (
                 <li key={o.id} className="flex items-center justify-between gap-2 px-3 py-2 text-sm">
@@ -150,6 +153,49 @@ function OptionsEditor({ product }: { product: Product }) {
         </Button>
       </div>
       <ErrorNote error={add.error ?? archive.error} />
+    </section>
+  );
+}
+
+/** Tick the shared groups of extras (Size, Toppings…) this dish offers. */
+function ExtrasPicker({ product }: { product: Product }) {
+  const { data: groups } = useExtras();
+  const save = useSave(
+    (group_ids: string[]) => api.put(`/hotel/products/${product.id}/extras`, { group_ids }),
+    [keys.products, keys.extras],
+    false,
+  );
+  const on = save.isPending ? (save.variables ?? []) : product.extra_group_ids;
+  if (!groups) return null;
+  return (
+    <section className="flex flex-col gap-2">
+      <div>
+        <h3 className="font-semibold">Extras for this dish</h3>
+        <p className="text-sm text-muted">Tick the groups customers can add. Build groups on the Extras tab of the menu.</p>
+      </div>
+      {groups.length === 0 ? (
+        <p className="rounded-lg bg-page p-3 text-sm text-muted">No groups yet. Open the Extras tab on the menu page to create one (Size, Toppings, Sides…).</p>
+      ) : (
+        <ul className="divide-y divide-line rounded-lg border border-line">
+          {groups.map((g) => (
+            <li key={g.id}>
+              <label className="flex cursor-pointer items-center gap-3 px-3 py-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={on.includes(g.id)}
+                  disabled={save.isPending}
+                  onChange={() => save.mutate(on.includes(g.id) ? on.filter((x) => x !== g.id) : [...on, g.id])}
+                />
+                <span className="flex-1">
+                  {g.name} <span className="text-muted">· {g.items.map((i) => i.name).join(", ")}</span>
+                </span>
+                <span className="text-xs text-muted">{ruleText(g.min_picks, g.max_picks)}</span>
+              </label>
+            </li>
+          ))}
+        </ul>
+      )}
+      <ErrorNote error={save.error} />
     </section>
   );
 }
@@ -313,11 +359,12 @@ export function ProductSheet({
       </form>
 
       {current ? (
-        <div className="mt-6 border-t border-line pt-4">
+        <div className="mt-6 flex flex-col gap-6 border-t border-line pt-4">
+          <ExtrasPicker product={current} />
           <OptionsEditor product={current} />
         </div>
       ) : (
-        <p className="mt-4 text-sm text-muted">You can add options and extras after creating the {w("dish")}.</p>
+        <p className="mt-4 text-sm text-muted">You can add extras after creating the {w("dish")}.</p>
       )}
     </Sheet>
   );

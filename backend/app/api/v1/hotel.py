@@ -23,11 +23,14 @@ from app.core.security import hash_password
 from app.models import (
     Category,
     Discount,
+    ExtraGroup,
+    ExtraItem,
     Hotel,
     HotelHours,
     Offer,
     Order,
     Product,
+    ProductExtraGroup,
     ProductOption,
     PromoRedemption,
     User,
@@ -42,6 +45,12 @@ from app.schemas.catalogue import (
     DiscountIn,
     DiscountOut,
     DiscountPatch,
+    ExtraGroupIn,
+    ExtraGroupOut,
+    ExtraGroupPatch,
+    ExtraItemIn,
+    ExtraItemOut,
+    ExtraItemPatch,
     HotelSettingsIn,
     HotelSettingsOut,
     OfferIn,
@@ -51,6 +60,7 @@ from app.schemas.catalogue import (
     OptionOut,
     OptionPatch,
     ProductIn,
+    ProductExtrasIn,
     ProductOut,
     ProductPatch,
     UploadOut,
@@ -142,7 +152,8 @@ async def delete_category(category_id: uuid.UUID, user: HotelAdmin, session: Ses
 
 async def _product_out(session, product: Product, storage: Storage) -> ProductOut:
     opts = await catalogue.options_by_product(session, [product.id], include_archived=True)
-    return catalogue.product_out(product, opts[product.id], storage)
+    attached = await catalogue.attached_group_ids(session, [product.id])
+    return catalogue.product_out(product, opts[product.id], storage, attached[product.id])
 
 
 @router.get("/products", response_model=list[ProductOut])
@@ -162,7 +173,8 @@ async def list_products(
     opts = await catalogue.options_by_product(
         session, [p.id for p in products], include_archived=True
     )
-    return [catalogue.product_out(p, opts[p.id], storage) for p in products]
+    attached = await catalogue.attached_group_ids(session, [p.id for p in products])
+    return [catalogue.product_out(p, opts[p.id], storage, attached[p.id]) for p in products]
 
 
 @router.get("/products/{product_id}", response_model=ProductOut)
@@ -257,6 +269,187 @@ async def patch_option(
         setattr(option, key, value)
     await session.commit()
     return option
+
+
+# --- Extras: the hotel's shared groups ("Pizza toppings"), attached to many dishes ---------------
+
+
+async def _extra_groups_out(session, hotel_id: uuid.UUID, only: uuid.UUID | None = None):
+    stmt = scoped_select(ExtraGroup, hotel_id).order_by(ExtraGroup.sort_order, ExtraGroup.name)
+    if only:
+        stmt = stmt.where(ExtraGroup.id == only)
+    groups = (await session.execute(stmt)).scalars().all()
+    ids = [g.id for g in groups]
+    items = {gid: [] for gid in ids}
+    links = {gid: [] for gid in ids}
+    if ids:
+        rows = await session.execute(
+            select(ExtraItem)
+            .where(ExtraItem.group_id.in_(ids), ExtraItem.is_archived.is_(False))
+            .order_by(ExtraItem.sort_order, ExtraItem.name)
+        )
+        for it in rows.scalars():
+            items[it.group_id].append(it)
+        for gid, pid in (
+            await session.execute(
+                select(ProductExtraGroup.group_id, ProductExtraGroup.product_id).where(
+                    ProductExtraGroup.group_id.in_(ids)
+                )
+            )
+        ).all():
+            links[gid].append(pid)
+    return [
+        ExtraGroupOut(
+            id=g.id,
+            name=g.name,
+            min_picks=g.min_picks,
+            max_picks=g.max_picks,
+            sort_order=g.sort_order,
+            items=[ExtraItemOut.model_validate(i) for i in items[g.id]],
+            product_ids=links[g.id],
+        )
+        for g in groups
+    ]
+
+
+async def _attach(session, hotel_id: uuid.UUID, group_id: uuid.UUID, product_ids: list[uuid.UUID]):
+    """Make exactly these dishes (the hotel's own) offer the group."""
+    wanted = set(product_ids)
+    if wanted:
+        found = set(
+            (
+                await session.execute(
+                    select(Product.id).where(Product.hotel_id == hotel_id, Product.id.in_(wanted))
+                )
+            ).scalars()
+        )
+        if found != wanted:
+            raise not_found()
+    await session.execute(delete(ProductExtraGroup).where(ProductExtraGroup.group_id == group_id))
+    for pid in wanted:
+        session.add(ProductExtraGroup(product_id=pid, group_id=group_id))
+
+
+@router.get("/extras", response_model=list[ExtraGroupOut])
+async def list_extras(user: HotelStaff, session: Session):
+    return await _extra_groups_out(session, user.hotel_id)
+
+
+@router.post("/extras", response_model=ExtraGroupOut, status_code=201)
+async def create_extra_group(body: ExtraGroupIn, user: HotelAdmin, session: Session):
+    data = body.model_dump(exclude={"items", "product_ids"})
+    group = ExtraGroup(hotel_id=user.hotel_id, **data)
+    session.add(group)
+    try:
+        await session.flush()
+    except IntegrityError:
+        raise _duplicate("group of extras") from None
+    for item in body.items:
+        session.add(ExtraItem(group_id=group.id, **item.model_dump()))
+    await _attach(session, user.hotel_id, group.id, body.product_ids)
+    await session.commit()
+    return (await _extra_groups_out(session, user.hotel_id, group.id))[0]
+
+
+@router.patch("/extras/{group_id}", response_model=ExtraGroupOut)
+async def patch_extra_group(
+    group_id: uuid.UUID, body: ExtraGroupPatch, user: HotelAdmin, session: Session
+):
+    group = await get_scoped(session, ExtraGroup, group_id, user.hotel_id)
+    data = body.model_dump(exclude_unset=True)
+    product_ids = data.pop("product_ids", None)
+    for key, value in data.items():
+        if value is None and key != "max_picks":
+            raise AppError(422, "validation_error", f"{key} cannot be empty")
+        setattr(group, key, value)
+    if group.max_picks is not None and group.max_picks < group.min_picks:
+        raise AppError(422, "validation_error", "The most they can pick can't be less than the fewest")
+    if product_ids is not None:
+        await _attach(session, user.hotel_id, group.id, product_ids)
+    try:
+        await session.flush()
+    except IntegrityError:
+        raise _duplicate("group of extras") from None
+    await session.commit()
+    return (await _extra_groups_out(session, user.hotel_id, group.id))[0]
+
+
+@router.delete("/extras/{group_id}", status_code=204)
+async def delete_extra_group(group_id: uuid.UUID, user: HotelAdmin, session: Session):
+    group = await get_scoped(session, ExtraGroup, group_id, user.hotel_id)
+    # Placed orders keep their own copy of what was chosen, so nothing else points at these.
+    await session.execute(delete(ProductExtraGroup).where(ProductExtraGroup.group_id == group.id))
+    await session.execute(delete(ExtraItem).where(ExtraItem.group_id == group.id))
+    await session.delete(group)
+    await session.commit()
+
+
+@router.post("/extras/{group_id}/items", response_model=ExtraGroupOut, status_code=201)
+async def create_extra_item(
+    group_id: uuid.UUID, body: ExtraItemIn, user: HotelAdmin, session: Session
+):
+    group = await get_scoped(session, ExtraGroup, group_id, user.hotel_id)
+    session.add(ExtraItem(group_id=group.id, **body.model_dump()))
+    await session.commit()
+    return (await _extra_groups_out(session, user.hotel_id, group.id))[0]
+
+
+@router.patch("/extras/{group_id}/items/{item_id}", response_model=ExtraGroupOut)
+async def patch_extra_item(
+    group_id: uuid.UUID, item_id: uuid.UUID, body: ExtraItemPatch, user: HotelStaff, session: Session
+):
+    data = body.model_dump(exclude_unset=True)
+    if user.role != "hotel_admin" and set(data) - {"is_sold_out"}:
+        raise AppError(403, "forbidden", "Only the hotel admin can edit extras")
+    group = await get_scoped(session, ExtraGroup, group_id, user.hotel_id)
+    item = await session.get(ExtraItem, item_id)
+    if item is None or item.group_id != group.id:
+        raise not_found()
+    for key, value in data.items():
+        if value is None:
+            raise AppError(422, "validation_error", f"{key} cannot be empty")
+        setattr(item, key, value)
+    await session.commit()
+    return (await _extra_groups_out(session, user.hotel_id, group.id))[0]
+
+
+@router.delete("/extras/{group_id}/items/{item_id}", response_model=ExtraGroupOut)
+async def delete_extra_item(
+    group_id: uuid.UUID, item_id: uuid.UUID, user: HotelAdmin, session: Session
+):
+    group = await get_scoped(session, ExtraGroup, group_id, user.hotel_id)
+    item = await session.get(ExtraItem, item_id)
+    if item is None or item.group_id != group.id:
+        raise not_found()
+    await session.delete(item)
+    await session.commit()
+    return (await _extra_groups_out(session, user.hotel_id, group.id))[0]
+
+
+@router.put("/products/{product_id}/extras", response_model=list[uuid.UUID])
+async def set_product_extras(
+    product_id: uuid.UUID, body: ProductExtrasIn, user: HotelAdmin, session: Session
+):
+    """Choose which groups of extras this dish offers (in this order)."""
+    product = await get_scoped(session, Product, product_id, user.hotel_id)
+    wanted = list(dict.fromkeys(body.group_ids))
+    if wanted:
+        found = set(
+            (
+                await session.execute(
+                    select(ExtraGroup.id).where(
+                        ExtraGroup.hotel_id == user.hotel_id, ExtraGroup.id.in_(wanted)
+                    )
+                )
+            ).scalars()
+        )
+        if found != set(wanted):
+            raise not_found()
+    await session.execute(delete(ProductExtraGroup).where(ProductExtraGroup.product_id == product.id))
+    for i, gid in enumerate(wanted):
+        session.add(ProductExtraGroup(product_id=product.id, group_id=gid, sort_order=i))
+    await session.commit()
+    return wanted
 
 
 # --- Uploads ----------------------------------------------------------------------------------

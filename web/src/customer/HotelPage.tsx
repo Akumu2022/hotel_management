@@ -16,7 +16,7 @@ import { setSection } from "./section";
 import { TopBar } from "./CustomerLayout";
 import { FoodImage } from "./FoodImage";
 import { cart, useCart, useOrderMode } from "./store";
-import type { Menu, MenuCategory, MenuProduct, PublicHotel, PublicOffer } from "./types";
+import type { Menu, MenuCategory, MenuExtraGroup, MenuProduct, PublicHotel, PublicOffer } from "./types";
 
 type Sort = "popular" | "low" | "high";
 
@@ -145,11 +145,20 @@ function OptionsSheet({ hotel, product, onClose, onConflict }: { hotel: PublicHo
   const t = useT();
   const [chosen, setChosen] = useState<string[]>([]);
   const [qty, setQty] = useState(1);
-  const groups = useMemo(() => {
+  const groups = useMemo<MenuExtraGroup[]>(() => {
+    if (product.extra_groups) return product.extra_groups;
     const map = new Map<string, MenuProduct["options"]>();
     product.options.forEach((o) => map.set(o.group_name, [...(map.get(o.group_name) ?? []), o]));
-    return [...map.entries()];
+    return [...map.entries()].map(([name, options]) => ({ id: null, name, min_picks: 0, max_picks: null, options }));
   }, [product]);
+  const countIn = (g: MenuExtraGroup) => g.options.filter((o) => chosen.includes(o.id)).length;
+  const missing = groups.find((g) => countIn(g) < g.min_picks);
+  const pick = (g: MenuExtraGroup, id: string) =>
+    setChosen((c) => {
+      if (c.includes(id)) return c.filter((x) => x !== id);
+      if (g.max_picks === 1) return [...c.filter((x) => !g.options.some((o) => o.id === x)), id]; // swap the one choice
+      return [...c, id];
+    });
   const base = product.discount_price ?? product.price;
   const unit = base + product.options.filter((o) => chosen.includes(o.id)).reduce((n, o) => n + o.price_delta, 0);
   const add = () =>
@@ -179,25 +188,42 @@ function OptionsSheet({ hotel, product, onClose, onConflict }: { hotel: PublicHo
           <h2 className="text-xl font-semibold">{product.name}</h2>
           {product.description ? <p className="mt-1 text-sm text-muted">{product.description}</p> : null}
           <p className="money mt-2 text-lg font-semibold">{money(base)}</p>
-          {groups.map(([group, opts]) => (
-            <fieldset key={group} className="mt-5">
-              <legend className="mb-2.5 text-sm font-semibold">{group} <span className="font-normal text-muted">· {t("optional")}</span></legend>
-              <div className="flex flex-col gap-2">
-                {opts.map((o) => {
-                  const on = chosen.includes(o.id);
-                  return (
-                    <label key={o.id} className={clsx("flex h-12 cursor-pointer items-center justify-between rounded-xl border px-4 text-sm", on ? "border-brand bg-brand-soft" : "border-line")}>
-                      <span className="flex items-center gap-3">
-                        <input type="checkbox" checked={on} onChange={() => setChosen((c) => (on ? c.filter((x) => x !== o.id) : [...c, o.id]))} className="size-4 accent-[#dc4b12]" />
-                        {o.name}
-                      </span>
-                      <span className="money text-muted">{o.price_delta ? `+${money(o.price_delta)}` : t("Free")}</span>
-                    </label>
-                  );
-                })}
-              </div>
-            </fieldset>
-          ))}
+          {groups.map((g) => {
+            const n = countIn(g);
+            const full = g.max_picks !== null && g.max_picks > 1 && n >= g.max_picks;
+            const rule = `${g.min_picks > 0 ? t("Required") : t("optional")} · ${g.max_picks === 1 ? t("pick one") : g.max_picks ? tr("up to {n}", { n: g.max_picks }) : t("any number")}`;
+            return (
+              <fieldset key={g.id ?? g.name} className="mt-5">
+                <legend className="mb-2.5 flex w-full items-baseline justify-between gap-2 text-sm font-semibold">
+                  <span>{g.name}</span>
+                  <span className={clsx("text-xs font-semibold", n < g.min_picks ? "text-brand" : "font-normal text-muted")}>{rule}</span>
+                </legend>
+                <div className="flex flex-col gap-2">
+                  {g.options.map((o) => {
+                    const on = chosen.includes(o.id);
+                    const off = !!o.is_sold_out || (full && !on);
+                    return (
+                      <label key={o.id} className={clsx("flex h-12 items-center justify-between rounded-xl border px-4 text-sm", on ? "border-brand bg-brand-soft" : "border-line", off ? "cursor-not-allowed opacity-50" : "cursor-pointer")}>
+                        <span className="flex items-center gap-3">
+                          <input
+                            type={g.max_picks === 1 ? "radio" : "checkbox"}
+                            name={g.id ?? g.name}
+                            checked={on}
+                            disabled={off}
+                            onChange={() => pick(g, o.id)}
+                            onClick={() => g.max_picks === 1 && on && g.min_picks === 0 && pick(g, o.id)}
+                            className="size-4 accent-[#dc4b12]"
+                          />
+                          <span className={o.is_sold_out ? "line-through" : ""}>{o.name}</span>
+                        </span>
+                        <span className="money text-muted">{o.is_sold_out ? t("Finished") : o.price_delta ? `+${money(o.price_delta)}` : t("Free")}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </fieldset>
+            );
+          })}
         </div>
         <div className="flex items-center gap-3 border-t border-line p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
           <div className="flex h-12 items-center rounded-xl border border-line">
@@ -206,7 +232,8 @@ function OptionsSheet({ hotel, product, onClose, onConflict }: { hotel: PublicHo
             <button className="flex h-full w-11 items-center justify-center" aria-label="More" onClick={() => setQty((q) => Math.min(20, q + 1))}><Plus className="size-4" /></button>
           </div>
           <button
-            className="h-12 flex-1 rounded-xl bg-brand font-semibold text-white hover:bg-brand-hover"
+            className="h-12 flex-1 rounded-xl bg-brand font-semibold text-white hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
+            disabled={!!missing}
             onClick={() => {
               if (add()) {
                 toast(tr("Added {name}", { name: `${qty}× ${product.name}` }));
@@ -214,7 +241,7 @@ function OptionsSheet({ hotel, product, onClose, onConflict }: { hotel: PublicHo
               } else onConflict(() => (cart.clear(), add(), toast(tr("Added {name}", { name: `${qty}× ${product.name}` })), onClose()));
             }}
           >
-            {t("Add to order")} · <span className="money">{money(unit * qty)}</span>
+            {missing ? tr("Choose {name}", { name: missing.name }) : <>{t("Add to order")} · <span className="money">{money(unit * qty)}</span></>}
           </button>
         </div>
       </div>

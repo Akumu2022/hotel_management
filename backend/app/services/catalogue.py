@@ -1,14 +1,26 @@
 """Read models for the catalogue: product lists with options (no N+1) and the public menu."""
 
 import uuid
+from dataclasses import dataclass, field
 from datetime import UTC, datetime, time, timedelta
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Category, Discount, Hotel, HotelHours, Product, ProductOption
+from app.models import (
+    Category,
+    Discount,
+    ExtraGroup,
+    ExtraItem,
+    Hotel,
+    HotelHours,
+    Product,
+    ProductExtraGroup,
+    ProductOption,
+)
 from app.schemas.catalogue import (
     MenuCategory,
+    MenuExtraGroup,
     MenuOption,
     MenuProduct,
     OptionOut,
@@ -24,22 +36,148 @@ def _url(storage: Storage, key: str | None) -> str | None:
     return storage.url(key) if key else None
 
 
-async def options_by_product(
+@dataclass
+class OptionRow:
+    """One extra a dish offers: a hotel-wide shared one (group_id set) or this dish's own."""
+
+    id: uuid.UUID
+    group_name: str
+    name: str
+    price_delta: int
+    sort_order: int = 0
+    is_archived: bool = False
+    is_sold_out: bool = False
+    group_id: uuid.UUID | None = None
+
+
+@dataclass
+class GroupRow:
+    """A dish's group of extras with its rules. Dish-only extras (group_id None) are optional."""
+
+    name: str
+    id: uuid.UUID | None = None
+    min_picks: int = 0
+    max_picks: int | None = None
+    is_archived: bool = False
+    options: list[OptionRow] = field(default_factory=list)
+
+    @property
+    def required_now(self) -> int:
+        """Fewest picks needed today: a required group whose extras are all finished can't block
+        the dish."""
+        free = sum(1 for o in self.options if not o.is_archived and not o.is_sold_out)
+        return min(self.min_picks, free)
+
+
+async def extras_by_product(
     session: AsyncSession, product_ids: list[uuid.UUID], *, include_archived: bool
-) -> dict[uuid.UUID, list[ProductOption]]:
-    out: dict[uuid.UUID, list[ProductOption]] = {pid: [] for pid in product_ids}
+) -> dict[uuid.UUID, list[GroupRow]]:
+    """Every group of extras each dish offers: its own, then the shared ones attached to it."""
+    out: dict[uuid.UUID, list[GroupRow]] = {pid: [] for pid in product_ids}
     if not product_ids:
         return out
     stmt = select(ProductOption).where(ProductOption.product_id.in_(product_ids))
     if not include_archived:
         stmt = stmt.where(ProductOption.is_archived.is_(False))
     stmt = stmt.order_by(ProductOption.group_name, ProductOption.sort_order, ProductOption.name)
-    for opt in (await session.execute(stmt)).scalars():
-        out[opt.product_id].append(opt)
+    own: dict[tuple[uuid.UUID, str], GroupRow] = {}
+    for o in (await session.execute(stmt)).scalars():
+        g = own.get((o.product_id, o.group_name))
+        if g is None:
+            g = own[(o.product_id, o.group_name)] = GroupRow(name=o.group_name)
+            out[o.product_id].append(g)
+        g.options.append(
+            OptionRow(o.id, o.group_name, o.name, o.price_delta, o.sort_order, o.is_archived)
+        )
+
+    links = (
+        await session.execute(
+            select(ProductExtraGroup.product_id, ExtraGroup)
+            .join(ExtraGroup, ExtraGroup.id == ProductExtraGroup.group_id)
+            .where(ProductExtraGroup.product_id.in_(product_ids))
+            .order_by(ProductExtraGroup.sort_order, ExtraGroup.sort_order, ExtraGroup.name)
+        )
+    ).all()
+    if not include_archived:
+        links = [(pid, g) for pid, g in links if not g.is_archived]
+    group_ids = {g.id for _, g in links}
+    items: dict[uuid.UUID, list[ExtraItem]] = {gid: [] for gid in group_ids}
+    if group_ids:
+        stmt = (
+            select(ExtraItem)
+            .where(ExtraItem.group_id.in_(group_ids))
+            .order_by(ExtraItem.sort_order, ExtraItem.name)
+        )
+        if not include_archived:
+            stmt = stmt.where(ExtraItem.is_archived.is_(False))
+        for it in (await session.execute(stmt)).scalars():
+            items[it.group_id].append(it)
+    for pid, g in links:
+        out[pid].append(
+            GroupRow(
+                name=g.name,
+                id=g.id,
+                min_picks=g.min_picks,
+                max_picks=g.max_picks,
+                is_archived=g.is_archived,
+                options=[
+                    OptionRow(
+                        it.id,
+                        g.name,
+                        it.name,
+                        it.price_delta,
+                        it.sort_order,
+                        it.is_archived or g.is_archived,
+                        it.is_sold_out,
+                        g.id,
+                    )
+                    for it in items[g.id]
+                ],
+            )
+        )
     return out
 
 
-def product_out(p: Product, options: list[ProductOption], storage: Storage) -> ProductOut:
+async def options_by_product(
+    session: AsyncSession, product_ids: list[uuid.UUID], *, include_archived: bool
+) -> dict[uuid.UUID, list[OptionRow]]:
+    """The same extras as one flat list (what older apps read)."""
+    groups = await extras_by_product(session, product_ids, include_archived=include_archived)
+    return {pid: [o for g in gs for o in g.options] for pid, gs in groups.items()}
+
+
+async def attached_group_ids(
+    session: AsyncSession, product_ids: list[uuid.UUID]
+) -> dict[uuid.UUID, list[uuid.UUID]]:
+    out: dict[uuid.UUID, list[uuid.UUID]] = {pid: [] for pid in product_ids}
+    if product_ids:
+        rows = await session.execute(
+            select(ProductExtraGroup.product_id, ProductExtraGroup.group_id)
+            .where(ProductExtraGroup.product_id.in_(product_ids))
+            .order_by(ProductExtraGroup.sort_order)
+        )
+        for pid, gid in rows.all():
+            out[pid].append(gid)
+    return out
+
+
+def menu_groups(groups: list[GroupRow]) -> list[MenuExtraGroup]:
+    return [
+        MenuExtraGroup(
+            id=g.id,
+            name=g.name,
+            min_picks=g.required_now,
+            max_picks=g.max_picks,
+            options=[MenuOption.model_validate(o) for o in g.options],
+        )
+        for g in groups
+        if g.options
+    ]
+
+
+def product_out(
+    p: Product, options: list[OptionRow], storage: Storage, extra_group_ids: list[uuid.UUID] = ()
+) -> ProductOut:
     return ProductOut(
         id=p.id,
         category_id=p.category_id,
@@ -53,6 +191,7 @@ def product_out(p: Product, options: list[ProductOption], storage: Storage) -> P
         image_url=_url(storage, p.image_key),
         thumb_url=_url(storage, p.thumb_key),
         options=[OptionOut.model_validate(o) for o in options],
+        extra_group_ids=list(extra_group_ids),
     )
 
 
@@ -153,7 +292,7 @@ async def menu_categories(
         .scalars()
         .all()
     )
-    options = await options_by_product(session, [p.id for p in products], include_archived=False)
+    extras = await extras_by_product(session, [p.id for p in products], include_archived=False)
     discounts = (
         (
             await session.execute(
@@ -192,7 +331,8 @@ async def menu_categories(
                 is_sold_out=p.is_sold_out,
                 image_url=_url(storage, p.image_key),
                 thumb_url=_url(storage, p.thumb_key),
-                options=[MenuOption.model_validate(o) for o in options[p.id]],
+                options=[MenuOption.model_validate(o) for g in extras[p.id] for o in g.options],
+                extra_groups=menu_groups(extras[p.id]),
                 discount_price=p.price - off if off else None,
             )
         )

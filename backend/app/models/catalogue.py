@@ -69,6 +69,51 @@ class ProductOption(Base):
     is_archived: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
 
 
+class ExtraGroup(Base):
+    """A hotel's set of extras ("Pizza toppings"), attached to any number of its dishes.
+
+    min_picks >= 1 makes the group required; max_picks 1 makes it pick-one (None = no limit)."""
+
+    __tablename__ = "extra_groups"
+    __table_args__ = (
+        UniqueConstraint("hotel_id", "name"),
+        CheckConstraint("min_picks >= 0", name="min_picks_non_negative"),
+        CheckConstraint("max_picks IS NULL OR max_picks >= 1", name="max_picks_positive"),
+        CheckConstraint("max_picks IS NULL OR max_picks >= min_picks", name="max_at_least_min"),
+    )
+
+    id: Mapped[uuid.UUID] = uuid_pk()
+    hotel_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("hotels.id"), index=True)
+    name: Mapped[str] = mapped_column(String(80))
+    min_picks: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    max_picks: Mapped[int | None] = mapped_column(Integer)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    is_archived: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+
+
+class ExtraItem(Base):
+    __tablename__ = "extra_items"
+    __table_args__ = tuple(non_negative("price_delta"))
+
+    id: Mapped[uuid.UUID] = uuid_pk()
+    group_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("extra_groups.id"), index=True)
+    name: Mapped[str] = mapped_column(String(80))
+    price_delta: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    sort_order: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    is_sold_out: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    is_archived: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+
+
+class ProductExtraGroup(Base):
+    """Which extra groups a dish offers."""
+
+    __tablename__ = "product_extra_groups"
+
+    product_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("products.id"), primary_key=True)
+    group_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("extra_groups.id"), primary_key=True)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+
+
 class Discount(Base):
     __tablename__ = "discounts"
     __table_args__ = (

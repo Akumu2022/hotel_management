@@ -7,6 +7,7 @@ import { api } from "../lib/api";
 import { money } from "../lib/format";
 import type { Category, Product } from "../lib/types";
 import { CategorySheet } from "./CategorySheet";
+import { ExtrasPanel } from "./ExtrasPanel";
 import { FoodImage } from "../customer/FoodImage";
 import { ProductSheet } from "./ProductSheet";
 import { backAt } from "./StockSheet";
@@ -108,6 +109,7 @@ export function MenuPage() {
   const [showArchived, setShowArchived] = useState(false);
   const categories = useCategories();
   const products = useProducts(showArchived);
+  const [tab, setTab] = useState<"menu" | "extras">("menu");
   const [activeCat, setActiveCat] = useState<string | "all">("all");
   const [editing, setEditing] = useState<Product | "new" | null>(null);
   const [editingCat, setEditingCat] = useState<Category | "new" | null>(null);
@@ -135,8 +137,33 @@ export function MenuPage() {
   const cats = categories.data!;
   const activeProducts = (products.data ?? []).filter((p) => !p.is_archived);
 
+  const tabs = (
+    <div role="tablist" className="mb-4 inline-flex gap-1 rounded-xl bg-subtle p-1">
+      {(["menu", "extras"] as const).map((t) => (
+        <button
+          key={t}
+          role="tab"
+          aria-selected={tab === t}
+          onClick={() => setTab(t)}
+          className={clsx("h-9 rounded-lg px-4 text-sm font-semibold", tab === t ? "bg-surface shadow-sm" : "text-muted")}
+        >
+          {t === "menu" ? "Menu" : "Extras"}
+        </button>
+      ))}
+    </div>
+  );
+  if (tab === "extras") {
+    return (
+      <div>
+        {tabs}
+        <ExtrasPanel isAdmin={isAdmin} />
+      </div>
+    );
+  }
+
   return (
     <div>
+      {tabs}
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-muted">{w("Tap a dish to edit it. Flip the switch when something runs out.")}</p>
         {isAdmin ? (

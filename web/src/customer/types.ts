@@ -24,7 +24,10 @@ export type PublicHotel = {
   pickup_only?: boolean; // beyond delivery range
 };
 
-export type MenuOption = { id: string; group_name: string; name: string; price_delta: number };
+export type MenuOption = { id: string; group_name: string; name: string; price_delta: number; is_sold_out?: boolean };
+
+/** min_picks >= 1 = the customer must choose; max_picks 1 = pick one, null = any number. */
+export type MenuExtraGroup = { id: string | null; name: string; min_picks: number; max_picks: number | null; options: MenuOption[] };
 
 export type MenuProduct = {
   id: string;
@@ -36,6 +39,7 @@ export type MenuProduct = {
   image_url: string | null;
   thumb_url: string | null;
   options: MenuOption[];
+  extra_groups?: MenuExtraGroup[];
   discount_price: number | null;
 };
 
