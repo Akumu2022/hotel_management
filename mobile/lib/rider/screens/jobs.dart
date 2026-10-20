@@ -9,6 +9,7 @@ import '../../util.dart';
 import '../location.dart';
 import '../logic.dart';
 import '../session.dart';
+import 'dashboard.dart';
 
 /// Go online, take a job, follow the steps, and prove the delivery with the customer's 4-digit code.
 class JobsTab extends StatefulWidget {
@@ -26,6 +27,9 @@ class _JobsTabState extends State<JobsTab> {
   Timer? _poll;
   final _busy = <String>{};
   int _openSeen = 0;
+  String _period = 'today';
+  String? _only = 'delivered';
+  final _jobsKey = GlobalKey();
 
   bool get _online => _s.me?['is_online'] == true;
 
@@ -109,10 +113,26 @@ class _JobsTabState extends State<JobsTab> {
   Widget build(BuildContext context) {
     final mine = _jobs.where((j) => j['mine'] == true).toList();
     final open = _jobs.where((j) => j['mine'] != true).toList();
+    final openWaiting = _online && mine.isEmpty ? open.length : 0;
+    final fresh = mine.where((j) => j['seen'] != true).toList();
     return RefreshIndicator(
       color: brand,
       onRefresh: _load,
       child: ListView(padding: const EdgeInsets.all(16), children: [
+        if (fresh.isNotEmpty || mine.isNotEmpty || openWaiting > 0) ...[
+          _AlertBar(
+            red: fresh.isNotEmpty || openWaiting > 0,
+            text: fresh.isNotEmpty
+                ? tr('New job for you: #{code}', {'code': fresh.first['code']})
+                : mine.isNotEmpty
+                    ? tr('Active order #{code}: keep going', {'code': mine.first['code']})
+                    : tr(openWaiting == 1 ? '{n} open job waiting. Take it now' : '{n} open jobs waiting. Take one now', {'n': openWaiting}),
+            onTap: () => Scrollable.ensureVisible(_jobsKey.currentContext!, duration: const Duration(milliseconds: 350), curve: Curves.easeOutCubic),
+          ),
+          const SizedBox(height: 12),
+        ],
+        const RiderProfileCard(),
+        const SizedBox(height: 12),
         _OnlineCard(online: _online, busy: _togglingOnline, onTap: _toggle),
         if (_online)
           Padding(
@@ -124,7 +144,10 @@ class _JobsTabState extends State<JobsTab> {
             ]),
           ),
         if (_error != null) Padding(padding: const EdgeInsets.only(top: 12), child: Text(_error!, style: const TextStyle(color: Colors.red, fontWeight: FontWeight.w600))),
+        const SizedBox(height: 12),
+        OrdersSummaryCard(period: _period, only: _only, onPeriod: (p) => setState(() => _period = p), onOnly: (g) => setState(() => _only = g)),
         if (!_loaded && _error == null) const Padding(padding: EdgeInsets.only(top: 16), child: Skel(160)),
+        SizedBox(key: _jobsKey, height: 0),
         for (final j in mine) ...[
           const SizedBox(height: 16),
           Text(tr('Your delivery'), style: kSection),
@@ -140,12 +163,61 @@ class _JobsTabState extends State<JobsTab> {
           else if (open.isEmpty)
             _Empty(emoji: '⏳', text: tr('No jobs right now. New ones appear here and your phone will buzz.'))
           else
-            for (final j in open) Padding(padding: const EdgeInsets.only(bottom: 12), child: _JobCard(job: j, busy: _busy.contains(j['id']), run: (a, {body}) => _run('${j['id']}', a, body: body))),
+            Container(
+              padding: const EdgeInsets.fromLTRB(10, 10, 10, 0),
+              decoration: BoxDecoration(color: const Color(0xFFFEE2E2), border: Border.all(color: const Color(0xFFDC2626), width: 2), borderRadius: BorderRadius.circular(24)),
+              child: Column(children: [
+                for (final j in open) Padding(padding: const EdgeInsets.only(bottom: 10), child: _JobCard(job: j, busy: _busy.contains(j['id']), run: (a, {body}) => _run('${j['id']}', a, body: body))),
+              ]),
+            ),
         ],
+        const SizedBox(height: 16),
+        RecentDeliveries(period: _period, only: _only),
         const SizedBox(height: 24),
       ]),
     );
   }
+}
+
+/// Needs the rider now: a pulsing bar that jumps to the jobs when tapped.
+class _AlertBar extends StatefulWidget {
+  final bool red;
+  final String text;
+  final VoidCallback onTap;
+  const _AlertBar({required this.red, required this.text, required this.onTap});
+  @override
+  State<_AlertBar> createState() => _AlertBarState();
+}
+
+class _AlertBarState extends State<_AlertBar> with SingleTickerProviderStateMixin {
+  late final AnimationController _c = AnimationController(vsync: this, duration: const Duration(milliseconds: 900))..repeat(reverse: true);
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => FadeTransition(
+        opacity: Tween(begin: 0.72, end: 1.0).animate(_c),
+        child: Material(
+          color: widget.red ? const Color(0xFFDC2626) : brand,
+          borderRadius: BorderRadius.circular(16),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(16),
+            onTap: widget.onTap,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              child: Row(children: [
+                const Icon(Icons.notifications_active, color: Colors.white),
+                const SizedBox(width: 10),
+                Expanded(child: Text(widget.text, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 15))),
+                Text('${tr('View')} ↓', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
+              ]),
+            ),
+          ),
+        ),
+      );
 }
 
 class _Empty extends StatelessWidget {

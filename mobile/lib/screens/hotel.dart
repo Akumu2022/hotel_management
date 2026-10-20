@@ -9,6 +9,7 @@ import 'age_gate.dart';
 import 'safety.dart';
 import 'shell.dart';
 import 'checkout.dart';
+import 'promo_strip.dart';
 
 class HotelScreen extends StatefulWidget {
   final String slug;
@@ -17,23 +18,51 @@ class HotelScreen extends StatefulWidget {
   State<HotelScreen> createState() => _HotelScreenState();
 }
 
+/// A dish's groups of extras with their rules (an older server sends only a flat list).
+List<Json> _extraGroups(Json p) {
+  final g = p['extra_groups'];
+  if (g is List) return g.cast<Json>();
+  final by = <String, List<Json>>{};
+  for (final o in (p['options'] as List).cast<Json>()) {
+    by.putIfAbsent(o['group_name'], () => []).add(o);
+  }
+  return [for (final e in by.entries) {'id': null, 'name': e.key, 'min_picks': 0, 'max_picks': null, 'options': e.value}];
+}
+
+/// "Required · pick one", "optional · up to 3".
+String _rule(Json g) {
+  final max = g['max_picks'] as int?;
+  final pick = max == 1 ? tr('pick one') : (max != null ? tr('up to {n}', {'n': max}) : tr('any number'));
+  return '${(g['min_picks'] as int) > 0 ? tr('Required') : tr('optional')} · $pick';
+}
+
 class _HotelScreenState extends State<HotelScreen> {
   late final Future<Json> _menu = apiGet('/hotels/${widget.slug}/menu').then((v) => v as Json);
 
   Future<void> _pick(Json hotel, Json p) async {
-    final opts = (p['options'] as List).cast<Json>();
+    final groups = _extraGroups(p);
+    final opts = [for (final g in groups) ...(g['options'] as List).cast<Json>()];
     final chosen = <String>{};
     var qty = 1;
     final ok = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
       builder: (ctx) => StatefulBuilder(builder: (ctx, set) {
-        final groups = <String, List<Json>>{};
-        for (final o in opts) {
-          groups.putIfAbsent(o['group_name'], () => []).add(o);
-        }
         final extra = opts.where((o) => chosen.contains(o['id'])).fold<int>(0, (n, o) => n + (o['price_delta'] as int));
         final base = (p['discount_price'] ?? p['price']) as int;
+        int count(Json g) => (g['options'] as List).where((o) => chosen.contains(o['id'])).length;
+        final missing = groups.where((g) => count(g) < (g['min_picks'] as int)).firstOrNull;
+        void toggle(Json g, Json o) {
+          final id = o['id'] as String;
+          if (chosen.remove(id)) return;
+          if (g['max_picks'] == 1) {
+            for (final x in (g['options'] as List)) {
+              chosen.remove(x['id']);
+            }
+          }
+          chosen.add(id);
+        }
+
         return SafeArea(
           child: Padding(
             padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + MediaQuery.of(ctx).viewInsets.bottom),
@@ -42,17 +71,35 @@ class _HotelScreenState extends State<HotelScreen> {
               if ((p['description'] as String).isNotEmpty) Padding(padding: const EdgeInsets.only(top: 4), child: Text(p['description'])),
               Flexible(
                 child: ListView(shrinkWrap: true, children: [
-                  for (final g in groups.entries) ...[
-                    Padding(padding: const EdgeInsets.only(top: 12), child: Text('${g.key} · ${tr('optional')}', style: const TextStyle(fontWeight: FontWeight.w600))),
-                    for (final o in g.value)
-                      CheckboxListTile(
-                        dense: true,
-                        contentPadding: EdgeInsets.zero,
-                        value: chosen.contains(o['id']),
-                        onChanged: (v) => set(() => v == true ? chosen.add(o['id']) : chosen.remove(o['id'])),
-                        title: Text(o['name']),
-                        secondary: (o['price_delta'] as int) > 0 ? Text('+${kes(o['price_delta'])}') : null,
-                      ),
+                  for (final g in groups) ...[
+                    Padding(
+                      padding: const EdgeInsets.only(top: 12),
+                      child: Row(children: [
+                        Expanded(child: Text('${g['name']}', style: const TextStyle(fontWeight: FontWeight.w700))),
+                        Text(
+                          _rule(g),
+                          style: TextStyle(fontSize: 12, fontWeight: count(g) < (g['min_picks'] as int) ? FontWeight.w700 : FontWeight.w400, color: count(g) < (g['min_picks'] as int) ? brand : Colors.black54),
+                        ),
+                      ]),
+                    ),
+                    for (final o in (g['options'] as List).cast<Json>())
+                      Builder(builder: (_) {
+                        final on = chosen.contains(o['id']);
+                        final max = g['max_picks'] as int?;
+                        final off = o['is_sold_out'] == true || (!on && max != null && max > 1 && count(g) >= max);
+                        return ListTile(
+                          dense: true,
+                          enabled: !off,
+                          contentPadding: EdgeInsets.zero,
+                          leading: Icon(
+                            max == 1 ? (on ? Icons.radio_button_checked : Icons.radio_button_off) : (on ? Icons.check_box : Icons.check_box_outline_blank),
+                            color: off ? Colors.black26 : (on ? brand : Colors.black54),
+                          ),
+                          title: Text(o['name'], style: o['is_sold_out'] == true ? const TextStyle(decoration: TextDecoration.lineThrough) : null),
+                          trailing: o['is_sold_out'] == true ? Text(tr('Finished')) : ((o['price_delta'] as int) > 0 ? Text('+${kes(o['price_delta'])}') : null),
+                          onTap: off ? null : () => set(() => toggle(g, o)),
+                        );
+                      }),
                   ],
                 ]),
               ),
@@ -61,7 +108,10 @@ class _HotelScreenState extends State<HotelScreen> {
                 Text('$qty', style: Theme.of(ctx).textTheme.titleMedium),
                 IconButton(onPressed: qty < 20 ? () => set(() => qty++) : null, icon: const Icon(Icons.add_circle_outline)),
                 const Spacer(),
-                FilledButton(onPressed: () => Navigator.pop(ctx, true), child: Text(tr('Add · {amount}', {'amount': kes((base + extra) * qty)}))),
+                FilledButton(
+                  onPressed: missing == null ? () => Navigator.pop(ctx, true) : null,
+                  child: Text(missing == null ? tr('Add · {amount}', {'amount': kes((base + extra) * qty)}) : tr('Choose {name}', {'name': '${missing['name']}'})),
+                ),
               ]),
             ]),
           ),
@@ -283,6 +333,7 @@ class _MenuBodyState extends State<_MenuBody> {
     final cats = _cats;
     final h = widget.hotel;
     return Column(children: [
+      PromoStrip(slug: '${h['slug']}'),
       Padding(
         padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
         child: TextField(

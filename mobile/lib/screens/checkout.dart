@@ -23,7 +23,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   late final _name = TextEditingController(text: s.name);
   late final _phone = TextEditingController(text: s.phone);
   late final _landmark = TextEditingController(text: s.landmark);
-  final _promo = TextEditingController();
+  late final _promo = TextEditingController(text: s.promo); // a claimed code is applied for them
 
   late bool liquor = s.hotelKind == 'liquor'; // drinks: delivery or pickup only
   late String type = (s.mode == 'eat_in' && liquor) ? 'delivery' : s.mode; // delivery | pickup | eat_in
@@ -163,6 +163,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       s.setPending(null);
       s.saveProfile(_name.text.trim(), _phone.text.trim(), _landmark.text.trim(), lat, lng);
       s.remember(placed['tracking_token'], placed['code'], s.hotelName ?? '');
+      s.setPromo('');
       s.clear();
       if (!mounted) return;
       tabIndex.value = 0; // back from the order page lands on Home, like the web

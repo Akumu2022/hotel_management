@@ -31,6 +31,7 @@ class AppState extends ChangeNotifier {
   List<Map<String, dynamic>> recent = []; // {token, code, hotel_name, at}
   List<Map<String, dynamic>> places = []; // {label, lat, lng, landmark}: Home / Work / Other
   String mode = 'delivery'; // order type the checkout opens with
+  String promo = ''; // a promo code the customer claimed; checkout applies it
   Map<String, dynamic>? pending; // {sig, key, arrive}: checkout in flight, so a retry can't create a 2nd order
   ThemeMode themeMode = ThemeMode.light; // always opens light; dark lasts for the current session
 
@@ -52,6 +53,7 @@ class AppState extends ChangeNotifier {
       recent = [for (final r in (jsonDecode(_p.getString('recent') ?? '[]') as List)) Map<String, dynamic>.from(r)];
       places = [for (final r in (jsonDecode(_p.getString('places') ?? '[]') as List)) Map<String, dynamic>.from(r)];
       mode = _p.getString('mode') ?? 'delivery';
+      promo = _p.getString('promo') ?? '';
       lang.value = _p.getString('lang') ?? 'en';
       final pd = _p.getString('pending');
       pending = pd == null ? null : Map<String, dynamic>.from(jsonDecode(pd) as Map);
@@ -65,6 +67,7 @@ class AppState extends ChangeNotifier {
     _p.setString('recent', jsonEncode(recent));
     _p.setString('places', jsonEncode(places));
     _p.setString('mode', mode);
+    promo.isEmpty ? _p.remove('promo') : _p.setString('promo', promo);
     pending == null ? _p.remove('pending') : _p.setString('pending', jsonEncode(pending));
     notifyListeners();
   }
@@ -95,6 +98,11 @@ class AppState extends ChangeNotifier {
       l.quantity = q.clamp(1, 20);
     }
     if (lines.isEmpty) hotelSlug = hotelName = hotelKind = null;
+    _save();
+  }
+
+  void setPromo(String code) {
+    promo = code.toUpperCase().replaceAll(RegExp(r'[^A-Z0-9]'), '');
     _save();
   }
 
